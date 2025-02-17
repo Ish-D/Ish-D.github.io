@@ -1,46 +1,57 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 
 const RectangleEditor = () => {
-    let initialWidth = window.innerWidth - (2 * 0.2 * window.innerWidth)
-    let initialHeight = window.innerHeight - (2 * 0.2 * window.innerHeight)
+  const [selectedId, setSelectedId] = useState(null);
+  const [action, setAction] = useState(null);
+  const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
+  const [startRect, setStartRect] = useState(null);
+  const [lastAngle, setLastAngle] = useState(0);
+  const [hoveredCorner, setHoveredCorner] = useState({ id: null, corner: null });
+  const [selectionOrder, setSelectionOrder] = useState([]);
 
-    let message = '# Sample Markdown\n\nHover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n [**New Page**](command:addRectangle)'
+  const canvasRef = useRef(null);
+  const scrollPositions = useRef({});
 
-    const [rectangles, setRectangles] = useState([{
-        id: Date.now(), 
-        x: (window.outerWidth - initialWidth)/2,
-        y: (window.innerHeight - initialHeight)/2,  
-        width: initialWidth, 
-        height: initialHeight,
-        rotation: 0,
-        color: `hsl(192, 100.00%, 99.00%)`,
-        text: message
-    }]);
+  let initialWidth = window.innerWidth - (2 * 0.4 * window.innerWidth)
+  let initialHeight = window.innerHeight - (2 * 0.4 * window.innerHeight)
+
+  let message = "# Sample Markdown\n\nHover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n [**New Page**](command:addRectangle)\n\n Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec tincidunt odio nec orci aliquet ultricies. Maecenas nec faucibus sapien. Nulla id dolor sit amet quam malesuada cursus eget eu ex. Morbi non nibh pulvinar, feugiat eros a, consequat ex. Ut a dolor a enim tempus elementum eu condimentum lectus. Sed non orci sed magna pulvinar lobortis vitae a mi. Donec non feugiat elit. Duis congue odio et nisl pharetra faucibus. Curabitur eu cursus magna. Nunc non efficitur risus. Etiam aliquet faucibus ex, vitae mattis urna rhoncus et. Duis condimentum maximus semper. Praesent et magna purus. Integer sagittis in est vitae rutrum."
+
+  const initialRect = {
+    id: Date.now(), 
+    x: (window.outerWidth - initialWidth)/2,
+    y: (window.innerHeight - initialHeight)/2,  
+    width: initialWidth, 
+    height: initialHeight,
+    rotation: 0,
+    color: `hsl(192, 100.00%, 99.00%)`,
+    text: message
+  };
+
+  const [rectangles, setRectangles] = useState([initialRect]);
     
-    const addRectangle = () => {
-        const newRect = {
-          id: Date.now(),
-          x: Math.random() * window.innerWidth,
-          y: Math.random() * window.innerHeight,
-          width: 300, // Increased width for better text display
-          height: 200, // Increased height for better text display
-          rotation: Math.random() * 360,
-          color: `hsl(192, 100.00%, 99.00%)`,
-          text: message
-        };
-        setRectangles(prev => [...prev, newRect]);
-        setSelectedId(newRect.id);
-      };
-
-    // const [rectangles, setRectangles] = useState([]);
-    const [selectedId, setSelectedId] = useState(null);
-    const [action, setAction] = useState(null);
-    const [startPoint, setStartPoint] = useState({ x: 0, y: 0 });
-    const [startRect, setStartRect] = useState(null);
-    const [lastAngle, setLastAngle] = useState(0);
-    const [hoveredCorner, setHoveredCorner] = useState({ id: null, corner: null });
-    const canvasRef = useRef(null);
+  // Initialize selection order with the initial rectangle
+  useEffect(() => {
+    setSelectionOrder([initialRect.id]);
+  }, []);
+    
+  const addRectangle = () => {
+    const newRect = {
+      id: Date.now(),
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      width: 300,
+      height: 200,
+      rotation: Math.random() * 360,
+      color: `hsl(192, 100.00%, 99.00%)`,
+      text: message
+    };
+    setRectangles(prev => [...prev, newRect]);
+    setSelectedId(newRect.id);
+    // Add new rectangle to the top of the selection order
+    setSelectionOrder(prev => [newRect.id, ...prev]);
+  };
 
   // Custom cursors
   const cursors = {
@@ -66,7 +77,7 @@ const RectangleEditor = () => {
   };
 
   const isPointNearCorner = (mouseX, mouseY, rect, corner) => {
-    const threshold = 50;
+    const threshold = 55;
     
     // Get the center of the rectangle (the point of rotation)
     const centerX = rect.x + rect.width / 2;
@@ -74,7 +85,7 @@ const RectangleEditor = () => {
     
     // Convert rotation to radians
     const angleRad = (rect.rotation * Math.PI) / 180;
-    const cos = Math.cos(-angleRad); // Negative angle to reverse the rotation
+    const cos = Math.cos(-angleRad);
     const sin = Math.sin(-angleRad);
     
     // Translate mouse point relative to rectangle's center
@@ -88,22 +99,22 @@ const RectangleEditor = () => {
     // Get corner coordinates in the original, unrotated space
     let cornerX, cornerY;
     switch(corner) {
-      case 'topleft':
-        cornerX = rect.x;
-        cornerY = rect.y;
-        break;
-      case 'topright':
-        cornerX = rect.x + rect.width;
-        cornerY = rect.y;
-        break;
-      case 'bottomleft':
-        cornerX = rect.x;
-        cornerY = rect.y + rect.height;
-        break;
-      case 'bottomright':
-        cornerX = rect.x + rect.width;
-        cornerY = rect.y + rect.height;
-        break;
+        case 'topleft':
+            cornerX = rect.x;
+            cornerY = rect.y;
+            break;
+        case 'topright':
+            cornerX = rect.x + rect.width;
+            cornerY = rect.y;
+            break;
+        case 'bottomleft':
+            cornerX = rect.x;
+            cornerY = rect.y + rect.height;
+            break;
+        case 'bottomright':
+            cornerX = rect.x + rect.width;
+            cornerY = rect.y + rect.height;
+            break;
     }
     
     // Calculate distance between rotated mouse point and corner
@@ -112,44 +123,71 @@ const RectangleEditor = () => {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     return distance < threshold;
+};
+
+const handleMouseEnter = useCallback((e, rectId) => {
+  e.stopPropagation();
+  if (selectedId !== rectId) {
+    setSelectedId(rectId);
+    // Update selection order by moving the selected rectangle to the front
+    setSelectionOrder(prev => {
+      const filtered = prev.filter(id => id !== rectId);
+      return [rectId, ...filtered];
+    });
+  }
+}, [selectedId]);
+
+  // Function to get z-index based on selection order
+  const getZIndex = (rectId) => {
+    const index = selectionOrder.indexOf(rectId);
+    // Higher index = higher z-index, base of 1
+    return selectionOrder.length - index;
   };
 
-  const handleMouseMove = (e) => {
-    if (!canvasRef.current) return;
-    
-    const canvas = canvasRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - canvas.left;
-    const mouseY = e.clientY - canvas.top;
+  const handleMouseLeave = useCallback((e, rectId) => {
+    e.stopPropagation();
+    // Only clear if we're not entering a child element
+    if (!e.relatedTarget?.closest(`[data-rect-id="${rectId}"]`)) {
+        setSelectedId(null);
+    }
+  }, []);
 
-    let foundHover = false;
-    for (const rect of rectangles) {
+const handleMouseMove = useCallback((e) => {
+  if (!canvasRef.current) return;
+  
+  const canvas = canvasRef.current.getBoundingClientRect();
+  const mouseX = e.clientX - canvas.left;
+  const mouseY = e.clientY - canvas.top;
+
+  let foundHover = false;
+  for (const rect of rectangles) {
       if (rect.id === selectedId) {
-        const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
-        for (const corner of corners) {
-          if (isPointNearCorner(mouseX, mouseY, rect, corner)) {
-            setHoveredCorner({ id: rect.id, corner });
-            foundHover = true;
-            break;
-          }
-        }
-        if (foundHover) break;
-      }
-    }
+          const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
 
-    if (!foundHover) {
+          for (const corner of corners) {
+              if (isPointNearCorner(mouseX, mouseY, rect, corner)) {
+                  setHoveredCorner({ id: rect.id, corner });
+                  foundHover = true;
+                  break;
+              }
+          }
+          if (foundHover) break;
+      }
+  }
+
+  if (!foundHover) {
       setHoveredCorner({ id: null, corner: null });
-    }
-  };
+  }
+}, [rectangles, selectedId]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      canvas.addEventListener('mousemove', handleMouseMove);
-      return () => {
-        canvas.removeEventListener('mousemove', handleMouseMove);
-      };
-    }
-  }, [rectangles, selectedId]);
+      const canvas = canvasRef.current;
+      if (canvas) {
+          canvas.addEventListener('mousemove', handleMouseMove);
+          return () => canvas.removeEventListener('mousemove', handleMouseMove);
+      }
+  }, [handleMouseMove]);
+
 
   const InteractiveArea = ({ x, y, size = 40, cursor, onMouseDown, onMouseEnter, onMouseLeave }) => (
     <div
@@ -172,15 +210,29 @@ const RectangleEditor = () => {
     />
   );
 
-  const RectangleContent = ({ rect, isSelected }) => {
-    const renderContent = (text) => {
-        // Split text at any markdown links
+
+  const RectangleContent = React.memo(({ rect, scrollPositions }) => {
+    const contentRef = useRef(null);
+
+    const handleScroll = useCallback((e) => {
+        scrollPositions.current[rect.id] = e.target.scrollTop;
+    }, [rect.id, scrollPositions]);
+
+    useLayoutEffect(() => {
+        const element = contentRef.current;
+        if (element) {
+            const savedPosition = scrollPositions.current[rect.id];
+            if (savedPosition !== undefined) {
+                element.scrollTop = savedPosition;
+            }
+        }
+    }, [rect.id]);
+
+    const renderContent = useCallback((text) => {
         const parts = text.match(/(\[.*?\]\(command:addRectangle\))|([^\[]+)/g) || [];
         
         return parts.map((part, index) => {
-            // Check if this part is our command link pattern
             if (part.match(/\[.*?\]\(command:addRectangle\)/)) {
-                // Extract the link text from between the square brackets
                 const linkText = part.match(/\[(.*?)\]/)[1];
                 return (
                     <div 
@@ -193,40 +245,36 @@ const RectangleEditor = () => {
                         }}
                     >
                         <div style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
-                        <ReactMarkdown className="cursor-pointer">
-                            {linkText}
-                        </ReactMarkdown>
+                            <ReactMarkdown className="cursor-pointer">
+                                {linkText}
+                            </ReactMarkdown>
                         </div>
                     </div>
                 );
             }
             
-            // For non-command parts, use ReactMarkdown
             return (
-                <div style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
-                <ReactMarkdown key={index}>
-                    {part}
-                </ReactMarkdown>
+                <div key={index} style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
+                    <ReactMarkdown>{part}</ReactMarkdown>
                 </div>
             );
         });
-    };
+    }, []);
 
     return (
         <div 
+            ref={contentRef}
             className="absolute inset-0 p-4 overflow-auto select-text"
             onClick={(e) => e.stopPropagation()}
-            style={{
-                cursor: 'text',
-            }}
+            onScroll={handleScroll}
+            style={{ cursor: 'text' }}
         >
             <div className="prose prose-sm max-w-none">
                 {renderContent(rect.text)}
             </div>
         </div>
     );
-};
-
+});
   const getCenter = (rect) => ({
     x: rect.x + rect.width / 2,
     y: rect.y + rect.height / 2
@@ -235,23 +283,6 @@ const RectangleEditor = () => {
   const getAngle = (center, point) => {
     return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
   };
-
-  const handleMouseOver = (e, rectId) => {
-    e.stopPropagation();
-    if (selectedId !== rectId) {
-        setSelectedId(rectId);
-    }
-};
-
-    const handleMouseOut = (e, rectId) => {
-        e.stopPropagation();
-        if (selectedId === rectId) {
-            // Only clear selection if we're not entering another part of the same rectangle
-            if (!e.relatedTarget?.closest(`[data-rect-id="${rectId}"]`)) {
-                setSelectedId(null);
-            }
-        }
-    };
 
   const handleMouseDown = (e, id, actionType, corner) => {
     if (!canvasRef.current) return;
@@ -407,13 +438,11 @@ const RectangleEditor = () => {
 
   return (
     <div>
-
-
       <div ref={canvasRef}>
         {rectangles.map((rect) => {
           const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
           const padding = 20;
-          
+
           return (
             <div 
               key={rect.id} 
@@ -425,11 +454,18 @@ const RectangleEditor = () => {
                 height: `${rect.height + 2 * padding}px`,
                 transform: `rotate(${rect.rotation}deg)`,
                 transformOrigin: `${rect.width/2 + padding}px ${rect.height/2 + padding}px`,
-                zIndex: selectedId === rect.id ? 10 : 1,
+                zIndex: getZIndex(rect.id),
               }}
-              onMouseOver={(e) => handleMouseOver(e, rect.id)}
-              onMouseOut={(e) => handleMouseOut(e, rect.id)}
+              onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
+              onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
             >
+            <div 
+                className="absolute inset-0"
+                style={{
+                    pointerEvents: 'none',
+                    cursor: 'default'
+                }}
+              />
               {/* Shadow and clipping container */}
               <div
                 className="absolute"
@@ -554,7 +590,7 @@ const RectangleEditor = () => {
               >
                 <RectangleContent 
                     rect={rect} 
-                    isSelected={selectedId === rect.id} 
+                    scrollPositions={scrollPositions}
                 />
 
                 {/* Folded corners with enhanced shadow effect */}
