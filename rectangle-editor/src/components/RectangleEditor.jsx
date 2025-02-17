@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import Frame from 'react-frame-component';
 
 const RectangleEditor = () => {
   const [selectedId, setSelectedId] = useState(null);
@@ -34,7 +35,7 @@ const RectangleEditor = () => {
   let initialWidth = window.innerWidth - (2 * 0.2 * window.innerWidth);
   let initialHeight = window.innerHeight - (2 * 0.2 * window.innerHeight);
 
-  let message = "#\n\n **Paper Controls:** \n\n Hover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n **Canvas Controls** \n\n Left click and drag to **pan** \n\n Right click and drag to **rotate** \n\n Scroll to **zoom** [**Click Here For New Page**](function:addRectangle)"
+  let message = "#\n\n **Paper Controls:** \n\n Hover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n **Canvas Controls** \n\n Left click and drag to **pan** \n\n Right click and drag to **rotate** \n\n Scroll to **zoom** [**Click Here For New Page**](function:addRectangle)\n\n [Wikipedia](https://en.wikipedia.org/wiki/Bernoulli_distribution)"
 
   const initialRect = {
     id: Date.now(), 
@@ -313,76 +314,146 @@ const handleMouseMove = useCallback((e) => {
 
   const RectangleContent = React.memo(({ rect, scrollPositions }) => {
     const contentRef = useRef(null);
-
+  
     const handleScroll = useCallback((e) => {
-        scrollPositions.current[rect.id] = e.target.scrollTop;
+      scrollPositions.current[rect.id] = e.target.scrollTop;
     }, [rect.id, scrollPositions]);
-
+  
     useLayoutEffect(() => {
-        const element = contentRef.current;
-        if (element) {
-            const savedPosition = scrollPositions.current[rect.id];
-            if (savedPosition !== undefined) {
-                element.scrollTop = savedPosition;
-            }
+      const element = contentRef.current;
+      if (element) {
+        const savedPosition = scrollPositions.current[rect.id];
+        if (savedPosition !== undefined) {
+          element.scrollTop = savedPosition;
         }
+      }
     }, [rect.id]);
-
+  
     const renderContent = useCallback((text) => {
-        const parts = text.match(/(\[.*?\]\(function:addRectangle\))|([^\[]+)/g) || [];
-        
-        return parts.map((part, index) => {
-            if (part.match(/\[.*?\]\(function:addRectangle\)/)) {
-                const linkText = part.match(/\[(.*?)\]/)[1];
-                return (
-                    <div 
-                        key={index} 
-                        className="inline"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            addRectangle();
-                        }}
-                    >
-                        <div style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
-                            <ReactMarkdown className="cursor-pointer">
-                                {linkText}
-                            </ReactMarkdown>
-                        </div>
-                    </div>
-                );
-            }
-            
-            return (
-                <div key={index} style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
-                    <ReactMarkdown>{part}</ReactMarkdown>
-                </div>
-            );
-        });
-    }, []);
-
-    return (
-        <div 
-            ref={contentRef}
-            className="absolute inset-0 p-4 overflow-auto select-text"
-            onClick={(e) => e.stopPropagation()}
-            onScroll={handleScroll}
-            style={{ cursor: 'text' }}
-        >
-            <div className="prose prose-sm max-w-none">
-                {renderContent(rect.text)}
+      // Check if the text contains an iframe
+      const iframeMatch = text.match(/<iframe.*?src="(.*?)".*?>/);
+      
+      if (iframeMatch) {
+        // If an iframe is present, render it directly with a sandbox attribute
+        return (
+          <div className="absolute inset-0 flex flex-col">
+            <div className="p-2 bg-gray-100 flex items-center justify-between">
+              <div 
+                className="cursor-pointer text-blue-600 hover:underline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  addRectangle();
+                }}
+              >
+              </div>
             </div>
+            <iframe 
+              src={iframeMatch[1]} 
+              className="flex-grow border-none" 
+              style={{ width: '100%', height: 'calc(100% - 40px)' }}
+              sandbox="allow-scripts allow-same-origin allow-forms"
+            />
+          </div>
+        );
+      }
+  
+      // Existing rendering logic for normal text
+      const parts = text.match(/(\[.*?\]\((?:function:addRectangle|https?:\/\/[^\)]+)\))|([^\[]+)/g) || [];
+      
+      return parts.map((part, index) => {
+        // Check for function call link (add rectangle)
+        if (part.match(/\[.*?\]\(function:addRectangle\)/)) {
+          const linkText = part.match(/\[(.*?)\]/)[1];
+          return (
+            <div 
+              key={index} 
+              className="inline"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                addRectangle();
+              }}
+            >
+              <div style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
+                <ReactMarkdown className="cursor-pointer">
+                  {linkText}
+                </ReactMarkdown>
+              </div>
+            </div>
+          );
+        }
+        
+        // Check for external link
+        const externalLinkMatch = part.match(/\[(.*?)\]\((https?:\/\/[^\)]+)\)/);
+        if (externalLinkMatch) {
+          const [, linkText, url] = externalLinkMatch;
+          return (
+            <div 
+              key={index} 
+              className="inline"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Create a new rectangle with the loaded URL
+                const newRect = {
+                  id: Date.now(),
+                  x: Math.random() * window.innerWidth,
+                  y: Math.random() * window.innerHeight,
+                  width: 800,
+                  height: 600,
+                  rotation: Math.random() * 360,
+                  color: `hsl(192, 100.00%, 99.00%)`,
+                  text: `<iframe src="${url}" style="width:100%; height:100%; border:none;"></iframe>`
+                };
+                
+                setRectangles(prev => [...prev, newRect]);
+                setSelectedId(newRect.id);
+                setSelectionOrder(prev => [newRect.id, ...prev]);
+              }}
+            >
+              <div style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
+                <ReactMarkdown className="cursor-pointer text-blue-600 hover:underline">
+                  {linkText}
+                </ReactMarkdown>
+              </div>
+            </div>
+          );
+        }
+        
+        // Regular text
+        return (
+          <div key={index} style={{ fontFamily: 'Helvetica', fontSize: '16px' }}>
+            <ReactMarkdown>{part}</ReactMarkdown>
+          </div>
+        );
+      });
+    }, [addRectangle, setRectangles, setSelectedId, setSelectionOrder]);
+  
+    return (
+      <div 
+        ref={contentRef}
+        className="absolute inset-0 p-4 overflow-auto select-text"
+        onClick={(e) => e.stopPropagation()}
+        onScroll={handleScroll}
+        style={{ cursor: 'text' }}
+      >
+        <div className="prose prose-sm max-w-none h-full">
+          {renderContent(rect.text)}
         </div>
+      </div>
     );
-});
-  const getCenter = (rect) => ({
-    x: rect.x + rect.width / 2,
-    y: rect.y + rect.height / 2
   });
 
-  const getAngle = (center, point) => {
-    return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
-  };
+const getCenter = (rect) => ({
+  x: rect.x + rect.width / 2,
+  y: rect.y + rect.height / 2
+});
+
+const getAngle = (center, point) => {
+  return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
+};
 
   
 // Update the canvas dragging handlers to handle right-click rotation
