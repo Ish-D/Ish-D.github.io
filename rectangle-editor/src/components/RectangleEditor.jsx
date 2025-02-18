@@ -149,7 +149,7 @@ const RectangleEditor = () => {
     );
   };
 
-  const RectangleContent = React.memo(({ rect, scrollPositions, setRectangles, setSelectedId, setSelectionOrder }) => {
+  const RectangleContent = React.memo(({ rect, scrollPositions, setRectangles, setSelectedId, setSelectionOrder, canvasRotation }) => {
     const contentRef = useRef(null);
   
     const handleScroll = useCallback((e) => {
@@ -180,24 +180,36 @@ const RectangleEditor = () => {
     // Calculate position based on parameters and current rectangle
     const calculatePosition = (params, currentRect) => {
       let x, y;
-  
+      
       if (params.relative === 'true' && currentRect) {
-        // Relative positioning
-        x = currentRect.x + (parseFloat(params.x) || 0);
-        y = currentRect.y + (parseFloat(params.y) || 0);
+        // Get the relative offsets
+        const dx = parseFloat(params.x) || 0;
+        const dy = parseFloat(params.y) || 0;
+        
+        // Convert canvas rotation to radians
+        const rotationRad = (-canvasRotation * Math.PI) / 180;
+        
+        // Apply rotation transformation to the relative offsets
+        const rotatedDx = dx * Math.cos(rotationRad) - dy * Math.sin(rotationRad);
+        const rotatedDy = dx * Math.sin(rotationRad) + dy * Math.cos(rotationRad);
+        
+        // Add rotated offsets to current rectangle position
+        x = currentRect.x + rotatedDx;
+        y = currentRect.y + rotatedDy;
       } else {
         // Absolute positioning
         x = parseFloat(params.x) || Math.random() * window.innerWidth;
         y = parseFloat(params.y) || Math.random() * window.innerHeight;
       }
-
+  
       if (params.jitter !== 'false') {
         x += Math.random() * 50 - 25;
         y += Math.random() * 50 - 25;
       }
-  
+      
       return { x, y };
     };
+  
   
     // Unified function to create new rectangles
     const createRectangle = async (params, currentRect, content = null) => {
@@ -223,7 +235,7 @@ const RectangleEditor = () => {
         y: position.y,
         width: parseFloat(params.width) || 300,
         height: parseFloat(params.height) || 200,
-        rotation: parseFloat(params.rotation) || 0,
+        rotation: parseFloat(params.rotation) || -canvasRotation,
         color: `hsl(192, 100.00%, 99.00%)`,
         text
       };
@@ -1317,6 +1329,7 @@ const RectangleEditor = () => {
                   setRectangles={setRectangles}
                   setSelectedId={setSelectedId}
                   setSelectionOrder={setSelectionOrder}
+                  canvasRotation={canvasRotation}
                 />
 
                   {/* Folded corners with enhanced shadow effect */}
