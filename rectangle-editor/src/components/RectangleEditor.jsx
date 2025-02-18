@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import Frame from 'react-frame-component';
+import rehypeRaw from "rehype-raw";
 
 const RectangleEditor = () => {
   // Setup Stage
@@ -37,7 +38,7 @@ const RectangleEditor = () => {
   // Initialization
   let initialWidth = window.innerWidth - (2 * 0.25 * window.innerWidth);
   let initialHeight = window.innerHeight - (2 * 0.1 * window.innerHeight);
-  let font = 'Garamond'
+  let font = 'Palatino'
   let fontSize = 16;
 
   const initialRect = {
@@ -300,7 +301,7 @@ const RectangleEditor = () => {
               }}
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown className="cursor-pointer">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]} className="cursor-pointer">
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -325,7 +326,7 @@ const RectangleEditor = () => {
               }}
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown className="cursor-pointer text-blue-600 hover:underline">
+                <ReactMarkdown rehypePlugins={[rehypeRaw]} className="cursor-pointer text-blue-600 hover:underline">
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -336,7 +337,7 @@ const RectangleEditor = () => {
         // Regular text
         return (
           <div key={index} style={{ fontFamily: font, fontSize: fontSize }}>
-            <ReactMarkdown>{part}</ReactMarkdown>
+            <ReactMarkdown rehypePlugins={[rehypeRaw]}>{part}</ReactMarkdown>
           </div>
         );
       });
