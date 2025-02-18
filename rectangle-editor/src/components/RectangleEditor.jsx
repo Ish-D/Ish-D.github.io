@@ -11,6 +11,11 @@ const RectangleEditor = () => {
   const [hoveredCorner, setHoveredCorner] = useState({ id: null, corner: null });
   const [selectionOrder, setSelectionOrder] = useState([]);
 
+  const [activeTouches, setActiveTouches] = useState(new Map());
+  const [initialTouchDistance, setInitialTouchDistance] = useState(null);
+  const [initialTouchAngle, setInitialTouchAngle] = useState(null);
+  const [initialScale, setInitialScale] = useState(1);
+  const [initialRotation, setInitialRotation] = useState(0);
   
   const canvasRef = useRef(null);
   const scrollPositions = useRef({});
@@ -455,7 +460,100 @@ const getAngle = (center, point) => {
   return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
 };
 
+const getTouchDistance = (touch1, touch2) => {
+  const dx = touch1.clientX - touch2.clientX;
+  const dy = touch1.clientY - touch2.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+// Function to calculate angle between two touch points
+const getTouchAngle = (touch1, touch2) => {
+  return Math.atan2(
+    touch2.clientY - touch1.clientY,
+    touch2.clientX - touch1.clientX
+  ) * 180 / Math.PI;
+};
   
+const handleTouchStart = useCallback((e) => {
+  e.preventDefault();
+  const touches = Array.from(e.touches);
+  
+  // Update active touches
+  const newTouches = new Map();
+  touches.forEach(touch => {
+    newTouches.set(touch.identifier, {
+      clientX: touch.clientX,
+      clientY: touch.clientY
+    });
+  });
+  setActiveTouches(newTouches);
+
+  if (touches.length === 2) {
+    // Initialize pinch-zoom and rotation
+    const distance = getTouchDistance(touches[0], touches[1]);
+    const angle = getTouchAngle(touches[0], touches[1]);
+    setInitialTouchDistance(distance);
+    setInitialTouchAngle(angle);
+    setInitialScale(viewport.scale);
+    setInitialRotation(canvasRotation);
+  } else if (touches.length === 1) {
+    // Handle single touch for dragging
+    const touch = touches[0];
+    lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    setIsDraggingCanvas(true);
+  }
+}, [viewport.scale, canvasRotation]);
+
+const handleTouchMove = useCallback((e) => {
+  e.preventDefault();
+  const touches = Array.from(e.touches);
+
+  if (touches.length === 2) {
+    // Handle pinch-zoom and rotation
+    const currentDistance = getTouchDistance(touches[0], touches[1]);
+    const currentAngle = getTouchAngle(touches[0], touches[1]);
+
+    if (initialTouchDistance && initialTouchAngle) {
+      // Calculate new scale
+      const scaleFactor = currentDistance / initialTouchDistance;
+      const newScale = Math.min(Math.max(initialScale * scaleFactor, 0.1), 5);
+      
+      // Calculate rotation
+      const rotationDelta = currentAngle - initialTouchAngle;
+      const newRotation = (initialRotation + rotationDelta) % 360;
+
+      setViewport(prev => ({
+        ...prev,
+        scale: newScale
+      }));
+      setCanvasRotation(newRotation);
+    }
+  } else if (touches.length === 1 && isDraggingCanvas) {
+    // Handle single touch drag
+    const touch = touches[0];
+    const dx = touch.clientX - lastMousePos.current.x;
+    const dy = touch.clientY - lastMousePos.current.y;
+    
+    setViewport(prev => ({
+      ...prev,
+      x: prev.x + dx,
+      y: prev.y + dy
+    }));
+    
+    lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+  }
+}, [initialTouchDistance, initialTouchAngle, initialScale, initialRotation, isDraggingCanvas]);
+
+const handleTouchEnd = useCallback((e) => {
+  if (e.touches.length === 0) {
+    // Reset all touch states when all fingers are lifted
+    setInitialTouchDistance(null);
+    setInitialTouchAngle(null);
+    setActiveTouches(new Map());
+    setIsDraggingCanvas(false);
+  }
+}, []);
+
 // Update the canvas dragging handlers to handle right-click rotation
 const handleCanvasMouseDown = useCallback((e) => {
   // Get the mouse position relative to the canvas
@@ -591,6 +689,13 @@ const handleWheel = useCallback((e) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
+      // Add touch event listeners
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+      canvas.addEventListener('touchend', handleTouchEnd);
+      canvas.addEventListener('touchcancel', handleTouchEnd);
+
+      // Existing mouse event listeners...
       canvas.addEventListener('wheel', handleWheel, { passive: false });
       canvas.addEventListener('mousedown', handleCanvasMouseDown);
       canvas.addEventListener('mousemove', handleCanvasMouseMove);
@@ -598,6 +703,13 @@ const handleWheel = useCallback((e) => {
       document.addEventListener('mouseup', handleCanvasMouseUp);
       
       return () => {
+        // Remove touch event listeners
+        canvas.removeEventListener('touchstart', handleTouchStart);
+        canvas.removeEventListener('touchmove', handleTouchMove);
+        canvas.removeEventListener('touchend', handleTouchEnd);
+        canvas.removeEventListener('touchcancel', handleTouchEnd);
+
+        // Remove existing mouse event listeners...
         canvas.removeEventListener('wheel', handleWheel);
         canvas.removeEventListener('mousedown', handleCanvasMouseDown);
         canvas.removeEventListener('mousemove', handleCanvasMouseMove);
@@ -605,7 +717,15 @@ const handleWheel = useCallback((e) => {
         document.removeEventListener('mouseup', handleCanvasMouseUp);
       };
     }
-  }, [handleWheel, handleCanvasMouseDown, handleCanvasMouseMove, handleCanvasMouseUp]);
+  }, [
+    handleWheel,
+    handleCanvasMouseDown,
+    handleCanvasMouseMove,
+    handleCanvasMouseUp,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd
+  ]);
 
   // Rectangle transformation handlers
   // Rectangle transformation handlers
