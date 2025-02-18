@@ -40,7 +40,7 @@ const RectangleEditor = () => {
   let initialWidth = window.innerWidth - (2 * 0.2 * window.innerWidth);
   let initialHeight = window.innerHeight - (2 * 0.2 * window.innerHeight);
 
-  let message = "#\n\n **Paper Controls:** \n\n Hover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n **Canvas Controls** \n\n Left click and drag to **pan** \n\n Right click and drag to **rotate** \n\n Scroll to **zoom** [**Click Here For New Page**](function:addRectangle)\n\n [Wikipedia](https://en.wikipedia.org/wiki/Bernoulli_distribution)"
+  let message = "#\n\n 1**Paper Controls:** \n\n Hover around the **corners** to edit the current page \n\n Outside a corner to **rotate** \n\n On a corner to **scale** \n\n Inside a corner to **drag**\n\n **Canvas Controls** \n\n Left click and drag to **pan** \n\n Right click and drag to **rotate** \n\n Scroll to **zoom** [**Click Here For New Page**](function:addRectangle)\n\n [Wikipedia](https://en.wikipedia.org/wiki/Bernoulli_distribution)"
 
   const initialRect = {
     id: Date.now(), 
@@ -140,181 +140,286 @@ const handleMouseEnter = useCallback((e, rectId) => {
     });
 }, []);
 
-const isPointNearCorner = (mouseX, mouseY, rect, canvasRotation, viewport) => {
-  const threshold = 80;
+const handleMouseDown = (e, id, actionType, corner) => {
+  if (!canvasRef.current) return;
   
-  // Get canvas center (origin of rotation)
+  e.preventDefault();
+  e.stopPropagation();
+  
+  const rect = rectangles.find(r => r.id === id);
+  if (!rect) return;
+
+  const canvas = canvasRef.current.getBoundingClientRect();
+  const mouseX = e.clientX - canvas.left;
+  const mouseY = e.clientY - canvas.top;
+  
+  // Convert screen coordinates to canvas space
   const canvasCenter = {
     x: window.innerWidth / 2,
     y: window.innerHeight / 2
   };
-  
-  // Step 1: Normalize canvas parameters
-  const canvasRotationRad = (-canvasRotation * Math.PI) / 180;
-  const scale = viewport.scale;
-  
-  // Step 2: Transform mouse coordinates to normalized world space
-  // First, translate relative to canvas center
+
+  // First, transform mouse coordinates relative to canvas center
   const relativeToCenterX = mouseX - canvasCenter.x;
   const relativeToCenterY = mouseY - canvasCenter.y;
   
-  // Apply inverse canvas rotation
-  const unrotatedX = (
+  // Apply inverse canvas rotation and scale
+  const canvasRotationRad = (-canvasRotation * Math.PI) / 180;
+  const rotatedX = (
     relativeToCenterX * Math.cos(canvasRotationRad) - 
     relativeToCenterY * Math.sin(canvasRotationRad)
   );
-  const unrotatedY = (
+  const rotatedY = (
     relativeToCenterX * Math.sin(canvasRotationRad) + 
     relativeToCenterY * Math.cos(canvasRotationRad)
   );
   
-  // Apply inverse viewport scaling and translation
-  const worldMouseX = (unrotatedX / scale) - (viewport.x / scale) + canvasCenter.x;
-  const worldMouseY = (unrotatedY / scale) - (viewport.y / scale) + canvasCenter.y;
-  
-  // Get the center of the rectangle (the point of rotation)
-  const centerX = rect.x + rect.width / 2;
-  const centerY = rect.y + rect.height / 2;
-  
-  // Convert rectangle rotation to radians
-  const rectAngleRad = (rect.rotation * Math.PI) / 180;
-  const cos = Math.cos(-rectAngleRad);
-  const sin = Math.sin(-rectAngleRad);
-  
-  // Translate mouse point relative to rectangle's center
-  const relativeX = worldMouseX - centerX;
-  const relativeY = worldMouseY - centerY;
-  
-  // Rotate the mouse coordinates to align with rectangle's coordinate system
-  const rotatedMouseX = (relativeX * cos - relativeY * sin) + centerX;
-  const rotatedMouseY = (relativeX * sin + relativeY * cos) + centerY;
-  
-  // Get corner coordinates in the original, unrotated space
-  const corners = {
-    topleft: { x: rect.x, y: rect.y },
-    topright: { x: rect.x + rect.width, y: rect.y },
-    bottomleft: { x: rect.x, y: rect.y + rect.height },
-    bottomright: { x: rect.x + rect.width, y: rect.y + rect.height }
+  // Apply inverse viewport transform to get world coordinates
+  const worldStartX = (rotatedX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
+  const worldStartY = (rotatedY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
+
+  setSelectedId(id);
+  setAction({ type: actionType, corner });
+  setStartPoint({ x: worldStartX, y: worldStartY });
+  setrect({ ...rect });
+  setLastAngle(rect.rotation);
+
+  const handleMove = (moveEvent) => {
+    const currentMouseX = moveEvent.clientX - canvas.left;
+    const currentMouseY = moveEvent.clientY - canvas.top;
+
+    // Convert current mouse position using same transformation as start point
+    const relativeCurrentX = currentMouseX - canvasCenter.x;
+    const relativeCurrentY = currentMouseY - canvasCenter.y;
+    
+    const rotatedCurrentX = (
+      relativeCurrentX * Math.cos(canvasRotationRad) - 
+      relativeCurrentY * Math.sin(canvasRotationRad)
+    );
+    const rotatedCurrentY = (
+      relativeCurrentX * Math.sin(canvasRotationRad) + 
+      relativeCurrentY * Math.cos(canvasRotationRad)
+    );
+    
+    const worldCurrentX = (rotatedCurrentX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
+    const worldCurrentY = (rotatedCurrentY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
+    
+    // Calculate world space delta
+    const deltaX = worldCurrentX - worldStartX;
+    const deltaY = worldCurrentY - worldStartY;
+
+    setRectangles(prevRects => 
+      prevRects.map(r => {
+        if (r.id !== id) return r;
+
+        if (actionType === 'move') {
+          // For move action, we can directly apply the world-space delta
+          // since our coordinate transformation already accounts for canvas rotation
+          return {
+            ...r,
+            x: rect.x + deltaX,
+            y: rect.y + deltaY
+          };
+        }
+
+        if (actionType === 'rotate') {
+          const center = {
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2
+          };
+          
+          // Calculate angles in the canvas-rotated coordinate system
+          const startAngle = Math.atan2(
+            worldStartY - center.y,
+            worldStartX - center.x
+          );
+          const currentAngle = Math.atan2(
+            worldCurrentY - center.y,
+            worldCurrentX - center.x
+          );
+          const deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
+          
+          return {
+            ...r,
+            rotation: (rect.rotation + deltaAngle) % 360
+          };
+        }
+
+        if (actionType === 'resize') {
+          // Get rectangle's center in world space
+          const centerX = rect.x + rect.width / 2;
+          const centerY = rect.y + rect.height / 2;
+
+          // Convert world coordinates to rectangle's local space
+          // First, undo the rectangle's rotation
+          const rectAngleRad = (rect.rotation * Math.PI) / 180;
+          const cos = Math.cos(-rectAngleRad);
+          const sin = Math.sin(-rectAngleRad);
+
+          // Transform current point to rectangle's local space
+          const relativeMouseX = worldCurrentX - centerX;
+          const relativeMouseY = worldCurrentY - centerY;
+          const rectLocalCurrentX = relativeMouseX * cos - relativeMouseY * sin;
+          const rectLocalCurrentY = relativeMouseX * sin + relativeMouseY * cos;
+
+          // Transform start point to rectangle's local space
+          const relativeStartX = worldStartX - centerX;
+          const relativeStartY = worldStartY - centerY;
+          const rectLocalStartX = relativeStartX * cos - relativeStartY * sin;
+          const rectLocalStartY = relativeStartX * sin + relativeStartY * cos;
+
+          // Calculate deltas in rectangle's local space
+          const deltaLocalX = rectLocalCurrentX - rectLocalStartX;
+          const deltaLocalY = rectLocalCurrentY - rectLocalStartY;
+
+          // Initialize new dimensions
+          let newWidth = rect.width;
+          let newHeight = rect.height;
+          let newX = rect.x;
+          let newY = rect.y;
+          
+          // Scale factor to account for canvas rotation and scale
+          const scaleFactor = 1;
+
+          switch(corner) {
+            case 'topleft':
+              newWidth = rect.width - deltaLocalX * scaleFactor;
+              newHeight = rect.height - deltaLocalY * scaleFactor;
+              break;
+            case 'topright':
+              newWidth = rect.width + deltaLocalX * scaleFactor;
+              newHeight = rect.height - deltaLocalY * scaleFactor;
+              break;
+            case 'bottomleft':
+              newWidth = rect.width - deltaLocalX * scaleFactor;
+              newHeight = rect.height + deltaLocalY * scaleFactor;
+              break;
+            case 'bottomright':
+              newWidth = rect.width + deltaLocalX * scaleFactor;
+              newHeight = rect.height + deltaLocalY * scaleFactor;
+              break;
+          }
+          
+          // Calculate the change in dimensions
+          const deltaWidth = newWidth - rect.width;
+          const deltaHeight = newHeight - rect.height;
+
+          // Ensure minimum size
+          newWidth = Math.max(50, newWidth);
+          newHeight = Math.max(50, newHeight);
+
+          // Calculate position adjustments to maintain the correct corner position
+          // Convert the dimension changes back to world space
+          const worldDeltaX = (deltaWidth / 2) * Math.cos(rectAngleRad) - (deltaHeight / 2) * Math.sin(rectAngleRad);
+          const worldDeltaY = (deltaWidth / 2) * Math.sin(rectAngleRad) + (deltaHeight / 2) * Math.cos(rectAngleRad);
+
+          // Adjust position to maintain the correct corner
+          newX = centerX - newWidth / 2;
+          newY = centerY - newHeight / 2;
+
+          return {
+            ...r,
+            width: newWidth,
+            height: newHeight,
+            x: newX,
+            y: newY
+          };
+        }
+
+        return r;
+      })
+    );
   };
-  
-  // Calculate distances to each corner
-  const cornerDistances = Object.entries(corners).map(([corner, { x, y }]) => {
-    const dx = rotatedMouseX - x;
-    const dy = rotatedMouseY - y;
-    return {
-      corner,
-      distance: Math.sqrt(dx * dx + dy * dy)
-    };
-  });
-  
-  // Find the closest corner within the threshold
-  const closestCorner = cornerDistances.reduce((closest, current) => 
-    current.distance < closest.distance ? current : closest
-  );
-  
-  return closestCorner.distance < threshold 
-    ? { 
-        isNear: true, 
-        corner: closestCorner.corner 
-      } 
-    : { 
-        isNear: false, 
-        corner: null 
-      };
+
+  const handleUp = () => {
+    document.removeEventListener('mousemove', handleMove);
+    document.removeEventListener('mouseup', handleUp);
+    setAction(null);
+    setrect(null);
+  };
+
+  document.addEventListener('mousemove', handleMove);
+  document.addEventListener('mouseup', handleUp);
 };
 
-const handleMouseMove = useCallback((e) => {
-  if (!canvasRef.current) return;
+// First, add touchStart and touchEnd handlers to the InteractiveArea component
+const InteractiveArea = ({ 
+  x, 
+  y, 
+  size = 40, 
+  cursor, 
+  onMouseDown, 
+  onTouchStart,
+  onMouseEnter, 
+  onMouseLeave,
+  onTouchEnter,  // New prop
+  onTouchLeave   // New prop
+}) => {
+  const touchSize = size;
+  const [isTouch, setIsTouch] = React.useState(false);
+  const [isActive, setIsActive] = React.useState(false);
   
-  const canvas = canvasRef.current.getBoundingClientRect();
-  const mouseX = e.clientX - canvas.left;
-  const mouseY = e.clientY - canvas.top;
-
-  // Find the rectangle under the cursor
-  const hoveredRect = rectangles.find(rect => {
-    // Convert to world coordinates
-    const worldMouseX = (mouseX - viewport.x) / viewport.scale;
-    const worldMouseY = (mouseY - viewport.y) / viewport.scale;
-
-    // Calculate rectangle bounds
-    const rectLeft = rect.x;
-    const rectTop = rect.y;
-    const rectRight = rect.x + rect.width;
-    const rectBottom = rect.y + rect.height;
-
-    // Check if point is within rectangle bounds
-    return (
-      worldMouseX >= rectLeft &&
-      worldMouseX <= rectRight &&
-      worldMouseY >= rectTop &&
-      worldMouseY <= rectBottom
+  React.useEffect(() => {
+    const isTouchDevice = (
+      'ontouchstart' in window || 
+      navigator.maxTouchPoints > 0 ||
+      navigator.msMaxTouchPoints > 0 ||
+      window.matchMedia('(pointer: coarse)').matches
     );
-  });
+    setIsTouch(isTouchDevice);
+  }, []);
 
-  // Update selection based on hovered rectangle
-  if (hoveredRect) {
-    if (selectedId !== hoveredRect.id) {
-      setSelectedId(hoveredRect.id);
-      // Update selection order by moving the selected rectangle to the front
-      setSelectionOrder(prev => {
-        const filtered = prev.filter(id => id !== hoveredRect.id);
-        return [hoveredRect.id, ...filtered];
-      });
-    }
-  } else {
-    // Clear selection if no rectangle is under the cursor
-    setSelectedId(null);
-  }
+  const handleTouchStart = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsActive(true);
+    onTouchStart?.(e);
+    onTouchEnter?.(e); // Simulate hover on touch start
+  };
 
-  // Check for corner hover on the selected rectangle
-  let foundHover = false;
-  for (const rect of rectangles) {
-    if (rect.id === selectedId) {
-      const cornerResult = isPointNearCorner(
-        mouseX, 
-        mouseY, 
-        rect, 
-        canvasRotation, 
-        viewport
-      );
+  const handleTouchEnd = () => {
+    setIsActive(false);
+    onTouchLeave?.(); // Simulate hover end on touch end
+  };
 
-      if (cornerResult.isNear) {
-        setHoveredCorner({ 
-          id: rect.id, 
-          corner: cornerResult.corner 
-        });
-        foundHover = true;
-        break;
-      }
-    }
-  }
-
-  if (!foundHover) {
-    setHoveredCorner({ id: null, corner: null });
-  }
-}, [rectangles, selectedId, canvasRotation, viewport]);
-
-
-  const InteractiveArea = ({ x, y, size = 40, cursor, onMouseDown, onMouseEnter, onMouseLeave }) => (
+  return (
     <div
       className="absolute"
       style={{
         transform: 'translate(-50%, -50%)',
         left: `${x}px`,
         top: `${y}px`,
-        width: `${size}px`,
-        height: `${size}px`,
+        width: `${touchSize}px`,
+        height: `${touchSize}px`,
         cursor,
-        zIndex: 30
+        zIndex: 30,
+        touchAction: 'none',
+        background: 'rgba(0, 0, 0, 0.001)',
+        borderRadius: '50%'
       }}
       onMouseDown={(e) => {
         e.stopPropagation();
-        onMouseDown(e);
+        onMouseDown?.(e);
       }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
-    />
+    >
+      {isTouch && (
+        <div
+          className="absolute inset-0 opacity-0 hover:opacity-10 transition-opacity"
+          style={{
+            background: 'currentColor',
+            borderRadius: '50%'
+          }}
+        />
+      )}
+    </div>
   );
+};
+
 
 
   const RectangleContent = React.memo(({ rect, scrollPositions }) => {
@@ -475,21 +580,32 @@ const getTouchAngle = (touch1, touch2) => {
 };
   
 const handleTouchStart = useCallback((e) => {
+  if (!canvasRef.current) return;
+  
+  // Clear selection if touching the background directly
+  if (e.target === canvasRef.current) {
+    setSelectedId(null);
+  }
+  
+  // If we're touching a rectangle or have one selected during a transformation, don't handle canvas interactions
+  if (e.target.closest('[data-rect-id]') || action !== null) {
+    return;
+  }
+  
   e.preventDefault();
   const touches = Array.from(e.touches);
   
   // Update active touches
   const newTouches = new Map();
-  touches.forEach(touch => {
-    newTouches.set(touch.identifier, {
-      clientX: touch.clientX,
-      clientY: touch.clientY
+  touches.forEach(t => {
+    newTouches.set(t.identifier, {
+      clientX: t.clientX,
+      clientY: t.clientY
     });
   });
   setActiveTouches(newTouches);
 
   if (touches.length === 2) {
-    // Initialize pinch-zoom and rotation
     const distance = getTouchDistance(touches[0], touches[1]);
     const angle = getTouchAngle(touches[0], touches[1]);
     setInitialTouchDistance(distance);
@@ -497,16 +613,30 @@ const handleTouchStart = useCallback((e) => {
     setInitialScale(viewport.scale);
     setInitialRotation(canvasRotation);
   } else if (touches.length === 1) {
-    // Handle single touch for dragging
-    const touch = touches[0];
-    lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    lastMousePos.current = { x: touches[0].clientX, y: touches[0].clientY };
     setIsDraggingCanvas(true);
   }
-}, [viewport.scale, canvasRotation]);
+}, [viewport.scale, canvasRotation, action]);
 
 const handleTouchMove = useCallback((e) => {
   e.preventDefault();
   const touches = Array.from(e.touches);
+
+  if (action) {
+    // If we're in the middle of a rectangle transformation,
+    // convert touch move to mouse move
+    const touch = touches[0];
+    const mouseEvent = new MouseEvent('mousemove', {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      bubbles: true,
+      cancelable: true,
+    });
+    
+    // Dispatch the mouse move event
+    document.dispatchEvent(mouseEvent);
+    return;
+  }
 
   if (touches.length === 2) {
     // Handle pinch-zoom and rotation
@@ -514,11 +644,8 @@ const handleTouchMove = useCallback((e) => {
     const currentAngle = getTouchAngle(touches[0], touches[1]);
 
     if (initialTouchDistance && initialTouchAngle) {
-      // Calculate new scale
       const scaleFactor = currentDistance / initialTouchDistance;
       const newScale = Math.min(Math.max(initialScale * scaleFactor, 0.1), 5);
-      
-      // Calculate rotation
       const rotationDelta = currentAngle - initialTouchAngle;
       const newRotation = (initialRotation + rotationDelta) % 360;
 
@@ -529,7 +656,7 @@ const handleTouchMove = useCallback((e) => {
       setCanvasRotation(newRotation);
     }
   } else if (touches.length === 1 && isDraggingCanvas) {
-    // Handle single touch drag
+    // Handle canvas panning
     const touch = touches[0];
     const dx = touch.clientX - lastMousePos.current.x;
     const dy = touch.clientY - lastMousePos.current.y;
@@ -540,19 +667,225 @@ const handleTouchMove = useCallback((e) => {
       y: prev.y + dy
     }));
     
-    lastMousePos.current = { x: touch.clientX, y: touch.clientY };
+    lastMousePos.current = { 
+      x: touch.clientX, 
+      y: touch.clientY 
+    };
   }
-}, [initialTouchDistance, initialTouchAngle, initialScale, initialRotation, isDraggingCanvas]);
+}, [
+  action, 
+  initialTouchDistance, 
+  initialTouchAngle, 
+  initialScale, 
+  initialRotation, 
+  isDraggingCanvas
+]);
 
 const handleTouchEnd = useCallback((e) => {
   if (e.touches.length === 0) {
-    // Reset all touch states when all fingers are lifted
+    // Reset all touch states
     setInitialTouchDistance(null);
     setInitialTouchAngle(null);
-    setActiveTouches(new Map());
     setIsDraggingCanvas(false);
+    
+    if (action) {
+      // Trigger mouseup to end any active transformations
+      const mouseEvent = new MouseEvent('mouseup', {
+        bubbles: true,
+        cancelable: true,
+      });
+      document.dispatchEvent(mouseEvent);
+    }
   }
-}, []);
+}, [action]);
+
+const handleRectangleTouchStart = useCallback((e, id, actionType, corner) => {
+  e.preventDefault();
+  e.stopPropagation();
+  
+  setIsDraggingCanvas(false);
+  setIsRotatingCanvas(false);
+  
+  const rect = rectangles.find(r => r.id === id);
+  if (!rect) return;
+
+  const touch = e.touches[0];
+  const canvas = canvasRef.current.getBoundingClientRect();
+  const touchX = touch.clientX - canvas.left;
+  const touchY = touch.clientY - canvas.top;
+  
+  // Set selected ID and immediately start the transformation
+  setSelectedId(id);
+  setAction({ type: actionType, corner });
+  
+  // Calculate and set the start point
+  const canvasCenter = {
+    x: window.innerWidth / 2,
+    y: window.innerHeight / 2
+  };
+
+  const relativeToCenterX = touchX - canvasCenter.x;
+  const relativeToCenterY = touchY - canvasCenter.y;
+  
+  const canvasRotationRad = (-canvasRotation * Math.PI) / 180;
+  const rotatedX = (
+    relativeToCenterX * Math.cos(canvasRotationRad) - 
+    relativeToCenterY * Math.sin(canvasRotationRad)
+  );
+  const rotatedY = (
+    relativeToCenterX * Math.sin(canvasRotationRad) + 
+    relativeToCenterY * Math.cos(canvasRotationRad)
+  );
+  
+  const worldStartX = (rotatedX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
+  const worldStartY = (rotatedY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
+
+  setStartPoint({ x: worldStartX, y: worldStartY });
+  setrect({ ...rect });
+  setLastAngle(rect.rotation);
+
+  const handleMove = (moveEvent) => {
+    if (!moveEvent.touches[0]) return;
+    
+    const currentTouch = moveEvent.touches[0];
+    const currentTouchX = currentTouch.clientX - canvas.left;
+    const currentTouchY = currentTouch.clientY - canvas.top;
+
+    const relativeCurrentX = currentTouchX - canvasCenter.x;
+    const relativeCurrentY = currentTouchY - canvasCenter.y;
+    
+    const rotatedCurrentX = (
+      relativeCurrentX * Math.cos(canvasRotationRad) - 
+      relativeCurrentY * Math.sin(canvasRotationRad)
+    );
+    const rotatedCurrentY = (
+      relativeCurrentX * Math.sin(canvasRotationRad) + 
+      relativeCurrentY * Math.cos(canvasRotationRad)
+    );
+    
+    const worldCurrentX = (rotatedCurrentX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
+    const worldCurrentY = (rotatedCurrentY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
+    
+    const deltaX = worldCurrentX - worldStartX;
+    const deltaY = worldCurrentY - worldStartY;
+
+    setRectangles(prevRects => 
+      prevRects.map(r => {
+        if (r.id !== id) return r;
+
+        if (actionType === 'move') {
+          return {
+            ...r,
+            x: rect.x + deltaX,
+            y: rect.y + deltaY
+          };
+        }
+
+        if (actionType === 'rotate') {
+          const center = {
+            x: rect.x + rect.width / 2,
+            y: rect.y + rect.height / 2
+          };
+          
+          const startAngle = Math.atan2(
+            worldStartY - center.y,
+            worldStartX - center.x
+          );
+          const currentAngle = Math.atan2(
+            worldCurrentY - center.y,
+            worldCurrentX - center.x
+          );
+          const deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
+          
+          return {
+            ...r,
+            rotation: (rect.rotation + deltaAngle) % 360
+          };
+        }
+
+        if (actionType === 'resize') {
+          const centerX = rect.x + rect.width / 2;
+          const centerY = rect.y + rect.height / 2;
+          const rectAngleRad = (rect.rotation * Math.PI) / 180;
+          const cos = Math.cos(-rectAngleRad);
+          const sin = Math.sin(-rectAngleRad);
+
+          const relativeMouseX = worldCurrentX - centerX;
+          const relativeMouseY = worldCurrentY - centerY;
+          const rectLocalCurrentX = relativeMouseX * cos - relativeMouseY * sin;
+          const rectLocalCurrentY = relativeMouseX * sin + relativeMouseY * cos;
+
+          const relativeStartX = worldStartX - centerX;
+          const relativeStartY = worldStartY - centerY;
+          const rectLocalStartX = relativeStartX * cos - relativeStartY * sin;
+          const rectLocalStartY = relativeStartX * sin + relativeStartY * cos;
+
+          const deltaLocalX = rectLocalCurrentX - rectLocalStartX;
+          const deltaLocalY = rectLocalCurrentY - rectLocalStartY;
+
+          let newWidth = rect.width;
+          let newHeight = rect.height;
+          let newX = rect.x;
+          let newY = rect.y;
+          
+          const scaleFactor = 1;
+
+          switch(corner) {
+            case 'topleft':
+              newWidth = rect.width - deltaLocalX * scaleFactor;
+              newHeight = rect.height - deltaLocalY * scaleFactor;
+              break;
+            case 'topright':
+              newWidth = rect.width + deltaLocalX * scaleFactor;
+              newHeight = rect.height - deltaLocalY * scaleFactor;
+              break;
+            case 'bottomleft':
+              newWidth = rect.width - deltaLocalX * scaleFactor;
+              newHeight = rect.height + deltaLocalY * scaleFactor;
+              break;
+            case 'bottomright':
+              newWidth = rect.width + deltaLocalX * scaleFactor;
+              newHeight = rect.height + deltaLocalY * scaleFactor;
+              break;
+          }
+          
+          newWidth = Math.max(50, newWidth);
+          newHeight = Math.max(50, newHeight);
+
+          const deltaWidth = newWidth - rect.width;
+          const deltaHeight = newHeight - rect.height;
+          const worldDeltaX = (deltaWidth / 2) * Math.cos(rectAngleRad) - (deltaHeight / 2) * Math.sin(rectAngleRad);
+          const worldDeltaY = (deltaWidth / 2) * Math.sin(rectAngleRad) + (deltaHeight / 2) * Math.cos(rectAngleRad);
+
+          newX = centerX - newWidth / 2;
+          newY = centerY - newHeight / 2;
+
+          return {
+            ...r,
+            width: newWidth,
+            height: newHeight,
+            x: newX,
+            y: newY
+          };
+        }
+
+        return r;
+      })
+    );
+  };
+
+  const handleEnd = () => {
+    document.removeEventListener('touchmove', handleMove);
+    document.removeEventListener('touchend', handleEnd);
+    document.removeEventListener('touchcancel', handleEnd);
+    setAction(null);
+    setrect(null);
+  };
+
+  document.addEventListener('touchmove', handleMove, { passive: false });
+  document.addEventListener('touchend', handleEnd);
+  document.addEventListener('touchcancel', handleEnd);
+}, [rectangles, viewport, canvasRotation]);
 
 // Update the canvas dragging handlers to handle right-click rotation
 const handleCanvasMouseDown = useCallback((e) => {
@@ -686,250 +1019,49 @@ const handleWheel = useCallback((e) => {
   }
 }, [rectangles, viewport, selectedId]);
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (canvas) {
-      // Add touch event listeners
-      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
-      canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
-      canvas.addEventListener('touchend', handleTouchEnd);
-      canvas.addEventListener('touchcancel', handleTouchEnd);
+useEffect(() => {
+  const canvas = canvasRef.current;
+  if (canvas) {
+    // Add touch event listeners
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+    canvas.addEventListener('touchcancel', handleTouchEnd);
 
-      // Existing mouse event listeners...
-      canvas.addEventListener('wheel', handleWheel, { passive: false });
-      canvas.addEventListener('mousedown', handleCanvasMouseDown);
-      canvas.addEventListener('mousemove', handleCanvasMouseMove);
-      canvas.addEventListener('contextmenu', handleContextMenu);
-      document.addEventListener('mouseup', handleCanvasMouseUp);
-      
-      return () => {
-        // Remove touch event listeners
-        canvas.removeEventListener('touchstart', handleTouchStart);
-        canvas.removeEventListener('touchmove', handleTouchMove);
-        canvas.removeEventListener('touchend', handleTouchEnd);
-        canvas.removeEventListener('touchcancel', handleTouchEnd);
+    // Existing mouse event listeners...
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+    canvas.addEventListener('mousedown', handleCanvasMouseDown);
+    canvas.addEventListener('mousemove', handleCanvasMouseMove);
+    canvas.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('mouseup', handleCanvasMouseUp);
+    
+    return () => {
+      // Remove touch event listeners
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      canvas.removeEventListener('touchcancel', handleTouchEnd);
 
-        // Remove existing mouse event listeners...
-        canvas.removeEventListener('wheel', handleWheel);
-        canvas.removeEventListener('mousedown', handleCanvasMouseDown);
-        canvas.removeEventListener('mousemove', handleCanvasMouseMove);
-        canvas.removeEventListener('contextmenu', handleContextMenu);
-        document.removeEventListener('mouseup', handleCanvasMouseUp);
-      };
-    }
-  }, [
-    handleWheel,
-    handleCanvasMouseDown,
-    handleCanvasMouseMove,
-    handleCanvasMouseUp,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd
-  ]);
+      // Remove existing mouse event listeners...
+      canvas.removeEventListener('wheel', handleWheel);
+      canvas.removeEventListener('mousedown', handleCanvasMouseDown);
+      canvas.removeEventListener('mousemove', handleCanvasMouseMove);
+      canvas.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('mouseup', handleCanvasMouseUp);
+    };
+  }
+}, [
+  handleWheel,
+  handleCanvasMouseDown,
+  handleCanvasMouseMove,
+  handleCanvasMouseUp,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd
+]);
 
   // Rectangle transformation handlers
-  // Rectangle transformation handlers
-  const handleMouseDown = (e, id, actionType, corner) => {
-    if (!canvasRef.current) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const rect = rectangles.find(r => r.id === id);
-    if (!rect) return;
   
-    const canvas = canvasRef.current.getBoundingClientRect();
-    const mouseX = e.clientX - canvas.left;
-    const mouseY = e.clientY - canvas.top;
-    
-    // Convert screen coordinates to canvas space
-    const canvasCenter = {
-      x: window.innerWidth / 2,
-      y: window.innerHeight / 2
-    };
-  
-    // First, transform mouse coordinates relative to canvas center
-    const relativeToCenterX = mouseX - canvasCenter.x;
-    const relativeToCenterY = mouseY - canvasCenter.y;
-    
-    // Apply inverse canvas rotation and scale
-    const canvasRotationRad = (-canvasRotation * Math.PI) / 180;
-    const rotatedX = (
-      relativeToCenterX * Math.cos(canvasRotationRad) - 
-      relativeToCenterY * Math.sin(canvasRotationRad)
-    );
-    const rotatedY = (
-      relativeToCenterX * Math.sin(canvasRotationRad) + 
-      relativeToCenterY * Math.cos(canvasRotationRad)
-    );
-    
-    // Apply inverse viewport transform to get world coordinates
-    const worldStartX = (rotatedX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
-    const worldStartY = (rotatedY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
-  
-    setSelectedId(id);
-    setAction({ type: actionType, corner });
-    setStartPoint({ x: worldStartX, y: worldStartY });
-    setrect({ ...rect });
-    setLastAngle(rect.rotation);
-  
-    const handleMove = (moveEvent) => {
-      const currentMouseX = moveEvent.clientX - canvas.left;
-      const currentMouseY = moveEvent.clientY - canvas.top;
-  
-      // Convert current mouse position using same transformation as start point
-      const relativeCurrentX = currentMouseX - canvasCenter.x;
-      const relativeCurrentY = currentMouseY - canvasCenter.y;
-      
-      const rotatedCurrentX = (
-        relativeCurrentX * Math.cos(canvasRotationRad) - 
-        relativeCurrentY * Math.sin(canvasRotationRad)
-      );
-      const rotatedCurrentY = (
-        relativeCurrentX * Math.sin(canvasRotationRad) + 
-        relativeCurrentY * Math.cos(canvasRotationRad)
-      );
-      
-      const worldCurrentX = (rotatedCurrentX / viewport.scale) - (viewport.x / viewport.scale) + canvasCenter.x;
-      const worldCurrentY = (rotatedCurrentY / viewport.scale) - (viewport.y / viewport.scale) + canvasCenter.y;
-      
-      // Calculate world space delta
-      const deltaX = worldCurrentX - worldStartX;
-      const deltaY = worldCurrentY - worldStartY;
-  
-      setRectangles(prevRects => 
-        prevRects.map(r => {
-          if (r.id !== id) return r;
-  
-          if (actionType === 'move') {
-            // For move action, we can directly apply the world-space delta
-            // since our coordinate transformation already accounts for canvas rotation
-            return {
-              ...r,
-              x: rect.x + deltaX,
-              y: rect.y + deltaY
-            };
-          }
-  
-          if (actionType === 'rotate') {
-            const center = {
-              x: rect.x + rect.width / 2,
-              y: rect.y + rect.height / 2
-            };
-            
-            // Calculate angles in the canvas-rotated coordinate system
-            const startAngle = Math.atan2(
-              worldStartY - center.y,
-              worldStartX - center.x
-            );
-            const currentAngle = Math.atan2(
-              worldCurrentY - center.y,
-              worldCurrentX - center.x
-            );
-            const deltaAngle = (currentAngle - startAngle) * (180 / Math.PI);
-            
-            return {
-              ...r,
-              rotation: (rect.rotation + deltaAngle) % 360
-            };
-          }
-  
-          if (actionType === 'resize') {
-            // Get rectangle's center in world space
-            const centerX = rect.x + rect.width / 2;
-            const centerY = rect.y + rect.height / 2;
-  
-            // Convert world coordinates to rectangle's local space
-            // First, undo the rectangle's rotation
-            const rectAngleRad = (rect.rotation * Math.PI) / 180;
-            const cos = Math.cos(-rectAngleRad);
-            const sin = Math.sin(-rectAngleRad);
-  
-            // Transform current point to rectangle's local space
-            const relativeMouseX = worldCurrentX - centerX;
-            const relativeMouseY = worldCurrentY - centerY;
-            const rectLocalCurrentX = relativeMouseX * cos - relativeMouseY * sin;
-            const rectLocalCurrentY = relativeMouseX * sin + relativeMouseY * cos;
-  
-            // Transform start point to rectangle's local space
-            const relativeStartX = worldStartX - centerX;
-            const relativeStartY = worldStartY - centerY;
-            const rectLocalStartX = relativeStartX * cos - relativeStartY * sin;
-            const rectLocalStartY = relativeStartX * sin + relativeStartY * cos;
-  
-            // Calculate deltas in rectangle's local space
-            const deltaLocalX = rectLocalCurrentX - rectLocalStartX;
-            const deltaLocalY = rectLocalCurrentY - rectLocalStartY;
-  
-            // Initialize new dimensions
-            let newWidth = rect.width;
-            let newHeight = rect.height;
-            let newX = rect.x;
-            let newY = rect.y;
-            
-            // Scale factor to account for canvas rotation and scale
-            const scaleFactor = 1;
-  
-            switch(corner) {
-              case 'topleft':
-                newWidth = rect.width - deltaLocalX * scaleFactor;
-                newHeight = rect.height - deltaLocalY * scaleFactor;
-                break;
-              case 'topright':
-                newWidth = rect.width + deltaLocalX * scaleFactor;
-                newHeight = rect.height - deltaLocalY * scaleFactor;
-                break;
-              case 'bottomleft':
-                newWidth = rect.width - deltaLocalX * scaleFactor;
-                newHeight = rect.height + deltaLocalY * scaleFactor;
-                break;
-              case 'bottomright':
-                newWidth = rect.width + deltaLocalX * scaleFactor;
-                newHeight = rect.height + deltaLocalY * scaleFactor;
-                break;
-            }
-            
-            // Calculate the change in dimensions
-            const deltaWidth = newWidth - rect.width;
-            const deltaHeight = newHeight - rect.height;
-  
-            // Ensure minimum size
-            newWidth = Math.max(50, newWidth);
-            newHeight = Math.max(50, newHeight);
-  
-            // Calculate position adjustments to maintain the correct corner position
-            // Convert the dimension changes back to world space
-            const worldDeltaX = (deltaWidth / 2) * Math.cos(rectAngleRad) - (deltaHeight / 2) * Math.sin(rectAngleRad);
-            const worldDeltaY = (deltaWidth / 2) * Math.sin(rectAngleRad) + (deltaHeight / 2) * Math.cos(rectAngleRad);
-  
-            // Adjust position to maintain the correct corner
-            newX = centerX - newWidth / 2;
-            newY = centerY - newHeight / 2;
-  
-            return {
-              ...r,
-              width: newWidth,
-              height: newHeight,
-              x: newX,
-              y: newY
-            };
-          }
-  
-          return r;
-        })
-      );
-    };
-  
-    const handleUp = () => {
-      document.removeEventListener('mousemove', handleMove);
-      document.removeEventListener('mouseup', handleUp);
-      setAction(null);
-      setrect(null);
-    };
-  
-    document.addEventListener('mousemove', handleMove);
-    document.addEventListener('mouseup', handleUp);
-  };
 
   const handleCornerHover = (e, id, corner) => {
     setHoveredCorner({ id, corner });
@@ -937,19 +1069,41 @@ const handleWheel = useCallback((e) => {
   };
 
   const handleCornerLeave = (e, id) => {
-    e.stopPropagation();
+    e?.stopPropagation?.(); // Make stopPropagation optional since we might not have an event
     setHoveredCorner({ id: null, corner: null });
-    handleMouseLeave(e, id);
+    if (e) handleMouseLeave(e, id); // Only call handleMouseLeave if we have an event
+  };
+
+  const handleCornerTouchEnter = (id, corner) => {
+    setHoveredCorner({ id, corner });
+  };
+
+  const handleCornerTouchLeave = () => {
+    setHoveredCorner({ id: null, corner: null });
   };
 
   return (
     <div>
-<div ref={canvasRef}
+<div 
+  ref={canvasRef}
   className="fixed inset-0 bg-gray-100"
   style={{ 
     overflow: 'hidden',
     cursor: isDraggingCanvas ? 'grabbing' : isRotatingCanvas ? cursors.rotate : 'grab'
-  }}>
+  }}
+  onTouchStart={(e) => {
+    // Only clear selection if touching the background directly
+    if (e.target === e.currentTarget) {
+      setSelectedId(null);
+    }
+    handleTouchStart(e);
+  }}
+  onTouchMove={handleTouchMove}
+  onTouchEnd={handleTouchEnd}
+  onMouseDown={handleCanvasMouseDown}
+  onMouseMove={handleCanvasMouseMove}
+  onContextMenu={handleContextMenu}
+>
   <div
     style={{
       position: 'absolute',
@@ -965,21 +1119,30 @@ const handleWheel = useCallback((e) => {
 
           return (
             <div 
-              key={rect.id} 
-              data-rect-id={rect.id} 
-              className="absolute"
-              style={{
-                left: `${rect.x - padding}px`,
-                top: `${rect.y - padding}px`,
-                width: `${rect.width + 2 * padding}px`,
-                height: `${rect.height + 2 * padding}px`,
-                transform: `rotate(${rect.rotation}deg)`,
-                transformOrigin: `${rect.width/2 + padding}px ${rect.height/2 + padding}px`,
-                zIndex: getZIndex(rect.id),
-              }}
-              onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
-              onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
-            >
+                key={rect.id} 
+                data-rect-id={rect.id} 
+                className="absolute"
+                style={{
+                  left: `${rect.x - padding}px`,
+                  top: `${rect.y - padding}px`,
+                  width: `${rect.width + 2 * padding}px`,
+                  height: `${rect.height + 2 * padding}px`,
+                  transform: `rotate(${rect.rotation}deg)`,
+                  transformOrigin: `${rect.width/2 + padding}px ${rect.height/2 + padding}px`,
+                  zIndex: getZIndex(rect.id),
+                  touchAction: 'none' // Prevent default touch actions
+                }}
+                onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
+                onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  setSelectedId(rect.id);
+                  setSelectionOrder(prev => {
+                    const filtered = prev.filter(id => id !== rect.id);
+                    return [rect.id, ...filtered];
+                  });
+                }}
+              >
             <div 
                 className="absolute inset-0"
                 style={{
@@ -1188,59 +1351,68 @@ const handleWheel = useCallback((e) => {
 
               {/* Interactive areas */}
               {selectedId === rect.id && (
-                <>
-                  {corners.map(corner => {
-                    const x = padding + (corner.includes('right') ? rect.width : 0);
-                    const y = padding + (corner.includes('bottom') ? rect.height : 0);
-                    
-                    // Move handle - positioned 30px inward from the corner
-                    const moveOffset = 30;
-                    const moveX = x + (corner.includes('right') ? -moveOffset : moveOffset);
-                    const moveY = y + (corner.includes('bottom') ? -moveOffset : moveOffset);
-                    
-                    // Rotation handle - positioned 15px outward from the corner
-                    const rotationOffset = 10;
-                    const rotateX = x + (corner.includes('right') ? rotationOffset : -rotationOffset);
-                    const rotateY = y + (corner.includes('bottom') ? rotationOffset : -rotationOffset);
-                    
-                    return (
-                      <React.Fragment key={corner}>
-                        {/* Move handle */}
-                        <InteractiveArea
-                          x={moveX}
-                          y={moveY}
-                          size={40}
-                          cursor='move'
-                          onMouseDown={(e) => handleMouseDown(e, rect.id, 'move')}
-                          onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                          onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                        />
-                        
-                        {/* Rotation handle */}
-                        <InteractiveArea
-                          x={rotateX}
-                          y={rotateY}
-                          cursor={cursors.rotate}
-                          onMouseDown={(e) => handleMouseDown(e, rect.id, 'rotate')}
-                          onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                          onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                        />
-                        
-                        {/* Scale handle */}
-                        <InteractiveArea
-                          x={x}
-                          y={y}
-                          cursor={cursors.scale}
+  <>
+    {corners.map(corner => {
+      const x = padding + (corner.includes('right') ? rect.width : 0);
+      const y = padding + (corner.includes('bottom') ? rect.height : 0);
+      
+      // Increase touch areas for mobile
+      const moveOffset = 30; // Increased from 30
+      const rotationOffset = 15; // Increased from 10
+      const scaleOffset = -5;
+      
+      const moveX = x + (corner.includes('right') ? -moveOffset : moveOffset);
+      const moveY = y + (corner.includes('bottom') ? -moveOffset : moveOffset);
+      const rotateX = x + (corner.includes('right') ? rotationOffset : -rotationOffset);
+      const rotateY = y + (corner.includes('bottom') ? rotationOffset : -rotationOffset);
+      const scaleX = x + (corner.includes('right') ? scaleOffset : -scaleOffset);
+      const scaleY = y + (corner.includes('bottom') ? scaleOffset : -scaleOffset);
+      
+      return (
+        <React.Fragment key={corner}>
+          <InteractiveArea
+      x={moveX}
+      y={moveY}
+      size={50}
+      cursor='move'
+      onMouseDown={(e) => handleMouseDown(e, rect.id, 'move')}
+      onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'move', corner)}
+      onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+      onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+      onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+      onTouchLeave={() => handleCornerTouchLeave()}
+    />
 
-                          onMouseDown={(e) => handleMouseDown(e, rect.id, 'resize', corner)}
-                          onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                          onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                        />
-                      </React.Fragment>
-                    );
-                  })}
-                </>
-              )}
+    <InteractiveArea
+      x={rotateX}
+      y={rotateY}
+      size={50}
+      cursor={cursors.rotate}
+      onMouseDown={(e) => handleMouseDown(e, rect.id, 'rotate')}
+      onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'rotate', corner)}
+      onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+      onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+      onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+      onTouchLeave={() => handleCornerTouchLeave()}
+    />
+
+    <InteractiveArea
+      x={scaleX}
+      y={scaleY}
+      size={50}
+      cursor={cursors.scale}
+      onMouseDown={(e) => handleMouseDown(e, rect.id, 'resize', corner)}
+      onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'resize', corner)}
+      onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+      onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+      onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+      onTouchLeave={() => handleCornerTouchLeave()}
+    />
+        </React.Fragment>
+      );
+    })}
+  </>
+)}
             </div>
           );
         })}
