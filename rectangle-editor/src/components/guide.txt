@@ -1,0 +1,3 @@
+Example adding new rectangle
+[New Rectangle](function:addRectangle?x=100&y=200&width=400&height=300&file=content.md)
+[New Rectangle](function:addRectangle?relative=true&x=50&y=50)
