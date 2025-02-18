@@ -9,5 +9,5 @@ Left click and drag to **pan**
 Right click and drag to **rotate**  
 Scroll to **zoom**  
 &nbsp;
-[**New Page**](function:addRectangle?file=controls.md)
-[Test Link](https://en.wikipedia.org/wiki/Bernoulli_distribution?rect=&width=500&height=500&relative=true&y=-50&x=200)
+[<u>**New Page**</u>](function:addRectangle?file=controls.md)
+[<u>**Test Link**</u>](https://en.wikipedia.org/wiki/Bernoulli_distribution?rect=&width=500&height=500&relative=true&y=-50&x=200)
