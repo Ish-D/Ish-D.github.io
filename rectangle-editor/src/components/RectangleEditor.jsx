@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from
 import ReactMarkdown from 'react-markdown';
 import Frame from 'react-frame-component';
 import rehypeRaw from "rehype-raw";
+import remarkGfm from 'remark-gfm';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
 
 const RectangleEditor = () => {
@@ -56,7 +57,7 @@ const RectangleEditor = () => {
     text: "",
     pageNumber: 0,
     margins: {
-      top: 80,
+      top: 40,
       right: 80,
       bottom: 80,
       left: 80
@@ -254,7 +255,7 @@ const RectangleEditor = () => {
         text,
         pageNumber: nextPageNumber,
         margins: {
-          top: parseFloat(params.marginTop) || 40,
+          top: parseFloat(params.marginTop) || 20,
           right: parseFloat(params.marginRight) || 40,
           bottom: parseFloat(params.marginBottom) || 40,
           left: parseFloat(params.marginLeft) || 40
@@ -321,7 +322,10 @@ const RectangleEditor = () => {
               }}
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]} className="cursor-pointer">
+                <ReactMarkdown 
+                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm]}
+                    className="cursor-pointer">
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -346,7 +350,10 @@ const RectangleEditor = () => {
               }}
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown rehypePlugins={[rehypeRaw]} className="cursor-pointer text-blue-600 hover:underline">
+                <ReactMarkdown
+                  rehypePlugins={[rehypeRaw]}
+                  remarkPlugins={[remarkGfm]}
+                className="cursor-pointer text-blue-600 hover:underline">
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -357,7 +364,10 @@ const RectangleEditor = () => {
         // Regular text
         return (
           <div key={index} style={{ fontFamily: font, fontSize: fontSize }}>
-            <ReactMarkdown rehypePlugins={[rehypeRaw]}>{part}</ReactMarkdown>
+            <ReactMarkdown 
+              rehypePlugins={[rehypeRaw]}
+              remarkPlugins={[remarkGfm]}
+            >{part}</ReactMarkdown>
           </div>
         );
       });
@@ -684,15 +694,119 @@ const FlapHoverArea = ({ rect, isSelected }) => {
   );
 };
 
+const getZIndex = (rectId) => {
+  const rect = rectangles.find(r => r.id === rectId);
+  if (rect && pinnedRectangles.has(rectId)) {
+    return 1000; // Pinned rectangles always on top
+  }
+  const index = selectionOrder.indexOf(rectId);
+  return selectionOrder.length - index;
+};
 
-  const getZIndex = (rectId) => {
-    const rect = rectangles.find(r => r.id === rectId);
-    if (rect && pinnedRectangles.has(rectId)) {
-      return 1000; // Pinned rectangles always on top
-    }
-    const index = selectionOrder.indexOf(rectId);
-    return selectionOrder.length - index;
+const hslToRgb = (h, s, l) => {
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1/6) return p + (q - p) * 6 * t;
+    if (t < 1/2) return q;
+    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+    return p;
   };
+
+  s /= 100;
+  l /= 100;
+  h /= 360;
+
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+
+  return {
+    r: Math.round(hue2rgb(p, q, h + 1/3) * 255),
+    g: Math.round(hue2rgb(p, q, h) * 255),
+    b: Math.round(hue2rgb(p, q, h - 1/3) * 255)
+  };
+};
+
+const interpolateColor = (color1, factor) => {
+  // Background color (Tailwind gray-100)
+  const bgColor = {
+    r: 243,
+    g: 244,
+    b: 246
+  };
+
+  // Parse the original color (assuming HSL format)
+  const hslMatch = color1.match(/hsl\((\d+),\s*([\d.]+)%,\s*([\d.]+)%\)/);
+  if (!hslMatch) return color1;
+
+  // Convert HSL to RGB
+  const rgbColor = hslToRgb(
+    parseInt(hslMatch[1]),
+    parseFloat(hslMatch[2]),
+    parseFloat(hslMatch[3])
+  );
+
+  // Interpolate between the colors
+  const r = Math.round(rgbColor.r + (bgColor.r - rgbColor.r) * factor);
+  const g = Math.round(rgbColor.g + (bgColor.g - rgbColor.g) * factor);
+  const b = Math.round(rgbColor.b + (bgColor.b - rgbColor.b) * factor);
+
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
+const getInterpolatedColor = (rectId) => {
+  const rect = rectangles.find(r => r.id === rectId);
+  if (!rect) return rect.color;
+
+  if (pinnedRectangles.has(rectId)) {
+    return rect.color; // Pinned rectangles keep their original color
+  }
+
+  const index = selectionOrder.indexOf(rectId);
+  if (index === -1 || index === 0) return rect.color; // Selected rectangle keeps original color
+
+  // Always interpolate over 8 steps, with a more gradual fall-off
+  const maxSteps = 8;
+  
+  // If beyond 8 steps, use constant interpolation
+  if (index >= maxSteps) {
+    const smoothFactor = 1 - Math.pow(1 - 1, 2); // Fully interpolated
+    return interpolateColor(rect.color, smoothFactor);
+  }
+
+  // Use a less aggressive power function to create more gradual fall-off
+  const interpolationFactor = Math.min(index / (maxSteps - 1), 1);
+  const smoothFactor = 1 - Math.pow(1 - interpolationFactor, 2);
+  
+  return interpolateColor(rect.color, smoothFactor);
+};
+
+const getInterpolatedDepth = (rectId) => {
+  const rect = rectangles.find(r => r.id === rectId);
+  if (!rect) return "4px 4px 8px rgba(0, 0, 0, 0.2)";
+
+  const index = selectionOrder.indexOf(rectId);
+  if (index === -1 || index === 0) return "4px 4px 8px rgba(0, 0, 0, 0.2)"; // Selected rectangle keeps original shadow
+
+  // Always interpolate over 8 steps, with a more gradual fall-off
+  const maxSteps = 8;
+  
+  // If beyond 8 steps, use constant interpolation
+  if (index >= maxSteps) {
+    return "4px 4px 8px rgba(0, 0, 0, 0.01)";
+  }
+
+  // Interpolate from 0.2 to 0.01 across 8 steps with more gradual fall-off
+  const startIntensity = 0.2;
+  const endIntensity = 0.01;
+  
+  // Use a less aggressive power function to create more gradual fall-off
+  const interpolationFactor = Math.min(index / (maxSteps - 1), 1);
+  const smoothFactor = 1 - Math.pow(1 - interpolationFactor, 2);
+  const shadowIntensity = startIntensity - (smoothFactor * (startIntensity - endIntensity));
+
+  return `4px 4px 8px rgba(0, 0, 0, ${shadowIntensity})`;
+};
 
   const handlePin = (rectId) => {
     setRectangles(prev => prev.map(rect => {
@@ -1616,7 +1730,7 @@ const FlapHoverArea = ({ rect, isSelected }) => {
                     height: `${rect.height}px`,
                     boxShadow: selectedId === rect.id
                       ? '8px 8px 16px rgba(0, 0, 0, 0.4)'
-                      : '4px 4px 8px rgba(0, 0, 0, 0.2)',
+                      : getInterpolatedDepth(rect.id),
                     /*
                     
                     */
@@ -1626,7 +1740,7 @@ const FlapHoverArea = ({ rect, isSelected }) => {
                   <div
                     className="absolute inset-0 overflow-hidden"
                     style={{
-                      backgroundColor: rect.color,
+                      backgroundColor: getInterpolatedColor(rect.id),
                       cursor: 'default',
                       clipPath: hoveredCorner.id === rect.id ? (() => {
                         const size = 20;
@@ -1711,7 +1825,7 @@ const FlapHoverArea = ({ rect, isSelected }) => {
                     top: `${padding}px`,
                     width: `${rect.width}px`,
                     height: `${rect.height}px`,
-                    backgroundColor: rect.color,
+                    backgroundColor: getInterpolatedColor(rect.id),
                     cursor: 'default',
                     clipPath: (hoveredCorner.id === rect.id && (isSelected || rect.isPinned)) ? (() => {
                       const size = 20;
