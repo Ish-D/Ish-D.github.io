@@ -360,10 +360,10 @@ const RectangleEditor = () => {
 
   const getZIndex = (rectId) => {
     // Check if this is the most recently created rectangle
-    if (rectId === Math.max(...rectangles.map(r => r.id))) {
-      // Give it the highest possible z-index
-      return selectionOrder.length + 1;
-    }
+    // if (rectId === Math.max(...rectangles.map(r => r.id))) {
+    //   // Give it the highest possible z-index
+    //   return selectionOrder.length + 1;
+    // }
     // Otherwise use selection order for z-index
     const index = selectionOrder.indexOf(rectId);
     return selectionOrder.length - index;
@@ -392,10 +392,28 @@ const RectangleEditor = () => {
         e.clientY
       );
 
-      // Check if the element under the cursor is NOT inside the current rectangle
-      if (!underCursor ||
-        !underCursor.closest(`[data-rect-id="${rectId}"]`)) {
+      if (!underCursor) {
         setSelectedId(null);
+        return;
+      }
+
+      // Find the closest rectangle container
+      const newRectContainer = underCursor.closest('[data-rect-id]');
+      
+      // If we're not entering another rectangle, clear selection
+      if (!newRectContainer) {
+        setSelectedId(null);
+        return;
+      }
+
+      // If we're entering a new rectangle, update selection to that rectangle's ID
+      const newRectId = parseInt(newRectContainer.getAttribute('data-rect-id'));
+      if (newRectId !== rectId) {
+        setSelectedId(newRectId);
+        setSelectionOrder(prev => {
+          const filtered = prev.filter(id => id !== newRectId);
+          return [newRectId, ...filtered];
+        });
       }
     });
   }, []);
