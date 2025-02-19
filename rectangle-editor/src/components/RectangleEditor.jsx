@@ -50,6 +50,7 @@ const RectangleEditor = () => {
     rotation: 0,
     color: `hsl(192, 100.00%, 99.00%)`,
     text: "",
+    pageNumber: 0,
     margins: {
       top: 80,
       right: 80,
@@ -222,12 +223,10 @@ const RectangleEditor = () => {
     const createRectangle = async (params, currentRect, content = null) => {
       const position = calculatePosition(params, currentRect);
       let text = "";
-  
+    
       if (content && content.url) {
-        // For external URLs, create an iframe
         text = `<iframe src="${content.url}" style="width:100%; height:100%; border:none;"></iframe>`;
       } else if (content && content.file) {
-        // For file content, fetch the file
         try {
           const response = await fetch(`/content/${content.file}`);
           text = await response.text();
@@ -235,7 +234,11 @@ const RectangleEditor = () => {
           console.error(`Error reading file ${content.file}:`, error);
         }
       }
-  
+    
+      // Get the highest page number from existing rectangles and increment
+      const highestPageNumber = Math.max(...rectangles.map(r => r.pageNumber), -1);
+      const nextPageNumber = highestPageNumber + 1;
+    
       const newRect = {
         id: Date.now(),
         x: position.x,
@@ -245,14 +248,15 @@ const RectangleEditor = () => {
         rotation: parseFloat(params.rotation) || -canvasRotation,
         color: `hsl(192, 100.00%, 99.00%)`,
         text,
+        pageNumber: nextPageNumber,
         margins: {
-          top:    parseFloat(params.marginTop)    || 40,
-          right:  parseFloat(params.marginRight)  || 40,
+          top: parseFloat(params.marginTop) || 40,
+          right: parseFloat(params.marginRight) || 40,
           bottom: parseFloat(params.marginBottom) || 40,
-          left:   parseFloat(params.marginLeft)   || 40
+          left: parseFloat(params.marginLeft) || 40
         }
       };
-  
+    
       setRectangles(prev => [...prev, newRect]);
       setSelectedId(newRect.id);
       setSelectionOrder(prev => [newRect.id, ...prev]);
@@ -486,6 +490,23 @@ const RectangleEditor = () => {
       ];
     }, [rect, renderContent]);
 
+    const pageNumberDisplay = (
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '8px',
+          left: '16px',
+          fontSize: 12,
+          fontFamily: font,
+          color: 'black',
+          zIndex: 20,
+          pointerEvents: 'none'
+        }}
+      >
+        {String(rect.pageNumber).padStart(2, '0')}
+      </div>
+    );
+  
     return (
       <div
         ref={contentRef}
@@ -506,6 +527,7 @@ const RectangleEditor = () => {
         >
           {parseContentWithMargins(rect.text)}
         </div>
+        {pageNumberDisplay}
       </div>
     );
   });
