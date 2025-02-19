@@ -11,15 +11,6 @@ This content appears only in the right margin!
 
 %{margin-top-start}
 This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin!
-This appears in the top margin! This appears in the top margin!
 %{margin-top-end}
 
 %{margin-bottom-start}

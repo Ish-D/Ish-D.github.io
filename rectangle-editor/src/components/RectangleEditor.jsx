@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from
 import ReactMarkdown from 'react-markdown';
 import Frame from 'react-frame-component';
 import rehypeRaw from "rehype-raw";
+import { Pin, PinOff, Trash2 } from 'lucide-react';
 
 const RectangleEditor = () => {
   // Setup Stage
@@ -11,6 +12,8 @@ const RectangleEditor = () => {
   const [rect, setrect] = useState(null);
   const [lastAngle, setLastAngle] = useState(0);
   const [hoveredCorner, setHoveredCorner] = useState({ id: null, corner: null });
+  const [pinnedRectangles, setPinnedRectangles] = useState(new Set());
+  const [hoveredFlap, setHoveredFlap] = useState(null);
   const [selectionOrder, setSelectionOrder] = useState([]);
 
   const [activeTouches, setActiveTouches] = useState(new Map());
@@ -48,6 +51,7 @@ const RectangleEditor = () => {
     width: initialWidth,
     height: initialHeight,
     rotation: 0,
+    isPinned: false,
     color: `hsl(192, 100.00%, 99.00%)`,
     text: "",
     pageNumber: 0,
@@ -486,7 +490,9 @@ const RectangleEditor = () => {
     
       return [
         mainContentElement,
-        ...marginElements
+        ...marginElements.map((element, index) => (
+          <React.Fragment key={`margin-${index}`}>{element}</React.Fragment>
+        ))
       ];
     }, [rect, renderContent]);
 
@@ -503,7 +509,7 @@ const RectangleEditor = () => {
           pointerEvents: 'none'
         }}
       >
-        {String(rect.pageNumber).padStart(2, '0')}
+        {(hoveredCorner.id === rect.id && hoveredCorner.corner === 'bottomleft') ?  String("") : String(rect.pageNumber).padStart(2, '0')}
       </div>
     );
   
@@ -517,30 +523,229 @@ const RectangleEditor = () => {
         }}
         style={{ cursor: 'text' }}
       >
-        <div 
-          className="prose prose-sm max-w-none h-full"
-          style={{
-            padding: rect.margins ? 
-              `${rect.margins.top}px ${rect.margins.right}px ${rect.margins.bottom}px ${rect.margins.left}px` 
-              : '16px'
-          }}
-        >
-          {parseContentWithMargins(rect.text)}
-        </div>
+          <div 
+            className="prose prose-sm max-w-none h-full"
+            style={{
+              padding: rect.margins ? 
+                `${rect.margins.top}px ${rect.margins.right}px ${rect.margins.bottom}px ${rect.margins.left}px` 
+                : '16px'
+            }}
+          >
+            {parseContentWithMargins(rect.text).map((element, index) => (
+              <React.Fragment key={`content-${rect.id}-${index}`}>
+                {element}
+              </React.Fragment>
+            ))}
+          </div>
         {pageNumberDisplay}
       </div>
     );
   });
 
+// TopFlap component with roll-out animation
+const TopFlap = React.memo(({ rect, isSelected }) => {
+  const isHovered = hoveredFlap === rect.id;
+  const flapHeight = 50;
+  const flapWidth = 140;
+  const verticalOffset = -22;
+  
+  return (
+    <div
+      className={`
+        flap-content 
+        absolute 
+        overflow-hidden
+        transition-all 
+        duration-300 
+        ease-out
+      `}
+      style={{
+        top: `-${verticalOffset + flapHeight}px`,
+        left: '50%',
+        transform: `translateX(-50%) perspective(1000px)`,
+        width: `${flapWidth}px`,
+        height: `${flapHeight}px`,
+        zIndex: getZIndex(rect.id),
+        visibility: isHovered ? 'visible' : 'visible', // Keep visible for animation
+        opacity: isHovered ? 1 : 0,
+      }}
+      onMouseEnter={() => setHoveredFlap(rect.id)}
+      onMouseLeave={(e) => {
+        const relatedTarget = e.relatedTarget;
+        if (!relatedTarget?.closest('.flap-hover-area')) {
+          setHoveredFlap(null);
+        }
+      }}
+    >
+      <div 
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          transform: isHovered ? 'rotateX(0deg)' : 'rotateX(-90deg)',
+          transformOrigin: 'bottom',
+          backfaceVisibility: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: `hsl(192, 100.00%, 99.00%)`,
+            boxShadow: isHovered 
+              ? '0 4px 6px rgba(0, 0, 0, 0.2)' 
+              : '0 2px 4px rgba(0, 0, 0, 0.2)',
+          }}
+        >
+          <div className="absolute inset-0 flex justify-center items-center gap-6">
+            {[
+              {
+                key: 'pin',
+                icon: rect.isPinned ? <PinOff size={20} /> : <Pin size={20} />,
+                onClick: (e) => {
+                  e.stopPropagation();
+                  handlePin(rect.id);
+                },
+                style: {
+                  color: rect.isPinned ? '#2563eb' : '#6b7280'
+                },
+                className: `
+                  p-2 
+                  rounded 
+                  hover:bg-gray-100 
+                  ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
+                `
+              },
+              {
+                key: 'delete',
+                icon: <Trash2 size={20} />,
+                onClick: (e) => {
+                  e.stopPropagation();
+                  handleDelete(rect.id);
+                },
+                className: `
+                  p-2 
+                  rounded 
+                  hover:bg-gray-100 
+                  text-gray-500 
+                  hover:text-red-500
+                  ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
+                `
+              }
+            ].map((control, index) => (
+              <button
+                key={`${control.key}-${rect.id}`}
+                className={control.className}
+                onClick={control.onClick}
+                style={{
+                  ...control.style,
+                  transitionDelay: `${150 + index * 50}ms`
+                }}
+              >
+                {control.icon}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// FlapHoverArea component with adjusted hover area
+const FlapHoverArea = ({ rect, isSelected }) => {
+  const areaHeight = 50;
+  const areaWidth = 160;
+  const verticalOffset = 30;
+
+  return (
+    <div
+      className="absolute flap-hover-area"
+      style={{
+        top: `-${verticalOffset}px`,
+        left: '50%',
+        transform: 'translateX(-50%)',
+        width: `${areaWidth}px`,
+        height: `${areaHeight}px`,
+        pointerEvents: 'auto',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={() => setHoveredFlap(rect.id)}
+      onMouseLeave={(e) => {
+        const relatedTarget = e.relatedTarget;
+        const flapContent = relatedTarget?.closest('.flap-content');
+        if (!flapContent) {
+          setHoveredFlap(null);
+        }
+      }}
+    />
+  );
+};
+
+
   const getZIndex = (rectId) => {
-    // Check if this is the most recently created rectangle
-    // if (rectId === Math.max(...rectangles.map(r => r.id))) {
-    //   // Give it the highest possible z-index
-    //   return selectionOrder.length + 1;
-    // }
-    // Otherwise use selection order for z-index
+    const rect = rectangles.find(r => r.id === rectId);
+    if (rect && pinnedRectangles.has(rectId)) {
+      return 1000; // Pinned rectangles always on top
+    }
     const index = selectionOrder.indexOf(rectId);
     return selectionOrder.length - index;
+  };
+
+  const handlePin = (rectId) => {
+    setRectangles(prev => prev.map(rect => {
+      if (rect.id === rectId) {
+        const newIsPinned = !rect.isPinned;
+        if (newIsPinned) {
+          setPinnedRectangles(prev => new Set([...prev, rectId]));
+        } else {
+          setPinnedRectangles(prev => {
+            const next = new Set(prev);
+            next.delete(rectId);
+            return next;
+          });
+        }
+        return { ...rect, isPinned: newIsPinned };
+      }
+      return rect;
+    }));
+  };
+
+  const handleDelete = (rectId) => {
+    setRectangles(prev => {
+      const updatedRectangles = prev.filter(rect => rect.id !== rectId);
+      // If this deletion would leave us with no rectangles, restore initial state
+      if (updatedRectangles.length === 0) {
+        const newInitialRect = {
+          ...initialRect,
+          id: Date.now() // Ensure a new unique ID
+        };
+        // Load initial content
+        fetch(`/content/landing.md`)
+          .then(response => response.text())
+          .then(text => {
+            setRectangles([{
+              ...newInitialRect,
+              text: text
+            }]);
+          });
+        setSelectionOrder([newInitialRect.id]);
+        return [newInitialRect];
+      }
+      return updatedRectangles;
+    });
+  
+    setPinnedRectangles(prev => {
+      const next = new Set(prev);
+      next.delete(rectId);
+      return next;
+    });
+    if (selectedId === rectId) {
+      setSelectedId(null);
+    }
+    setSelectionOrder(prev => prev.filter(id => id !== rectId));
   };
 
   const handleMouseEnter = useCallback((e, rectId) => {
@@ -1355,35 +1560,45 @@ const RectangleEditor = () => {
           }}
         >
           {rectangles.map((rect) => {
-            const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
-            const padding = 20;
+           const isSelected = selectedId === rect.id;
+           const isPinned = rect.isPinned;
+           const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
+           const padding = 20;
 
-            return (
-              <div
-                key={rect.id}
-                data-rect-id={rect.id}
-                className="absolute"
-                style={{
-                  left: `${rect.x - padding}px`,
-                  top: `${rect.y - padding}px`,
-                  width: `${rect.width + 2 * padding}px`,
-                  height: `${rect.height + 2 * padding}px`,
-                  transform: `rotate(${rect.rotation}deg)`,
-                  transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
-                  zIndex: getZIndex(rect.id),
-                  touchAction: 'none' // Prevent default touch actions
-                }}
-                onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
-                onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
-                onTouchStart={(e) => {
-                  e.stopPropagation();
-                  setSelectedId(rect.id);
-                  setSelectionOrder(prev => {
-                    const filtered = prev.filter(id => id !== rect.id);
-                    return [rect.id, ...filtered];
-                  });
-                }}
-              >
+              return (
+                <div
+                  key={rect.id}
+                  data-rect-id={rect.id}
+                  className="absolute"
+                  style={{
+                    left: `${rect.x - padding}px`,
+                    top: `${rect.y - padding}px`,
+                    width: `${rect.width + 2 * padding}px`,
+                    height: `${rect.height + 2 * padding}px`,
+                    transform: `rotate(${rect.rotation}deg)`,
+                    transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
+                    zIndex: getZIndex(rect.id),
+                    pointerEvents: isPinned ? 'auto' : 'auto',
+                    touchAction: 'none'
+                  }}
+                  onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
+                  onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
+                  onTouchStart={(e) => {
+                    if (isPinned) return;
+                    e.stopPropagation();
+                    setSelectedId(rect.id);
+                    setSelectionOrder(prev => {
+                      const filtered = prev.filter(id => id !== rect.id);
+                      return [rect.id, ...filtered];
+                    });
+                  }}
+                >
+                {/* Add FlapHoverArea */}
+                <FlapHoverArea rect={rect} isSelected={isSelected} />
+                
+                {/* Add TopFlap */}
+                <TopFlap rect={rect} isSelected={isSelected} />
+
                 <div
                   className="absolute inset-0"
                   style={{
@@ -1498,7 +1713,7 @@ const RectangleEditor = () => {
                     height: `${rect.height}px`,
                     backgroundColor: rect.color,
                     cursor: 'default',
-                    clipPath: hoveredCorner.id === rect.id ? (() => {
+                    clipPath: (hoveredCorner.id === rect.id && (isSelected || rect.isPinned)) ? (() => {
                       const size = 20;
                       const overlap = 10;
                       switch (hoveredCorner.corner) {
@@ -1526,8 +1741,8 @@ const RectangleEditor = () => {
                 />
 
                   {/* Folded corners with enhanced shadow effect */}
-                  {selectedId === rect.id && corners.map(corner => (
-                    <div
+                  {(selectedId === rect.id || rect.isPinned) && corners.map(corner => (
+                      <div
                       key={corner}
                       style={{
                         position: 'absolute',
@@ -1593,9 +1808,29 @@ const RectangleEditor = () => {
                     />
                   ))}
                 </div>
-
+                {/* Corner hover areas for pinned rectangles */}
+                {rect.isPinned && corners.map(corner => {
+                  const x = padding + (corner.includes('right') ? rect.width : 0);
+                  const y = padding + (corner.includes('bottom') ? rect.height : 0);
+                  return (
+                    <div
+                      key={corner}
+                      style={{
+                        position: 'absolute',
+                        left: x - 25,
+                        top: y - 25,
+                        width: '50px',
+                        height: '50px',
+                        pointerEvents: 'auto',
+                        zIndex: 20
+                      }}
+                      onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+                      onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+                    />
+                  );
+                })}
                 {/* Interactive areas */}
-                {selectedId === rect.id && (
+                {isSelected && !isPinned && (
                   <>
                     {corners.map(corner => {
                       const x = padding + (corner.includes('right') ? rect.width : 0);
