@@ -49,7 +49,13 @@ const RectangleEditor = () => {
     height: initialHeight,
     rotation: 0,
     color: `hsl(192, 100.00%, 99.00%)`,
-    text: ""
+    text: "",
+    margins: {
+      top: 80,
+      right: 80,
+      bottom: 80,
+      left: 80
+    }
   };
 
   // Load initial content from file if path is provided
@@ -151,8 +157,8 @@ const RectangleEditor = () => {
   };
 
   const RectangleContent = React.memo(({ rect, scrollPositions, setRectangles, setSelectedId, setSelectionOrder, canvasRotation }) => {
-    const contentRef = useRef(null);
-  
+    const contentRef = useRef(null);    
+
     const handleScroll = useCallback((e) => {
       scrollPositions.current[rect.id] = e.target.scrollTop;
     }, [rect.id, scrollPositions]);
@@ -238,7 +244,13 @@ const RectangleEditor = () => {
         height: parseFloat(params.height) || 200,
         rotation: parseFloat(params.rotation) || -canvasRotation,
         color: `hsl(192, 100.00%, 99.00%)`,
-        text
+        text,
+        margins: {
+          top:    parseFloat(params.marginTop)    || 40,
+          right:  parseFloat(params.marginRight)  || 40,
+          bottom: parseFloat(params.marginBottom) || 40,
+          left:   parseFloat(params.marginLeft)   || 40
+        }
       };
   
       setRectangles(prev => [...prev, newRect]);
@@ -343,16 +355,156 @@ const RectangleEditor = () => {
       });
     }, [rect, availableFunctions, setRectangles, setSelectedId, setSelectionOrder]);
   
+    const parseContentWithMargins = useCallback((text) => {
+      const margins = rect.margins || {
+        top: 20,
+        right: 20,
+        bottom: 20,
+        left: 20
+      };
+    
+      const marginContents = {
+        left: [],
+        'left-normal': [],
+        right: [],
+        'right-normal': [],
+        top: [],
+        bottom: []
+      };
+    
+      // Updated regex to capture the optional -normal flag
+      const cleanedText = text.replace(
+        /%{margin-(left|right|top|bottom)(-normal)?-start}([\s\S]*?)%{margin-\1(?:-normal)?-end}/g, 
+        (match, position, normalFlag, content) => {
+          const key = normalFlag ? `${position}-normal` : position;
+          marginContents[key].push(content.trim());
+          return '';
+        }
+      );
+    
+      const mainContent = cleanedText.trim();
+    
+      const mainContentElement = (
+        <div 
+          style={{ 
+            position: 'absolute',
+            top: `${margins.top}px`,
+            left: `${margins.left}px`,
+            right: `${margins.right}px`,
+            bottom: `${margins.bottom}px`,
+            overflow: 'auto'  // Allow scrolling within the clipped area
+          }}
+        >
+          {renderContent(mainContent)}
+        </div>
+      );
+
+      const marginElements = Object.entries(marginContents).map(([positionKey, contents]) => 
+        contents.map((content, idx) => {
+          const [position, orientation] = positionKey.split('-');
+          const isNormal = orientation === 'normal';
+          const style = {
+            position: 'absolute',
+            margin: 0,
+            padding: '8px',
+            zIndex: 10,
+            overflow: 'auto',
+            boxSizing: 'border-box'
+          };
+    
+          const wrapperStyle = {
+            width: '100%',
+            height: '100%',
+            fontFamily: 'Palatino',
+            fontSize: 16,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          };
+    
+          const isSideMargin = position === 'left' || position === 'right';
+          
+          const contentStyle = {
+            transform: !isNormal && position === 'left' ? 
+              'rotate(-90deg)' : 
+              !isNormal && position === 'right' ? 
+              'rotate(90deg)' : 
+              'none',
+            transformOrigin: 'center center',
+            whiteSpace: isSideMargin && !isNormal ? 'nowrap' : 'pre-wrap',
+            width: isSideMargin && !isNormal ? 'max-content' : '100%',
+            maxWidth: isSideMargin && !isNormal ? 
+              `${rect.height - margins.top - margins.bottom - 16}px` : 
+              '100%'
+          };
+    
+          switch(position) {
+            case 'left':
+              style.left = 0;
+              style.width = `${margins.left}px`;
+              style.top = `${margins.top}px`;
+              style.bottom = `${margins.bottom}px`;
+              break;
+            case 'right':
+              style.right = 0;
+              style.width = `${margins.right}px`;
+              style.top = `${margins.top}px`;
+              style.bottom = `${margins.bottom}px`;
+              break;
+            case 'top':
+              style.top = 0;
+              style.height = `${margins.top}px`;
+              style.left = `${margins.left}px`;
+              style.right = `${margins.right}px`;
+              break;
+            case 'bottom':
+              style.bottom = 0;
+              style.height = `${margins.bottom}px`;
+              style.left = `${margins.left}px`;
+              style.right = `${margins.right}px`;
+              break;
+          }
+    
+          return (
+            <div 
+              key={`margin-${positionKey}-${idx}`}
+              style={style}
+            >
+              <div style={wrapperStyle}>
+                <div style={contentStyle}>
+                  {isSideMargin && !isNormal ? content : renderContent(content)}
+                </div>
+              </div>
+            </div>
+          );
+        })
+      ).flat();
+    
+      return [
+        mainContentElement,
+        ...marginElements
+      ];
+    }, [rect, renderContent]);
+
     return (
       <div
         ref={contentRef}
-        className="absolute inset-0 p-4 overflow-auto select-text"
+        className="absolute inset-0 overflow-auto select-text"
         onClick={(e) => e.stopPropagation()}
-        onScroll={handleScroll}
+        onScroll={(e) => {
+          scrollPositions.current[rect.id] = e.target.scrollTop;
+        }}
         style={{ cursor: 'text' }}
       >
-        <div className="prose prose-sm max-w-none h-full">
-          {renderContent(rect.text)}
+        <div 
+          className="prose prose-sm max-w-none h-full"
+          style={{
+            padding: rect.margins ? 
+              `${rect.margins.top}px ${rect.margins.right}px ${rect.margins.bottom}px ${rect.margins.left}px` 
+              : '16px'
+          }}
+        >
+          {parseContentWithMargins(rect.text)}
         </div>
       </div>
     );
