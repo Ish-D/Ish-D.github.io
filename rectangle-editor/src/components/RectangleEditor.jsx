@@ -1,9 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
+import { Pin, PinOff, Trash2 } from 'lucide-react';
+
 import ReactMarkdown from 'react-markdown';
-import Frame from 'react-frame-component';
 import rehypeRaw from "rehype-raw";
 import remarkGfm from 'remark-gfm';
-import { Pin, PinOff, Trash2 } from 'lucide-react';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css'; // Import Katex CSS
 
 const RectangleEditor = () => {
   // Setup Stage
@@ -40,8 +43,8 @@ const RectangleEditor = () => {
   });
 
   // Initialization
-  let initialWidth = window.innerWidth - (2 * 0.25 * window.innerWidth);
-  let initialHeight = window.innerHeight - (2 * 0.1 * window.innerHeight);
+  let initialWidth = window.innerWidth - (2 * 0.3 * window.innerWidth);
+  let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
   let fontSize = 16;
 
@@ -57,10 +60,10 @@ const RectangleEditor = () => {
     text: "",
     pageNumber: 0,
     margins: {
-      top: 40,
-      right: 80,
-      bottom: 80,
-      left: 80
+      top: 8,
+      right: 8,
+      bottom: 8,
+      left: 8
     }
   };
 
@@ -255,10 +258,10 @@ const RectangleEditor = () => {
         text,
         pageNumber: nextPageNumber,
         margins: {
-          top: parseFloat(params.marginTop) || 20,
-          right: parseFloat(params.marginRight) || 40,
-          bottom: parseFloat(params.marginBottom) || 40,
-          left: parseFloat(params.marginLeft) || 40
+          top: parseFloat(params.marginTop) || 5,
+          right: parseFloat(params.marginRight) || 10,
+          bottom: parseFloat(params.marginBottom) || 10,
+          left: parseFloat(params.marginLeft) || 10
         }
       };
     
@@ -299,6 +302,49 @@ const RectangleEditor = () => {
       // Match function calls, external links with parameters, and other text
       const parts = text.match(/(\[.*?\]\(function:\w+(?:\?[^\)]+)?\))|(\[.*?\]\(https?:\/\/[^?]+(?:\?rect=[^\)]+)?\))|([^\[]+)/g) || [];
   
+      const markdownComponents = {
+        // Handle div elements, preserving className and other attributes
+        div: ({ node, className, children, ...props }) => {
+          if (className?.includes('text-center')) {
+            return (
+              <div className={className} {...props}>
+                <div className="markdown-content">
+                  {children}
+                </div>
+              </div>
+            );
+          }
+          return <div className={className} {...props}>{children}</div>;
+        },
+        
+        // Headers with proper styling
+        h1: ({ node, children }) => (
+          <h1 className="mt-6 mb-4 text-4xl font-bold">{children}</h1>
+        ),
+        h2: ({ node, children }) => (
+          <h2 className="mt-5 mb-3 text-3xl font-bold">{children}</h2>
+        ),
+        h3: ({ node, children }) => (
+          <h3 className="mt-4 mb-2 text-2xl font-bold">{children}</h3>
+        ),
+        // Lists with proper alignment and nesting
+        ul: ({ node, children }) => (
+          <ul className="list-disc pl-6 my-3 text-left block w-full">{children}</ul>
+        ),
+        ol: ({ node, children }) => (
+          <ol className="list-decimal pl-6 my-3 text-left block w-full">{children}</ol>
+        ),
+        li: ({ node, children }) => {
+          // Check if children contains a list
+          const hasNestedList = React.Children.toArray(children).some(
+            child => React.isValidElement(child) && (child.type === 'ul' || child.type === 'ol')
+          );
+          return (
+            <li className={`my-1 ${hasNestedList ? 'block' : ''}`}>{children}</li>
+          );
+        }
+      };
+
       return parts.map((part, index) => {
         // Check for function call link with optional parameters
         const functionMatch = part.match(/\[(.*?)\]\(function:(\w+)(?:\?([^)]*))?\)/);
@@ -323,9 +369,11 @@ const RectangleEditor = () => {
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
                 <ReactMarkdown 
-                  rehypePlugins={[rehypeRaw]}
-                  remarkPlugins={[remarkGfm]}
-                    className="cursor-pointer">
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
+                  components={markdownComponents}
+                  className="cursor-pointer markdown-wrapper"
+                >
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -344,16 +392,17 @@ const RectangleEditor = () => {
               onClick={async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-  
                 const params = rectParams ? parseParams(rectParams) : {};
                 await createRectangle(params, rect, { url });
               }}
             >
               <div style={{ fontFamily: font, fontSize: fontSize }}>
                 <ReactMarkdown
-                  rehypePlugins={[rehypeRaw]}
-                  remarkPlugins={[remarkGfm]}
-                className="cursor-pointer text-blue-600 hover:underline">
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeRaw, rehypeKatex]}
+                  components={markdownComponents}
+                  className="cursor-pointer text-blue-600 hover:underline markdown-wrapper"
+                >
                   {linkText}
                 </ReactMarkdown>
               </div>
@@ -363,11 +412,39 @@ const RectangleEditor = () => {
   
         // Regular text
         return (
-          <div key={index} style={{ fontFamily: font, fontSize: fontSize }}>
+          <div key={index} style={{ fontFamily: font, fontSize: fontSize }} className="markdown-wrapper">
+            <style>
+              {`
+                .markdown-wrapper .text-center .markdown-content > * {
+                  margin-left: auto;
+                  margin-right: auto;
+                }
+                .markdown-wrapper .text-center .markdown-content ul,
+                .markdown-wrapper .text-center .markdown-content ol {
+                  display: inline-block;
+                  text-align: left;
+                  width: auto;
+                }
+                .markdown-wrapper .text-center .markdown-content li > ul,
+                .markdown-wrapper .text-center .markdown-content li > ol {
+                  display: block;
+                  margin-top: 0.5rem;
+                  margin-bottom: 0.5rem;
+                }
+                .markdown-wrapper .text-center .markdown-content h1,
+                .markdown-wrapper .text-center .markdown-content h2,
+                .markdown-wrapper .text-center .markdown-content h3 {
+                  text-align: center;
+                }
+              `}
+            </style>
             <ReactMarkdown 
-              rehypePlugins={[rehypeRaw]}
-              remarkPlugins={[remarkGfm]}
-            >{part}</ReactMarkdown>
+              remarkPlugins={[remarkGfm, remarkMath]}
+              rehypePlugins={[rehypeRaw, rehypeKatex]}
+              components={markdownComponents}
+            >
+              {part}
+            </ReactMarkdown>
           </div>
         );
       });
@@ -381,35 +458,67 @@ const RectangleEditor = () => {
         left: 20
       };
     
-      const marginContents = {
-        left: [],
-        'left-normal': [],
-        right: [],
-        'right-normal': [],
-        top: [],
-        bottom: []
+      const lines = text.split('\n');
+      
+const marginContents = {
+  left: [],
+  'left-normal': [],
+  right: [],
+  'right-normal': [],
+  top: [],
+  bottom: []
+};
+
+let lineIndex = 0;
+const mainContentLines = [];
+
+while (lineIndex < lines.length) {
+  const line = lines[lineIndex];
+  
+  const marginMatch = line.match(/%{margin-(left|right|top|bottom)(-normal)?-start}/);
+  
+  if (marginMatch) {
+    const position = marginMatch[1];
+    const normalFlag = marginMatch[2];
+    const key = normalFlag ? `${position}-normal` : position;
+    
+    let marginContent = [];
+    let currentLine = lineIndex + 1;
+    
+    while (currentLine < lines.length && !lines[currentLine].includes(`%{margin-${position}${normalFlag || ''}-end}`)) {
+      marginContent.push(lines[currentLine]);
+      currentLine++;
+    }
+    
+    marginContents[key].push({
+      content: marginContent.join('\n').trim(),
+      position: mainContentLines.length // Store current main content line number
+    });
+    
+    lineIndex = currentLine + 1;
+  } else {
+    mainContentLines.push(line);
+    lineIndex++;
+  }
+}
+
+const mainContent = mainContentLines.join('\n').trim();
+    
+      const marginSizes = {
+        left: (rect.width * (margins.left / 100)),
+        right: (rect.width * (margins.right / 100)),
+        top: (rect.height * (margins.top / 100)),
+        bottom: (rect.height * (margins.bottom / 100))
       };
-    
-      // Updated regex to capture the optional -normal flag
-      const cleanedText = text.replace(
-        /%{margin-(left|right|top|bottom)(-normal)?-start}([\s\S]*?)%{margin-\1(?:-normal)?-end}/g, 
-        (match, position, normalFlag, content) => {
-          const key = normalFlag ? `${position}-normal` : position;
-          marginContents[key].push(content.trim());
-          return '';
-        }
-      );
-    
-      const mainContent = cleanedText.trim();
-    
+
       const mainContentElement = (
         <div 
           style={{ 
             position: 'absolute',
-            top: `${margins.top}px`,
-            left: `${margins.left}px`,
-            right: `${margins.right}px`,
-            bottom: `${margins.bottom}px`,
+            top: `${marginSizes.top}px`,
+            left: `${marginSizes.left}px`,
+            right: `${marginSizes.right}px`,
+            bottom: `${marginSizes.bottom}px`,
             overflow: 'auto'  // Allow scrolling within the clipped area
           }}
         >
@@ -421,76 +530,106 @@ const RectangleEditor = () => {
         contents.map((content, idx) => {
           const [position, orientation] = positionKey.split('-');
           const isNormal = orientation === 'normal';
+          const isSideMargin = position === 'left' || position === 'right';
+          
+          const lineHeight = 20;
+          const verticalOffset = isSideMargin ? content.position * lineHeight : 0;
+          
           const style = {
             position: 'absolute',
             margin: 0,
             padding: '8px',
             zIndex: 10,
-            overflow: 'auto',
+            overflow: 'hidden',
             boxSizing: 'border-box'
           };
-    
+      
           const wrapperStyle = {
             width: '100%',
-            height: '100%',
+            height: isSideMargin ? '100%' : '100%', // Changed to 100% for side margins
             fontFamily: 'Palatino',
             fontSize: 16,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            alignItems: isSideMargin ? 'flex-start' : 'center',
+            justifyContent: isSideMargin ? 'flex-start' : 'center',
+            position: 'relative',
+            overflow: 'hidden' // Ensure content doesn't overflow
           };
-    
-          const isSideMargin = position === 'left' || position === 'right';
-          
+      
           const contentStyle = {
             transform: !isNormal && position === 'left' ? 
-              'rotate(-90deg)' : 
+              'rotate(-90deg) translate(30%, 0%)' : 
               !isNormal && position === 'right' ? 
-              'rotate(90deg)' : 
+              'rotate(90deg) translate(-30%, 0%)' : 
               'none',
-            transformOrigin: 'center center',
+            transformOrigin: !isNormal && position === 'left' ? 
+              'left bottom' :
+              !isNormal && position === 'right' ?
+              'right bottom' :
+              'top left',
             whiteSpace: isSideMargin && !isNormal ? 'nowrap' : 'pre-wrap',
             width: isSideMargin && !isNormal ? 'max-content' : '100%',
             maxWidth: isSideMargin && !isNormal ? 
-              `${rect.height - margins.top - margins.bottom - 16}px` : 
-              '100%'
+              `${rect.height - margins.top - margins.bottom - 32}px` : 
+              '100%',
+            position: isSideMargin ? 'absolute' : 'static',
+            top: isSideMargin ? `${verticalOffset}px` : 'auto',
+            overflowWrap: 'break-word',
+            // wordBreak: 'break-all',
+            // For rotated text, we need to position it relative to its container
+            ...(isSideMargin && !isNormal && {
+              position: 'absolute',
+              left: position === 'left' ? '50%' : undefined,
+              right: position === 'right' ? '50%' : undefined,
+              top: '50%'
+            })
           };
-    
+      
           switch(position) {
             case 'left':
               style.left = 0;
-              style.width = `${margins.left}px`;
-              style.top = `${margins.top}px`;
-              style.bottom = `${margins.bottom}px`;
+              style.width = `${marginSizes.left}px`;
+              style.top = `${marginSizes.top + 16}px`;
+              style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
+              style.overflow = 'hidden';
               break;
             case 'right':
               style.right = 0;
-              style.width = `${margins.right}px`;
-              style.top = `${margins.top}px`;
-              style.bottom = `${margins.bottom}px`;
+              style.width = `${marginSizes.right}px`;
+              style.top = `${marginSizes.top + 16}px`;
+              style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
+              style.overflow = 'hidden';
               break;
             case 'top':
               style.top = 0;
-              style.height = `${margins.top}px`;
-              style.left = `${margins.left}px`;
-              style.right = `${margins.right}px`;
+              style.height = `${marginSizes.top}px`;
+              style.left = `${marginSizes.left + 16}px`;
+              style.right = `${marginSizes.right + 16}px`;
               break;
             case 'bottom':
               style.bottom = 0;
-              style.height = `${margins.bottom}px`;
-              style.left = `${margins.left}px`;
-              style.right = `${margins.right}px`;
+              style.height = `${marginSizes.bottom}px`;
+              style.left = `${marginSizes.left + 16}px`;
+              style.right = `${marginSizes.right + 16}px`;
               break;
           }
-    
+      
+          // Get scroll position for this rectangle
+          const scrollTop = scrollPositions.current[rect.id] || 0;
+      
+          // Add scroll adjustment for side margins
+          if (isSideMargin) {
+            contentStyle.transform += ` translateY(-${scrollTop}px)`;
+          }
+      
           return (
-            <div 
+            <div
               key={`margin-${positionKey}-${idx}`}
               style={style}
             >
               <div style={wrapperStyle}>
                 <div style={contentStyle}>
-                  {isSideMargin && !isNormal ? content : renderContent(content)}
+                  {isSideMargin && !isNormal ? content.content : renderContent(content.content)}
                 </div>
               </div>
             </div>
@@ -537,7 +676,7 @@ const RectangleEditor = () => {
             className="prose prose-sm max-w-none h-full"
             style={{
               padding: rect.margins ? 
-                `${rect.margins.top}px ${rect.margins.right}px ${rect.margins.bottom}px ${rect.margins.left}px` 
+                `${rect.height * (rect.margins.top / 100)}px ${rect.width * (rect.margins.right / 100)}px ${rect.height * (rect.margins.bottom / 100)}px ${rect.width * (rect.margins.left / 100)}px` 
                 : '16px'
             }}
           >
