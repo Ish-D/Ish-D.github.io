@@ -70,12 +70,46 @@ const RectangleEditor = () => {
   // Load initial content from file if path is provided
   useEffect(() => {
     const loadInitialContent = async () => {
-      const response = await fetch(`/content/landing.md`);
-      let text = await response.text();
-      setRectangles(prev => [{
-        ...prev[0],
-        text: text
-      }]);
+      // Get the pathname from the URL
+      const pathname = window.location.pathname;
+      
+      // Remove leading slash and get the filename
+      const filename = pathname.substring(1);
+      
+      // If no specific path (or just '/'), use landing.md, otherwise use pathname.md
+      const mdFile = filename ? `${filename}.md` : 'landing.md';
+      
+      try {
+        const response = await fetch(`/content/${mdFile}`);
+        if (!response.ok) {
+          // If file not found, fall back to landing.md
+          const fallbackResponse = await fetch('/content/landing.md');
+          let text = await fallbackResponse.text();
+          setRectangles(prev => [{
+            ...prev[0],
+            text: text
+          }]);
+        } else {
+          let text = await response.text();
+          setRectangles(prev => [{
+            ...prev[0],
+            text: text
+          }]);
+        }
+      } catch (error) {
+        console.error('Error loading markdown file:', error);
+        // On error, try to load landing.md
+        try {
+          const fallbackResponse = await fetch('/content/landing.md');
+          let text = await fallbackResponse.text();
+          setRectangles(prev => [{
+            ...prev[0],
+            text: text
+          }]);
+        } catch (fallbackError) {
+          console.error('Error loading fallback file:', fallbackError);
+        }
+      }
     };
     loadInitialContent();
   }, []);
