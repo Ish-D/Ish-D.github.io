@@ -1,3 +1,7 @@
 Example adding new rectangle
 [New Rectangle](function:addRectangle?x=100&y=200&width=400&height=300&file=content.md)
 [New Rectangle](function:addRectangle?relative=true&x=50&y=50)
+
+
+[***New Page***](function:addRectangle?file=controls.md)  
+[***Test Link***](https://en.wikipedia.org/wiki/Bernoulli_distribution?rect=&width=500&height=500&relative=true&y=-50&x=200)

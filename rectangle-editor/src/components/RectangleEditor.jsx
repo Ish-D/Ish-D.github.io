@@ -405,7 +405,7 @@ const RectangleEditor = () => {
     const renderContent = useCallback((text) => {
       // Check if the text contains an iframe
       const iframeMatch = text.match(/<iframe.*?src="(.*?)".*?>/);
-  
+    
       if (iframeMatch) {
         return (
           <div className="absolute inset-0 flex flex-col">
@@ -422,10 +422,50 @@ const RectangleEditor = () => {
           </div>
         );
       }
-  
-      // Match function calls, external links with parameters, and other text
-      const parts = text.match(/(\[.*?\]\(function:\w+(?:\?[^\)]+)?\))|(\[.*?\]\(https?:\/\/[^?]+(?:\?rect=[^\)]+)?\))|([^\[]+)/g) || [];
-  
+    
+      // Pre-process the text to find and mark special elements
+      const customElements = new Map();
+      let elementCounter = 0;
+    
+      // Replace function calls and links with unique placeholders
+      const processedText = text.replace(
+        /\[(.*?)\]\((function:\w+(?:\?[^)]+)?|https?:\/\/[^?]+(?:\?rect=[^)]+)?)\)/g,
+        (match, linkText, target) => {
+          const placeholder = `CUSTOM_ELEMENT_${elementCounter++}`;
+          
+          if (target.startsWith('function:')) {
+            const [, functionName, params] = target.match(/function:(\w+)(?:\?(.+))?/);
+            const functionToCall = availableFunctions[functionName];
+            
+            if (functionToCall) {
+              customElements.set(placeholder, {
+                type: 'function',
+                content: linkText,
+                onClick: (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  functionToCall(params);
+                }
+              });
+            }
+          } else {
+            const [, url, rectParams] = target.match(/(https?:\/\/[^?]+)(?:\?rect=(.+))?/);
+            customElements.set(placeholder, {
+              type: 'link',
+              content: linkText,
+              onClick: async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const params = rectParams ? parseParams(rectParams) : {};
+                await createRectangle(params, rect, { url });
+              }
+            });
+          }
+    
+          return placeholder;
+        }
+      );
+    
       const markdownComponents = {
         // Handle div elements, preserving className and other attributes
         div: ({ node, className, children, ...props }) => {
@@ -459,120 +499,97 @@ const RectangleEditor = () => {
           <ol className="list-decimal pl-6 my-3 text-left block w-full">{children}</ol>
         ),
         li: ({ node, children }) => {
-          // Check if children contains a list
           const hasNestedList = React.Children.toArray(children).some(
             child => React.isValidElement(child) && (child.type === 'ul' || child.type === 'ol')
           );
           return (
             <li className={`my-1 ${hasNestedList ? 'block' : ''}`}>{children}</li>
           );
+        },
+        p: ({ children }) => {
+          // Process children to replace placeholders with custom elements
+          const processedChildren = React.Children.map(children, child => {
+            if (typeof child === 'string') {
+              const segments = child.split(/(\bCUSTOM_ELEMENT_\d+\b)/);
+              return segments.map((segment, index) => {
+                if (customElements.has(segment)) {
+                  const element = customElements.get(segment);
+                  return (
+                    <span
+                      key={index}
+                      onClick={element.onClick}
+                      className={`cursor-pointer inline ${element.type === 'link' ? 'text-blue-600 hover:underline' : ''}`}
+                      style={{ fontFamily: font, fontSize: fontSize, display: 'inline' }}
+                    >
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeRaw, rehypeKatex]}
+                        components={{
+                          ...markdownComponents,
+                          p: ({ children }) => <>{children}</>,
+                        }}
+                      >
+                        {element.content}
+                      </ReactMarkdown>
+                    </span>
+                  );
+                }
+                return segment;
+              });
+            }
+            return child;
+          });
+    
+          // Check if we should render without a p tag
+          const allInline = processedChildren.every(child => 
+            typeof child === 'string' || 
+            (React.isValidElement(child) && (
+              child.type === 'span' ||
+              child.props?.className?.includes('inline')
+            ))
+          );
+    
+          return allInline ? <>{processedChildren}</> : <p>{processedChildren}</p>;
         }
       };
-
-      return parts.map((part, index) => {
-        // Check for function call link with optional parameters
-        const functionMatch = part.match(/\[(.*?)\]\(function:(\w+)(?:\?([^)]*))?\)/);
-        if (functionMatch) {
-          const [, linkText, functionName, params] = functionMatch;
-          const functionToCall = availableFunctions[functionName];
-  
-          if (!functionToCall) {
-            console.warn(`Function "${functionName}" not found in availableFunctions`);
-            return null;
-          }
-  
-          return (
-            <div
-              key={index}
-              className="inline"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                functionToCall(params);
-              }}
-            >
-              <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeRaw, rehypeKatex]}
-                  components={markdownComponents}
-                  className="cursor-pointer markdown-wrapper"
-                >
-                  {linkText}
-                </ReactMarkdown>
-              </div>
-            </div>
-          );
-        }
-  
-        // Check for external link with optional rectangle parameters
-        const externalLinkMatch = part.match(/\[(.*?)\]\((https?:\/\/[^?]+)(?:\?rect=([^\)]+))?\)/);
-        if (externalLinkMatch) {
-          const [, linkText, url, rectParams] = externalLinkMatch;
-          return (
-            <div
-              key={index}
-              className="inline"
-              onClick={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const params = rectParams ? parseParams(rectParams) : {};
-                await createRectangle(params, rect, { url });
-              }}
-            >
-              <div style={{ fontFamily: font, fontSize: fontSize }}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm, remarkMath]}
-                  rehypePlugins={[rehypeRaw, rehypeKatex]}
-                  components={markdownComponents}
-                  className="cursor-pointer text-blue-600 hover:underline markdown-wrapper"
-                >
-                  {linkText}
-                </ReactMarkdown>
-              </div>
-            </div>
-          );
-        }
-  
-        // Regular text
-        return (
-          <div key={index} style={{ fontFamily: font, fontSize: fontSize }} className="markdown-wrapper">
-            <style>
-              {`
-                .markdown-wrapper .text-center .markdown-content > * {
-                  margin-left: auto;
-                  margin-right: auto;
-                }
-                .markdown-wrapper .text-center .markdown-content ul,
-                .markdown-wrapper .text-center .markdown-content ol {
-                  display: inline-block;
-                  text-align: left;
-                  width: auto;
-                }
-                .markdown-wrapper .text-center .markdown-content li > ul,
-                .markdown-wrapper .text-center .markdown-content li > ol {
-                  display: block;
-                  margin-top: 0.5rem;
-                  margin-bottom: 0.5rem;
-                }
-                .markdown-wrapper .text-center .markdown-content h1,
-                .markdown-wrapper .text-center .markdown-content h2,
-                .markdown-wrapper .text-center .markdown-content h3 {
-                  text-align: center;
-                }
-              `}
-            </style>
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm, remarkMath]}
-              rehypePlugins={[rehypeRaw, rehypeKatex]}
-              components={markdownComponents}
-            >
-              {part}
-            </ReactMarkdown>
-          </div>
-        );
-      });
-    }, [rect, availableFunctions, setRectangles, setSelectedId, setSelectionOrder]);
+    
+      return (
+        <div style={{ fontFamily: font, fontSize: fontSize }} className="markdown-wrapper">
+          <style>
+            {`
+              .markdown-wrapper .text-center .markdown-content > * {
+                margin-left: auto;
+                margin-right: auto;
+              }
+              .markdown-wrapper .text-center .markdown-content ul,
+              .markdown-wrapper .text-center .markdown-content ol {
+                display: inline-block;
+                text-align: left;
+                width: auto;
+              }
+              .markdown-wrapper .text-center .markdown-content li > ul,
+              .markdown-wrapper .text-center .markdown-content li > ol {
+                display: block;
+                margin-top: 0.5rem;
+                margin-bottom: 0.5rem;
+              }
+              .markdown-wrapper .text-center .markdown-content h1,
+              .markdown-wrapper .text-center .markdown-content h2,
+              .markdown-wrapper .text-center .markdown-content h3 {
+                text-align: center;
+              }
+            `}
+          </style>
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeRaw, rehypeKatex]}
+            components={markdownComponents}
+          >
+            {processedText}
+          </ReactMarkdown>
+        </div>
+      );
+    }, [rect, availableFunctions, font, fontSize]);
   
     const parseContentWithMargins = useCallback((text) => {
       const margins = rect.margins || {
@@ -632,7 +649,7 @@ const RectangleEditor = () => {
         left: (rect.width * (margins.left / 100)),
         right: (rect.width * (margins.right / 100)),
         top: (rect.height * (margins.top / 100)),
-        bottom: (rect.height * (margins.bottom / 100))
+        bottom: Math.max(rect.height * (margins.bottom / 100))
       };
 
       const mainContentElement = (
@@ -767,8 +784,8 @@ const RectangleEditor = () => {
       <div
         style={{
           position: 'absolute',
-          bottom: '8px',
-          left: '16px',
+          bottom: '6px',
+          left: '10px',
           fontSize: 12,
           fontFamily: font,
           color: 'black',
