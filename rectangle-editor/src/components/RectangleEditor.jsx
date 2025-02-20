@@ -68,51 +68,85 @@ const RectangleEditor = () => {
   };
 
   // Load initial content from file if path is provided
-  useEffect(() => {
-    const loadInitialContent = async () => {
-      // Get the pathname from the URL
-      const pathname = window.location.pathname;
+// Load initial content from file based on URL path
+// Load initial content from file based on URL path
+useEffect(() => {
+  const loadInitialContent = async () => {
+    const hash = window.location.hash;
       
-      // Remove leading slash and get the filename
-      const filename = pathname.substring(1);
-      
-      // If no specific path (or just '/'), use landing.md, otherwise use pathname.md
-      const mdFile = filename ? `${filename}.md` : 'landing.md';
-      
-      try {
-        const response = await fetch(`/content/${mdFile}`);
-        if (!response.ok) {
-          // If file not found, fall back to landing.md
-          const fallbackResponse = await fetch('/content/landing.md');
-          let text = await fallbackResponse.text();
-          setRectangles(prev => [{
-            ...prev[0],
-            text: text
-          }]);
-        } else {
-          let text = await response.text();
-          setRectangles(prev => [{
-            ...prev[0],
-            text: text
-          }]);
-        }
-      } catch (error) {
-        console.error('Error loading markdown file:', error);
-        // On error, try to load landing.md
+    // Remove the #/ prefix and get page name
+    const pageName = hash.replace('#/', '') || 'landing';
+    
+    // Form the markdown filename
+    const mdFile = `${pageName}.md`;
+    console.log('Attempting to load markdown file:', mdFile);
+    
+    try {
+      // Try all possible path combinations
+      const possiblePaths = [
+        `/content/${mdFile}`,
+        `content/${mdFile}`,
+        `/${mdFile}`,
+        mdFile
+      ];
+
+      let content = null;
+      for (const path of possiblePaths) {
+        console.log('Trying path:', path);
         try {
-          const fallbackResponse = await fetch('/content/landing.md');
-          let text = await fallbackResponse.text();
-          setRectangles(prev => [{
-            ...prev[0],
-            text: text
-          }]);
-        } catch (fallbackError) {
-          console.error('Error loading fallback file:', fallbackError);
+          const response = await fetch(path);
+          if (response.ok) {
+            content = await response.text();
+            console.log('Successfully loaded from:', path);
+            break;
+          }
+        } catch (e) {
+          console.log('Failed to load from:', path);
         }
       }
-    };
-    loadInitialContent();
-  }, []);
+
+      // If no content was loaded, try landing.md
+      if (!content) {
+        console.log('Falling back to landing.md');
+        for (const path of ['/content/landing.md', 'content/landing.md', '/landing.md', 'landing.md']) {
+          try {
+            const response = await fetch(path);
+            if (response.ok) {
+              content = await response.text();
+              console.log('Successfully loaded landing.md from:', path);
+              break;
+            }
+          } catch (e) {
+            console.log('Failed to load landing.md from:', path);
+          }
+        }
+      }
+
+      // Update the rectangles with the content
+      if (content) {
+        setRectangles(prev => [{
+          ...prev[0],
+          text: content
+        }]);
+      } else {
+        console.error('Failed to load any markdown content');
+        setRectangles(prev => [{
+          ...prev[0],
+          text: "# Error\nFailed to load content. Please check the console for details."
+        }]);
+      }
+    } catch (error) {
+      console.error('Error in loadInitialContent:', error);
+      setRectangles(prev => [{
+        ...prev[0],
+        text: "# Error\nFailed to load content. Please check the console for details."
+      }]);
+    }
+  };
+  loadInitialContent();
+  window.addEventListener('hashchange', loadInitialContent);
+  return () => window.removeEventListener('hashchange', loadInitialContent);
+}, []);
 
   // Initialize selection order with the initial rectangle
   const [rectangles, setRectangles] = useState([initialRect]);
