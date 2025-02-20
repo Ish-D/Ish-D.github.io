@@ -2,7 +2,7 @@
 <div class="text-center">
 <!-- <img src="/content/higuchi.png"> -->
 
-## Main Title 2
+## Main Title 3
 
 This is centered text with **bold** and *italic*.
 
