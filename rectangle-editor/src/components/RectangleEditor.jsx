@@ -616,11 +616,14 @@ const RectangleEditor = () => {
     while (lineIndex < lines.length) {
       const line = lines[lineIndex];
       
-      const marginMatch = line.match(/%{margin-(left|right|top|bottom)(-normal)?-start}/);
+      const marginMatch = line.match(/%{margin-(left|right|top|bottom)(-normal)?-start(\s+vertical=(-?\d+(?:\.\d+)?(?:px|%)|\d+(?:\.\d+)?(?:px|%)))?(\s+horizontal=(-?\d+(?:\.\d+)?(?:px|%)|\d+(?:\.\d+)?(?:px|%)))?}/);
+
       
       if (marginMatch) {
         const position = marginMatch[1];
         const normalFlag = marginMatch[2];
+        const verticalPosition = marginMatch[4] || '0px';    // Extract from regex group 4
+        const horizontalPosition = marginMatch[6] || '0px';  // Extract from regex group 6
         const key = normalFlag ? `${position}-normal` : position;
         
         let marginContent = [];
@@ -633,7 +636,8 @@ const RectangleEditor = () => {
         
         marginContents[key].push({
           content: marginContent.join('\n').trim(),
-          position: mainContentLines.length // Store current main content line number
+          vertical: verticalPosition,
+          horizontal: horizontalPosition
         });
         
         lineIndex = currentLine + 1;
@@ -646,10 +650,10 @@ const RectangleEditor = () => {
       const mainContent = mainContentLines.join('\n').trim();
     
       const marginSizes = {
-        left: (rect.width * (margins.left / 100)),
-        right: (rect.width * (margins.right / 100)),
-        top: (rect.height * (margins.top / 100)),
-        bottom: Math.max(rect.height * (margins.bottom / 100))
+        left:   Math.max(rect.width  * (margins.left   / 100), 28),
+        right:  Math.max(rect.width  * (margins.right  / 100), 28),
+        top:    Math.max(rect.height * (margins.top    / 100), 28),
+        bottom: Math.max(rect.height * (margins.bottom / 100), 28)
       };
 
       const mainContentElement = (
@@ -675,13 +679,31 @@ const RectangleEditor = () => {
           const isNormal = orientation === 'normal';
           const isSideMargin = position === 'left' || position === 'right';
           
-          const lineHeight = 20;
-          const verticalOffset = isSideMargin ? content.position * lineHeight : 0;
+          const parsePosition = (pos) => {
+            if (typeof pos !== 'string') return { value: 0, unit: 'px' };
+            const match = pos.match(/^(-?\d*\.?\d+)(px|%)$/);
+            if (!match) return { value: 0, unit: 'px' };
+            return {
+              value: parseFloat(match[1]),
+              unit: match[2]
+            };
+          };
+          
+          const verticalPos = parsePosition(content.vertical);
+          const horizontalPos = parsePosition(content.horizontal);
+          
+          const verticalOffset = verticalPos.unit === '%' 
+            ? `${verticalPos.value}%` 
+            : `${verticalPos.value}px`;
+            
+          const horizontalOffset = horizontalPos.unit === '%' 
+            ? `${horizontalPos.value}%` 
+            : `${horizontalPos.value}px`;
           
           const style = {
             position: 'absolute',
             margin: 0,
-            padding: '8px',
+            // padding: '8px',
             zIndex: 10,
             overflow: 'hidden',
             boxSizing: 'border-box'
@@ -689,37 +711,32 @@ const RectangleEditor = () => {
       
           const wrapperStyle = {
             width: '100%',
-            height: isSideMargin ? '100%' : '100%', // Changed to 100% for side margins
+            height: isSideMargin ? '100%' : '100%',
             fontFamily: 'Palatino',
             fontSize: 16,
             display: 'flex',
             alignItems: isSideMargin ? 'flex-start' : 'center',
             justifyContent: isSideMargin ? 'flex-start' : 'center',
             position: 'relative',
-            overflow: 'hidden' // Ensure content doesn't overflow
+            overflow: 'hidden'
           };
       
           const contentStyle = {
-            transform: !isNormal && position === 'left' ? 
-              'rotate(-90deg) translate(30%, 0%)' : 
-              !isNormal && position === 'right' ? 
-              'rotate(90deg) translate(-30%, 0%)' : 
-              position == 'top' ? 'translate(0%, -20%)' : 'none',
+            transform: 
+              !isNormal && position === 'left' ? 'rotate(-90deg) translate(30%, 50%)' : 
+              !isNormal && position === 'right' ? 'rotate(90deg) translate(-30%, 50%)' : 
+              'none',
             transformOrigin: !isNormal && position === 'left' ? 
               'left bottom' :
               !isNormal && position === 'right' ?
               'right bottom' :
               'top left',
-            whiteSpace: isSideMargin && !isNormal ? 'nowrap' : 'pre-wrap',
             width: isSideMargin && !isNormal ? 'max-content' : '100%',
             maxWidth: isSideMargin && !isNormal ? 
               `${rect.height - margins.top - margins.bottom - 32}px` : 
               '100%',
-            position: isSideMargin ? 'absolute' : 'static',
-            top: isSideMargin ? `${verticalOffset}px` : 'auto',
+            position: 'absolute',
             overflowWrap: 'break-word',
-            // wordBreak: 'break-all',
-            // For rotated text, we need to position it relative to its container
             ...(isSideMargin && !isNormal && {
               position: 'absolute',
               left: position === 'left' ? '50%' : undefined,
@@ -730,31 +747,48 @@ const RectangleEditor = () => {
       
           switch(position) {
             case 'left':
-              style.left = 0;
+              style.left = horizontalOffset;
               style.width = `${marginSizes.left}px`;
-              style.top = `${marginSizes.top + 16}px`;
+              style.top = verticalOffset;
               style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
               style.overflow = 'hidden';
               break;
             case 'right':
-              style.right = 0;
+              style.right = horizontalOffset;
               style.width = `${marginSizes.right}px`;
-              style.top = `${marginSizes.top + 16}px`;
+              style.top = verticalOffset;
               style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
               style.overflow = 'hidden';
               break;
-            case 'top':
-              style.top = 0;
+              case 'top':
+              style.position = 'absolute';
+              style.top = verticalOffset;
               style.height = `${marginSizes.top}px`;
-              style.left = `${marginSizes.left + 16}px`;
-              style.right = `${marginSizes.right + 16}px`;
+              style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
+              style.overflow = 'visible';
+              if (content.horizontal === '0px' || !content.horizontal) {
+                style.left = '50%';
+                style.transform = 'translateX(-50%)';
+              } else {
+                style.left = horizontalOffset;
+              }
               break;
-            case 'bottom':
-              style.bottom = 0;
-              style.height = `${marginSizes.bottom}px`;
-              style.left = `${marginSizes.left + 16}px`;
-              style.right = `${marginSizes.right + 16}px`;
-              break;
+              case 'bottom':
+                const baseBottomOffset = 4;  // Negative to move down
+                const calculatedBottom = parseFloat(verticalOffset) || 0;
+                style.position = 'absolute';
+                style.bottom = `${calculatedBottom - baseBottomOffset}px`;
+                style.height = `${marginSizes.bottom}px`;
+                style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
+                style.overflow = 'visible';
+                style.maxHeight = '32px';  // Limit height to prevent excessive overflow
+                if (content.horizontal === '0px' || !content.horizontal) {
+                  style.left = '50%';
+                  style.transform = 'translateX(-50%)';
+                } else {
+                  style.left = horizontalOffset;
+                }
+                break;
           }
       
           return (
@@ -764,7 +798,7 @@ const RectangleEditor = () => {
             >
               <div style={wrapperStyle}>
                 <div style={contentStyle}>
-                  {isSideMargin && !isNormal ? content.content : renderContent(content.content)}
+                  {renderContent(content.content)}
                 </div>
               </div>
             </div>
@@ -784,8 +818,8 @@ const RectangleEditor = () => {
       <div
         style={{
           position: 'absolute',
-          bottom: '6px',
-          left: '10px',
+          bottom: '4px',
+          left: '9px',
           fontSize: 12,
           fontFamily: font,
           color: 'black',
@@ -799,17 +833,18 @@ const RectangleEditor = () => {
   
     return (
       <div
-        // ref={contentRef}
         className="absolute inset-0 overflow-auto select-text"
         onClick={(e) => e.stopPropagation()}
-        // onScroll={handleScroll}
         style={{ cursor: 'text' }}
       >
           <div 
             className="prose prose-sm max-w-none h-full"
             style={{
               padding: rect.margins ? 
-                `${rect.height * (rect.margins.top / 100)}px ${rect.width * (rect.margins.right / 100)}px ${rect.height * (rect.margins.bottom / 100)}px ${rect.width * (rect.margins.left / 100)}px` 
+                `${rect.height * (rect.margins.top / 100)}px 
+                ${rect.width * (rect.margins.right / 100)}px 
+                ${rect.height * (rect.margins.bottom / 100)}px 
+                ${rect.width * (rect.margins.left / 100)}px` 
                 : '16px'
             }}
           >
@@ -837,9 +872,6 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
         flap-content 
         absolute 
         overflow-hidden
-        transition-all 
-        duration-300 
-        ease-out
       `}
       style={{
         top: `-${verticalOffset + flapHeight}px`,
@@ -848,7 +880,6 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
         width: `${flapWidth}px`,
         height: `${flapHeight}px`,
         zIndex: getZIndex(rect.id),
-        visibility: isHovered ? 'visible' : 'visible', // Keep visible for animation
         opacity: isHovered ? 1 : 0,
       }}
       onMouseEnter={() => setHoveredFlap(rect.id)}
@@ -1953,20 +1984,20 @@ const getInterpolatedDepth = (rectId) => {
 
               return (
                 <div
-                  key={rect.id}
-                  data-rect-id={rect.id}
-                  className="absolute"
-                  style={{
-                    left: `${rect.x - padding}px`,
-                    top: `${rect.y - padding}px`,
-                    width: `${rect.width + 2 * padding}px`,
-                    height: `${rect.height + 2 * padding}px`,
-                    transform: `rotate(${rect.rotation}deg)`,
-                    transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
-                    zIndex: getZIndex(rect.id),
-                    pointerEvents: isPinned ? 'auto' : 'auto',
-                    touchAction: 'none'
-                  }}
+                key={rect.id}
+                data-rect-id={rect.id}
+                className="absolute"
+                style={{
+                  left: `${rect.x - padding}px`,
+                  top: `${rect.y - padding}px`,
+                  width: `${rect.width + 2 * padding}px`,
+                  height: `${rect.height + 2 * padding + 32}px`,  // Add extra height for bottom margin
+                  transform: `rotate(${rect.rotation}deg)`,
+                  transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
+                  zIndex: getZIndex(rect.id),
+                  pointerEvents: isPinned ? 'auto' : 'auto',
+                  touchAction: 'none'
+                }}
                   onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
                   onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
                   onTouchStart={(e) => {
@@ -2099,6 +2130,7 @@ const getInterpolatedDepth = (rectId) => {
                     height: `${rect.height}px`,
                     backgroundColor: getInterpolatedColor(rect.id),
                     cursor: 'default',
+                    overflow: 'visible',
                     clipPath: (hoveredCorner.id === rect.id && (isSelected || rect.isPinned)) ? (() => {
                       const size = 20;
                       const overlap = 10;

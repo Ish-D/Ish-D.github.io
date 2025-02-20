@@ -5,3 +5,19 @@ Example adding new rectangle
 
 [***New Page***](function:addRectangle?file=controls.md)  
 [***Test Link***](https://en.wikipedia.org/wiki/Bernoulli_distribution?rect=&width=500&height=500&relative=true&y=-50&x=200)
+
+%{margin-top-start}
+Top margin text
+%{margin-top-end}
+
+%{margin-right-start vertical=25% horizontal=5px}
+Right margin text
+%{margin-right-end}
+
+%{margin-bottom-start vertical=15px horizontal=30%}
+Bottom margin text
+%{margin-bottom-end}
+
+%{margin-left-normal-start vertical=50% horizontal=10px}
+Left margin text (horizontal)
+%{margin-left-normal-end}
