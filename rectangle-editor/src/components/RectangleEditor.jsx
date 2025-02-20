@@ -35,6 +35,37 @@ const RectangleEditor = () => {
 
   const canvasRef = useRef(null);
   const scrollPositions = useRef({});
+  
+  const checkIsMobile = () => {
+    let hasTouchScreen = false;
+    
+    // First check
+    if ("maxTouchPoints" in navigator) {
+      hasTouchScreen = navigator.maxTouchPoints > 0;
+    } else if ("msMaxTouchPoints" in navigator) {
+      hasTouchScreen = navigator.msMaxTouchPoints > 0;
+    }
+    
+    // Second check
+    const mQ = window.matchMedia && window.matchMedia("(pointer:coarse)");
+    if (mQ && mQ.media === "(pointer:coarse)") {
+      hasTouchScreen = !!mQ.matches;
+    }
+    
+    // Third check
+    if ('orientation' in window) {
+      hasTouchScreen = true;
+    }
+
+    // Fourth check
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isMobileUserAgent = /mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+
+    // Screen size check
+    const isSmallScreen = window.innerWidth <= 768;
+
+    return hasTouchScreen || isMobileUserAgent || isSmallScreen;
+  };
 
   const [viewport, setViewport] = useState({
     x: 0,
@@ -43,7 +74,7 @@ const RectangleEditor = () => {
   });
 
   // Initialization
-  let initialWidth = window.innerWidth - (2 * 0.3 * window.innerWidth);
+  let initialWidth = window.innerWidth - (2 * (checkIsMobile() ? 0.05 : 0.3) * window.innerWidth);
   let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
   let fontSize = 16;
@@ -60,17 +91,14 @@ const RectangleEditor = () => {
     text: "",
     pageNumber: 0,
     margins: {
-      top: 8,
-      right: 8,
-      bottom: 8,
-      left: 8
+      top: checkIsMobile() ? 10 : 6,
+      right: checkIsMobile() ? 12 : 8,
+      bottom: checkIsMobile() ? 12 : 8,
+      left: checkIsMobile() ? 12 : 8
     }
   };
 
-  // Load initial content from file if path is provided
-// Load initial content from file based on URL path
-// Load initial content from file based on URL path
-useEffect(() => {
+  useEffect(() => {
   const loadInitialContent = async () => {
     const hash = window.location.hash;
       
@@ -153,7 +181,6 @@ useEffect(() => {
   useEffect(() => {
     setSelectionOrder([initialRect.id]);
   }, []);
-
 
   // Structures
   const InteractiveArea = ({
@@ -261,34 +288,63 @@ useEffect(() => {
       );
     };
   
-    // Calculate position based on parameters and current rectangle
+  // Calculate position based on parameters and current rectangle
     const calculatePosition = (params, currentRect) => {
       let x, y;
       
       if (params.relative === 'true' && currentRect) {
-        // Get the relative offsets
-        const dx = parseFloat(params.x) || 0;
-        const dy = parseFloat(params.y) || 0;
+        // Get the offsets and directions
+        const offset_x = parseFloat(params.x) || 0;
+        const offset_y = parseFloat(params.y) || 0;
+        const horizontal = params.horizontal || 'right';
+        const vertical = params.vertical || 'bottom';
+        
+        // Calculate base positions based on edges
+        if (horizontal === 'left') {
+          x = currentRect.x - offset_x;
+        } else if (horizontal === 'right') {
+          x = currentRect.x + currentRect.width + offset_x;
+        } else {
+          x = currentRect.x + (currentRect.width / 2); // Center if not specified
+        }
+        
+        if (vertical === 'top') {
+          y = currentRect.y - offset_y;
+        } else if (vertical === 'bottom') {
+          y = currentRect.y + currentRect.height + offset_y;
+        } else {
+          y = currentRect.y + (currentRect.height / 2); // Center if not specified
+        }
         
         // Convert canvas rotation to radians
         const rotationRad = (-canvasRotation * Math.PI) / 180;
         
-        // Apply rotation transformation to the relative offsets
-        const rotatedDx = dx * Math.cos(rotationRad) - dy * Math.sin(rotationRad);
-        const rotatedDy = dx * Math.sin(rotationRad) + dy * Math.cos(rotationRad);
+        // Get the center of the current rectangle
+        const centerX = currentRect.x + currentRect.width / 2;
+        const centerY = currentRect.y + currentRect.height / 2;
         
-        // Add rotated offsets to current rectangle position
-        x = currentRect.x + rotatedDx;
-        y = currentRect.y + rotatedDy;
+        // Calculate position relative to center
+        const relX = x - centerX;
+        const relY = y - centerY;
+        
+        // Apply rotation transformation
+        const rotatedX = relX * Math.cos(rotationRad) - relY * Math.sin(rotationRad);
+        const rotatedY = relX * Math.sin(rotationRad) + relY * Math.cos(rotationRad);
+        
+        // Add rotated offsets back to center
+        x = centerX + rotatedX;
+        y = centerY + rotatedY;
       } else {
         // Absolute positioning
         x = parseFloat(params.x) || Math.random() * window.innerWidth;
         y = parseFloat(params.y) || Math.random() * window.innerHeight;
       }
-  
+      
+      // Add jitter if not disabled
       if (params.jitter !== 'false') {
-        x += Math.random() * 50 - 25;
-        y += Math.random() * 50 - 25;
+        let jitterAmount = params.jitterAmount || 50;
+        x += Math.random() * jitterAmount - (jitterAmount/2);
+        y += Math.random() * jitterAmount - (jitterAmount/2);
       }
       
       return { x, y };
@@ -326,10 +382,10 @@ useEffect(() => {
         text,
         pageNumber: nextPageNumber,
         margins: {
-          top: parseFloat(params.marginTop) || 5,
-          right: parseFloat(params.marginRight) || 10,
-          bottom: parseFloat(params.marginBottom) || 10,
-          left: parseFloat(params.marginLeft) || 10
+          top: parseFloat(params.marginTop) || checkIsMobile() ? 10 : 6,
+          right: parseFloat(params.marginRight) || checkIsMobile() ? 12 : 8,
+          bottom: parseFloat(params.marginBottom) || checkIsMobile() ? 12 : 8,
+          left: parseFloat(params.marginLeft) || checkIsMobile() ? 12 : 8
         }
       };
     
@@ -528,49 +584,49 @@ useEffect(() => {
     
       const lines = text.split('\n');
       
-const marginContents = {
-  left: [],
-  'left-normal': [],
-  right: [],
-  'right-normal': [],
-  top: [],
-  bottom: []
-};
+    const marginContents = {
+      left: [],
+      'left-normal': [],
+      right: [],
+      'right-normal': [],
+      top: [],
+      bottom: []
+    };
 
-let lineIndex = 0;
-const mainContentLines = [];
+    let lineIndex = 0;
+    const mainContentLines = [];
 
-while (lineIndex < lines.length) {
-  const line = lines[lineIndex];
-  
-  const marginMatch = line.match(/%{margin-(left|right|top|bottom)(-normal)?-start}/);
-  
-  if (marginMatch) {
-    const position = marginMatch[1];
-    const normalFlag = marginMatch[2];
-    const key = normalFlag ? `${position}-normal` : position;
-    
-    let marginContent = [];
-    let currentLine = lineIndex + 1;
-    
-    while (currentLine < lines.length && !lines[currentLine].includes(`%{margin-${position}${normalFlag || ''}-end}`)) {
-      marginContent.push(lines[currentLine]);
-      currentLine++;
+    while (lineIndex < lines.length) {
+      const line = lines[lineIndex];
+      
+      const marginMatch = line.match(/%{margin-(left|right|top|bottom)(-normal)?-start}/);
+      
+      if (marginMatch) {
+        const position = marginMatch[1];
+        const normalFlag = marginMatch[2];
+        const key = normalFlag ? `${position}-normal` : position;
+        
+        let marginContent = [];
+        let currentLine = lineIndex + 1;
+        
+        while (currentLine < lines.length && !lines[currentLine].includes(`%{margin-${position}${normalFlag || ''}-end}`)) {
+          marginContent.push(lines[currentLine]);
+          currentLine++;
+        }
+        
+        marginContents[key].push({
+          content: marginContent.join('\n').trim(),
+          position: mainContentLines.length // Store current main content line number
+        });
+        
+        lineIndex = currentLine + 1;
+      } else {
+        mainContentLines.push(line);
+        lineIndex++;
+      }
     }
-    
-    marginContents[key].push({
-      content: marginContent.join('\n').trim(),
-      position: mainContentLines.length // Store current main content line number
-    });
-    
-    lineIndex = currentLine + 1;
-  } else {
-    mainContentLines.push(line);
-    lineIndex++;
-  }
-}
 
-const mainContent = mainContentLines.join('\n').trim();
+      const mainContent = mainContentLines.join('\n').trim();
     
       const marginSizes = {
         left: (rect.width * (margins.left / 100)),
@@ -581,6 +637,8 @@ const mainContent = mainContentLines.join('\n').trim();
 
       const mainContentElement = (
         <div 
+        ref={contentRef}
+        onScroll={handleScroll}
           style={{ 
             position: 'absolute',
             top: `${marginSizes.top}px`,
@@ -629,7 +687,7 @@ const mainContent = mainContentLines.join('\n').trim();
               'rotate(-90deg) translate(30%, 0%)' : 
               !isNormal && position === 'right' ? 
               'rotate(90deg) translate(-30%, 0%)' : 
-              'none',
+              position == 'top' ? 'translate(0%, -20%)' : 'none',
             transformOrigin: !isNormal && position === 'left' ? 
               'left bottom' :
               !isNormal && position === 'right' ?
@@ -682,14 +740,6 @@ const mainContent = mainContentLines.join('\n').trim();
               break;
           }
       
-          // Get scroll position for this rectangle
-          const scrollTop = scrollPositions.current[rect.id] || 0;
-      
-          // Add scroll adjustment for side margins
-          if (isSideMargin) {
-            contentStyle.transform += ` translateY(-${scrollTop}px)`;
-          }
-      
           return (
             <div
               key={`margin-${positionKey}-${idx}`}
@@ -732,12 +782,10 @@ const mainContent = mainContentLines.join('\n').trim();
   
     return (
       <div
-        ref={contentRef}
+        // ref={contentRef}
         className="absolute inset-0 overflow-auto select-text"
         onClick={(e) => e.stopPropagation()}
-        onScroll={(e) => {
-          scrollPositions.current[rect.id] = e.target.scrollTop;
-        }}
+        // onScroll={handleScroll}
         style={{ cursor: 'text' }}
       >
           <div 
