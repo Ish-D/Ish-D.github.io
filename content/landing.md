@@ -2,7 +2,7 @@
 <div class="text-center">
 <!-- <img src="/content/higuchi.png"> -->
 
-## Main Title 1
+## Main Title
 
 This is centered text with **bold** and *italic*.
 
@@ -18,8 +18,8 @@ This is centered text with **bold** and *italic*.
 $$
 \int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
 $$
-[***Controls/Features***](function:addRectangle?relative=true&x=-275&y=150&width=400&height=350&file=controls.md)
-[***TODOs***](function:addRectangle?relative=true&x=700&y=50&width=450&height=225&file=todo.md)  
+[***Controls/Features***](function:addRectangle?relative=true&horizontal=left&vertical=top&x=350&y=-70&jitterAmount=50&width=400&height=350&file=controls.md)
+[***TODOs***](function:addRectangle?relative=true&horizontal=right&vertical=top&x=-50&y=-120&width=450&height=225&file=todo.md)  
 
 %{margin-top-start}
 <div align="center">
