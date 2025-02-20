@@ -5,19 +5,22 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ish</title>
-    <script type="module" crossorigin src="/assets/index-b7a1a7bd.js"></script>
+
+    <script>
+      (function() {
+        const savedPath = sessionStorage.getItem('redirectPath');
+        if (savedPath) {
+          // Clear it immediately to prevent loops
+          sessionStorage.removeItem('redirectPath');
+          window.__INITIAL_PATH__ = savedPath;
+        }
+      })();
+    </script>
+    
+    <script type="module" crossorigin src="/assets/index-8bf0bd3e.js"></script>
     <link rel="stylesheet" href="/assets/index-f389f7e8.css">
   </head>
   <body style="background-color: rgb(238, 243, 247);">
-    <script>
-      // Check if we were redirected from another path
-      const redirectPath = sessionStorage.getItem('redirectPath');
-      if (redirectPath) {
-        sessionStorage.removeItem('redirectPath');
-        // Your app can read this attribute to know what page to load
-        document.documentElement.setAttribute('data-redirect-path', redirectPath);
-      }
-    </script>
     <div id="root"></div>
     
   </body>
