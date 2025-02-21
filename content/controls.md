@@ -24,22 +24,30 @@ With no paper selected:
 - Right click and drag to rotate  
 - Scroll to zoom  
 
-%{margin-right-start vertical=80px}
-⟵ Scroll ⟶
+%{margin-right-start vertical=60px}
+<size:12px> 
+    ⟵ Scroll ⟶ 
+</size>
 %{margin-right-end}
 
-%{margin-left-start vertical=-15%}
+%{margin-left-start vertical=-20%}
+<size:12px> 
 Drag ⟶
+</size>
 %{margin-left-end}
 
-%{margin-top-start vertical=7px}
-<div align="center" font-size=3>
-Hover
+%{margin-top-start vertical=8px}
+<div align="center">
+    <size:12px> 
+        Hover 
+    </size>
 </div>
 %{margin-top-end}
 
 %{margin-top-start vertical=-7px}
-<div align="center" font-size=3>
-↑
+<div align="center">
+    <size:12px> 
+        ↑ 
+    </size>
 </div>
 %{margin-top-end}
