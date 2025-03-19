@@ -21,3 +21,5 @@ Bottom margin text
 %{margin-left-normal-start vertical=50% horizontal=10px}
 Left margin text (horizontal)
 %{margin-left-normal-end}
+
+<size:24>Large Text</size> or <size:0.8em>Smaller text</size>

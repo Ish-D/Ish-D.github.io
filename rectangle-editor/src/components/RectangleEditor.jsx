@@ -78,109 +78,175 @@ const RectangleEditor = () => {
   let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
   let fontSize = 16;
-
-  const initialRect = {
-    id: Date.now(),
-    x: (window.outerWidth - initialWidth) / 2,
-    y: (window.innerHeight - initialHeight) / 2,
-    width: initialWidth,
-    height: initialHeight,
-    rotation: 0,
-    isPinned: false,
-    color: `hsl(192, 100.00%, 99.00%)`,
-    text: "",
-    pageNumber: 0,
-    margins: {
-      top: checkIsMobile() ? 10 : 6,
-      right: checkIsMobile() ? 12 : 8,
-      bottom: checkIsMobile() ? 12 : 8,
-      left: checkIsMobile() ? 12 : 8
-    }
+  
+  
+  const getInitialRectangles = () => {
+    const now = Date.now();
+    const centerWidth = window.innerWidth - (2 * (checkIsMobile() ? 0.05 : 0.3) * window.innerWidth);
+    const centerHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
+    
+    // Define which markdown files should be loaded for each rectangle
+    // The key is the rectangle index (0-based), and the value is the markdown filename
+    const initialMarkdowns = {
+      0: 'landing.md',
+      1: 'controls.md',
+      2: 'about.md'
+    };
+    
+    return [{
+      id: now,
+      x: (window.outerWidth - initialWidth) / 2,
+      y: (window.innerHeight - initialHeight) / 2,
+      width: initialWidth,
+      height: initialHeight,
+      rotation: 0,
+      isPinned: false,
+      color: `hsl(192, 100.00%, 99.00%)`,
+      castShadow: true,
+      text: "",
+      pageNumber: 0,
+      markdownFile: initialMarkdowns[0], // Store which markdown file this rectangle should load
+      margins: {
+        top: checkIsMobile() ? 10 : 6,
+        right: checkIsMobile() ? 12 : 8,
+        bottom: checkIsMobile() ? 12 : 8,
+        left: checkIsMobile() ? 12 : 8
+      }
+    },
+    {
+      id: now + 1,
+      x: (window.outerWidth - initialWidth) / 2 - 50,
+      y: (window.innerHeight - initialHeight) / 2,
+      width: initialWidth,
+      height: initialHeight,
+      rotation: 0,
+      isPinned: false,
+      color: `hsl(192, 100.00%, 99.00%)`,
+      castShadow: true,
+      text: "",
+      pageNumber: 1,
+      markdownFile: initialMarkdowns[1], // Store which markdown file this rectangle should load
+      margins: {
+        top: checkIsMobile() ? 10 : 6,
+        right: checkIsMobile() ? 12 : 8,
+        bottom: checkIsMobile() ? 12 : 8,
+        left: checkIsMobile() ? 12 : 8
+      }
+    },
+    {
+      id: now + 2,
+      x: (window.outerWidth - initialWidth) / 2 + 50,
+      y: (window.innerHeight - initialHeight) / 2,
+      width: initialWidth,
+      height: initialHeight,
+      rotation: 0,
+      isPinned: false,
+      color: `hsl(192, 100.00%, 99.00%)`,
+      castShadow: true,
+      text: "",
+      pageNumber: 2,
+      markdownFile: initialMarkdowns[2], // Store which markdown file this rectangle should load
+      margins: {
+        top: checkIsMobile() ? 10 : 6,
+        right: checkIsMobile() ? 12 : 8,
+        bottom: checkIsMobile() ? 12 : 8,
+        left: checkIsMobile() ? 12 : 8
+      }
+    }];
   };
-
+  
+  // New function to load content for a specific markdown file
+  const loadMarkdownContent = async (fileName) => {
+    console.log(`Attempting to load markdown file: ${fileName}`);
+    
+    // Try all possible path combinations
+    const possiblePaths = [
+      `/content/${fileName}`,
+      `content/${fileName}`,
+      `/${fileName}`,
+      fileName
+    ];
+  
+    for (const path of possiblePaths) {
+      console.log('Trying path:', path);
+      try {
+        const response = await fetch(path);
+        if (response.ok) {
+          const content = await response.text();
+          console.log('Successfully loaded from:', path);
+          return content;
+        }
+      } catch (e) {
+        console.log('Failed to load from:', path);
+      }
+    }
+    
+    // If we reach here, we couldn't load the file
+    console.error(`Failed to load ${fileName}`);
+    return null;
+  };
+  
   useEffect(() => {
-  const loadInitialContent = async () => {
-    const hash = window.location.hash;
+    const loadInitialContent = async () => {
+      const hash = window.location.hash;
+      // Remove the #/ prefix and get page name
+      const pageName = hash.replace('#/', '') || 'landing';
       
-    // Remove the #/ prefix and get page name
-    const pageName = hash.replace('#/', '') || 'landing';
-    
-    // Form the markdown filename
-    const mdFile = `${pageName}.md`;
-    console.log('Attempting to load markdown file:', mdFile);
-    
-    try {
-      // Try all possible path combinations
-      const possiblePaths = [
-        `/content/${mdFile}`,
-        `content/${mdFile}`,
-        `/${mdFile}`,
-        mdFile
-      ];
-
-      let content = null;
-      for (const path of possiblePaths) {
-        console.log('Trying path:', path);
-        try {
-          const response = await fetch(path);
-          if (response.ok) {
-            content = await response.text();
-            console.log('Successfully loaded from:', path);
-            break;
-          }
-        } catch (e) {
-          console.log('Failed to load from:', path);
+      // Get our initial rectangles
+      const initialRects = getInitialRectangles();
+      
+      // Create a copy of the current rectangles
+      let updatedRectangles = [...initialRects];
+      
+      // Load content for each rectangle
+      const loadPromises = initialRects.map(async (rect, index) => {
+        // Determine which markdown file to load
+        // For rectangle 0, if there's a hash URL, use that instead of the default
+        let mdFile = rect.markdownFile;
+        if (index === 0 && hash) {
+          mdFile = `${pageName}.md`;
         }
-      }
-
-      // If no content was loaded, try landing.md
-      if (!content) {
-        console.log('Falling back to landing.md');
-        for (const path of ['/content/landing.md', 'content/landing.md', '/landing.md', 'landing.md']) {
-          try {
-            const response = await fetch(path);
-            if (response.ok) {
-              content = await response.text();
-              console.log('Successfully loaded landing.md from:', path);
-              break;
-            }
-          } catch (e) {
-            console.log('Failed to load landing.md from:', path);
-          }
+        
+        let content = await loadMarkdownContent(mdFile);
+        
+        // If couldn't load specified file for rectangle 0, try landing.md
+        if (content === null && index === 0) {
+          console.log('Falling back to landing.md for main rectangle');
+          content = await loadMarkdownContent('landing.md');
         }
-      }
-
-      // Update the rectangles with the content
-      if (content) {
-        setRectangles(prev => [{
-          ...prev[0],
-          text: content
-        }]);
-      } else {
-        console.error('Failed to load any markdown content');
-        setRectangles(prev => [{
-          ...prev[0],
-          text: "# Error\nFailed to load content. Please check the console for details."
-        }]);
-      }
-    } catch (error) {
-      console.error('Error in loadInitialContent:', error);
-      setRectangles(prev => [{
-        ...prev[0],
-        text: "# Error\nFailed to load content. Please check the console for details."
-      }]);
-    }
-  };
-  loadInitialContent();
-  window.addEventListener('hashchange', loadInitialContent);
-  return () => window.removeEventListener('hashchange', loadInitialContent);
-}, []);
-
-  // Initialize selection order with the initial rectangle
-  const [rectangles, setRectangles] = useState([initialRect]);
-  useEffect(() => {
-    setSelectionOrder([initialRect.id]);
+        
+        // Update the rectangle with the loaded content
+        if (content !== null) {
+          updatedRectangles[index] = {
+            ...updatedRectangles[index],
+            text: content
+          };
+        } else {
+          // Set error message if content couldn't be loaded
+          updatedRectangles[index] = {
+            ...updatedRectangles[index],
+            text: `# Error\nFailed to load ${mdFile}. Please check the console for details.`
+          };
+        }
+      });
+      
+      // Wait for all content to be loaded
+      await Promise.all(loadPromises);
+      
+      // Update state with the loaded rectangles
+      setRectangles(updatedRectangles);
+    };
+    
+    loadInitialContent();
+    window.addEventListener('hashchange', loadInitialContent);
+    return () => window.removeEventListener('hashchange', loadInitialContent);
   }, []);
+  
+
+const [rectangles, setRectangles] = useState(getInitialRectangles());
+useEffect(() => {
+  setSelectionOrder(rectangles.map(rect => rect.id));
+}, []);
 
   // Structures
   const InteractiveArea = ({
@@ -267,6 +333,7 @@ const RectangleEditor = () => {
       scrollPositions.current[rect.id] = e.target.scrollTop;
     }, [rect.id, scrollPositions]);
   
+    
     useLayoutEffect(() => {
       const element = contentRef.current;
       if (element) {
@@ -351,245 +418,277 @@ const RectangleEditor = () => {
     };
   
   
-    // Unified function to create new rectangles
-    const createRectangle = async (params, currentRect, content = null) => {
-      const position = calculatePosition(params, currentRect);
-      let text = "";
-    
-      if (content && content.url) {
-        text = `<iframe src="${content.url}" style="width:100%; height:100%; border:none;"></iframe>`;
-      } else if (content && content.file) {
-        try {
-          const response = await fetch(`/content/${content.file}`);
-          text = await response.text();
-        } catch (error) {
-          console.error(`Error reading file ${content.file}:`, error);
-        }
+  const createRectangle = async (params, currentRect, content = null) => {
+    const position = calculatePosition(params, currentRect);
+    let text = "";
+
+    if (content && content.url) {
+      text = `<iframe src="${content.url}" style="width:100%; height:100%; border:none;"></iframe>`;
+    } else if (content && content.file) {
+      try {
+        const response = await fetch(`/content/${content.file}`);
+        text = await response.text();
+      } catch (error) {
+        console.error(`Error reading file ${content.file}:`, error);
       }
+    }
+
+    // Get the highest page number from existing rectangles and increment
+    const highestPageNumber = Math.max(...rectangles.map(r => r.pageNumber), -1);
+    const nextPageNumber = highestPageNumber + 1;
+
+    // Default color
+    let color = `hsl(192, 100.00%, 99.00%)`;
     
-      // Get the highest page number from existing rectangles and increment
-      const highestPageNumber = Math.max(...rectangles.map(r => r.pageNumber), -1);
-      const nextPageNumber = highestPageNumber + 1;
+    // Check for RGB parameters
+    if (params.colorR !== undefined && params.colorG !== undefined && params.colorB !== undefined) {
+      // Parse the RGB values (ensuring they're within 0-255 range)
+      const r = Math.min(255, Math.max(0, parseInt(params.colorR) || 0));
+      const g = Math.min(255, Math.max(0, parseInt(params.colorG) || 0));
+      const b = Math.min(255, Math.max(0, parseInt(params.colorB) || 0));
+      
+      // Create RGB color string
+      color = `rgb(${r}, ${g}, ${b})`;
+    }
+    // Check for HSL parameters
+    else if (params.colorH !== undefined && params.colorS !== undefined && params.colorL !== undefined) {
+      // Parse the HSL values
+      // Hue is a degree on the color wheel (0 to 360)
+      const h = parseInt(params.colorH) % 360;
+      // Saturation and Lightness are percentages (0 to 100)
+      const s = Math.min(100, Math.max(0, parseInt(params.colorS) || 0));
+      const l = Math.min(100, Math.max(0, parseInt(params.colorL) || 0));
+      
+      // Create HSL color string
+      color = `hsl(${h}, ${s}%, ${l}%)`;
+    }
     
-      const newRect = {
-        id: Date.now(),
-        x: position.x,
-        y: position.y,
-        width: parseFloat(params.width) || 300,
-        height: parseFloat(params.height) || 200,
-        rotation: parseFloat(params.rotation) || -canvasRotation,
-        color: `hsl(192, 100.00%, 99.00%)`,
-        text,
-        pageNumber: nextPageNumber,
-        margins: {
-          top: parseFloat(params.marginTop) || checkIsMobile() ? 10 : 6,
-          right: parseFloat(params.marginRight) || checkIsMobile() ? 12 : 8,
-          bottom: parseFloat(params.marginBottom) || checkIsMobile() ? 12 : 8,
-          left: parseFloat(params.marginLeft) || checkIsMobile() ? 12 : 8
-        }
-      };
-    
-      setRectangles(prev => [...prev, newRect]);
-      setSelectedId(newRect.id);
-      setSelectionOrder(prev => [newRect.id, ...prev]);
-    };
-  
-    // Available functions that can be called from markdown
-    const availableFunctions = {
-      addRectangle: async (paramString) => {
-        const params = parseParams(paramString);
-        await createRectangle(params, rect, { file: params.file });
+    const castShadow = params.castShadow !== 'false';
+
+    const newRect = {
+      id: Date.now(),
+      x: position.x,
+      y: position.y,
+      width: parseFloat(params.width) || 300,
+      height: parseFloat(params.height) || 200,
+      rotation: parseFloat(params.rotation) || -canvasRotation,
+      color: color,
+      castShadow: castShadow,
+      text,
+      pageNumber: nextPageNumber,
+      margins: {
+        top: parseFloat(params.marginTop) || (checkIsMobile() ? 10 : 6),
+        right: parseFloat(params.marginRight) || (checkIsMobile() ? 12 : 8),
+        bottom: parseFloat(params.marginBottom) || (checkIsMobile() ? 12 : 8),
+        left: parseFloat(params.marginLeft) || (checkIsMobile() ? 12 : 8)
       }
     };
+
+    setRectangles(prev => [...prev, newRect]);
+    setSelectedId(newRect.id);
+    setSelectionOrder(prev => [newRect.id, ...prev]);
+  };
+
+  // Available functions that can be called from markdown
+  const availableFunctions = {
+    addRectangle: async (paramString) => {
+      const params = parseParams(paramString);
+      await createRectangle(params, rect, { file: params.file });
+    }
+  };
   
-    const renderContent = useCallback((text) => {
-      // Check if the text contains an iframe
-      const iframeMatch = text.match(/<iframe.*?src="(.*?)".*?>/);
+// Update the renderContent function with text size support
+const renderContent = useCallback((text) => {
+  // Check if the text contains an iframe
+  const iframeMatch = text.match(/<iframe.*?src="(.*?)".*?>/);
+
+  if (iframeMatch) {
+    return (
+      <div className="absolute inset-0 flex flex-col">
+        <div className="p-2 bg-gray-100 flex items-center justify-between">
+          <div className="cursor-pointer text-blue-600 hover:underline">
+          </div>
+        </div>
+        <iframe
+          src={iframeMatch[1]}
+          className="flex-grow border-none"
+          style={{ width: '100%', height: 'calc(100% - 40px)' }}
+          sandbox="allow-scripts allow-same-origin allow-forms"
+        />
+      </div>
+    );
+  }
+
+  // Pre-process text size tags
+  // Format: <size:VALUE>text</size>
+  // Example: <size:24>Large Text</size> or <size:0.8em>Smaller text</size>
+  const processTextWithSizes = (text) => {
+    // Regex to match size tags with any valid CSS size value (px, em, rem, %)
+    const sizeTagRegex = /<size:([\d.]+(?:px|em|rem|%|))>(.*?)<\/size>/gs;
     
-      if (iframeMatch) {
+    return text.replace(sizeTagRegex, (match, size, content) => {
+      // If size doesn't have a unit, assume pixels
+      const sizeValue = size.match(/\d/) ? (size.match(/[a-z%]+$/) ? size : `${size}px`) : size;
+      return `<span style="font-size:${sizeValue}">${content}</span>`;
+    });
+  };
+
+  // Process text with size tags before handling other markdown elements
+  const processedText = processTextWithSizes(text);
+
+  // Pre-process the text to find and mark special elements
+  const customElements = new Map();
+  let elementCounter = 0;
+
+  // Replace function calls and links with unique placeholders
+  const finalProcessedText = processedText.replace(
+    /\[(.*?)\]\((function:\w+(?:\?[^)]+)?|https?:\/\/[^?]+(?:\?rect=[^)]+)?)\)/g,
+    (match, linkText, target) => {
+      const placeholder = `CUSTOM_ELEMENT_${elementCounter++}`;
+      
+      if (target.startsWith('function:')) {
+        const [, functionName, params] = target.match(/function:(\w+)(?:\?(.+))?/);
+        const functionToCall = availableFunctions[functionName];
+        
+        if (functionToCall) {
+          customElements.set(placeholder, {
+            type: 'function',
+            content: linkText,
+            onClick: (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              functionToCall(params);
+            }
+          });
+        }
+      } else {
+        const [, url, rectParams] = target.match(/(https?:\/\/[^?]+)(?:\?rect=(.+))?/);
+        customElements.set(placeholder, {
+          type: 'link',
+          content: linkText,
+          onClick: async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const params = rectParams ? parseParams(rectParams) : {};
+            await createRectangle(params, rect, { url });
+          }
+        });
+      }
+
+      return placeholder;
+    }
+  );
+
+  const markdownComponents = {
+    // Handle div elements, preserving className and other attributes
+    div: ({ node, className, children, ...props }) => {
+      if (className?.includes('text-center')) {
         return (
-          <div className="absolute inset-0 flex flex-col">
-            <div className="p-2 bg-gray-100 flex items-center justify-between">
-              <div className="cursor-pointer text-blue-600 hover:underline">
-              </div>
+          <div className={className} {...props}>
+            <div className="markdown-content">
+              {children}
             </div>
-            <iframe
-              src={iframeMatch[1]}
-              className="flex-grow border-none"
-              style={{ width: '100%', height: 'calc(100% - 40px)' }}
-              sandbox="allow-scripts allow-same-origin allow-forms"
-            />
           </div>
         );
       }
+      return <div className={className} {...props}>{children}</div>;
+    },
     
-      // Pre-process the text to find and mark special elements
-      const customElements = new Map();
-      let elementCounter = 0;
+    // Headers with proper styling
+    h1: ({ node, children }) => (
+      <h1 className="mt-6 mb-4 text-4xl font-bold">{children}</h1>
+    ),
+    h2: ({ node, children }) => (
+      <h2 className="mt-5 mb-3 text-3xl font-bold">{children}</h2>
+    ),
+    h3: ({ node, children }) => (
+      <h3 className="mt-4 mb-2 text-2xl font-bold">{children}</h3>
+    ),
     
-      // Replace function calls and links with unique placeholders
-      const processedText = text.replace(
-        /\[(.*?)\]\((function:\w+(?:\?[^)]+)?|https?:\/\/[^?]+(?:\?rect=[^)]+)?)\)/g,
-        (match, linkText, target) => {
-          const placeholder = `CUSTOM_ELEMENT_${elementCounter++}`;
-          
-          if (target.startsWith('function:')) {
-            const [, functionName, params] = target.match(/function:(\w+)(?:\?(.+))?/);
-            const functionToCall = availableFunctions[functionName];
-            
-            if (functionToCall) {
-              customElements.set(placeholder, {
-                type: 'function',
-                content: linkText,
-                onClick: (e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  functionToCall(params);
-                }
-              });
-            }
-          } else {
-            const [, url, rectParams] = target.match(/(https?:\/\/[^?]+)(?:\?rect=(.+))?/);
-            customElements.set(placeholder, {
-              type: 'link',
-              content: linkText,
-              onClick: async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const params = rectParams ? parseParams(rectParams) : {};
-                await createRectangle(params, rect, { url });
-              }
-            });
-          }
+    // Support HTML in markdown, including spans with style attributes
+    span: ({ node, ...props }) => {
+      if (props.style) {
+        return <span {...props} />;
+      }
+      return <span {...props} />;
+    },
     
-          return placeholder;
-        }
+    // Lists with proper alignment and nesting
+    ul: ({ node, children }) => (
+      <ul className="list-disc pl-6 my-3 text-left block w-full">{children}</ul>
+    ),
+    ol: ({ node, children }) => (
+      <ol className="list-decimal pl-6 my-3 text-left block w-full">{children}</ol>
+    ),
+    li: ({ node, children }) => {
+      const hasNestedList = React.Children.toArray(children).some(
+        child => React.isValidElement(child) && (child.type === 'ul' || child.type === 'ol')
       );
-    
-      const markdownComponents = {
-        // Handle div elements, preserving className and other attributes
-        div: ({ node, className, children, ...props }) => {
-          if (className?.includes('text-center')) {
-            return (
-              <div className={className} {...props}>
-                <div className="markdown-content">
-                  {children}
-                </div>
-              </div>
-            );
-          }
-          return <div className={className} {...props}>{children}</div>;
-        },
-        
-        // Headers with proper styling
-        h1: ({ node, children }) => (
-          <h1 className="mt-6 mb-4 text-4xl font-bold">{children}</h1>
-        ),
-        h2: ({ node, children }) => (
-          <h2 className="mt-5 mb-3 text-3xl font-bold">{children}</h2>
-        ),
-        h3: ({ node, children }) => (
-          <h3 className="mt-4 mb-2 text-2xl font-bold">{children}</h3>
-        ),
-        // Lists with proper alignment and nesting
-        ul: ({ node, children }) => (
-          <ul className="list-disc pl-6 my-3 text-left block w-full">{children}</ul>
-        ),
-        ol: ({ node, children }) => (
-          <ol className="list-decimal pl-6 my-3 text-left block w-full">{children}</ol>
-        ),
-        li: ({ node, children }) => {
-          const hasNestedList = React.Children.toArray(children).some(
-            child => React.isValidElement(child) && (child.type === 'ul' || child.type === 'ol')
-          );
-          return (
-            <li className={`my-1 ${hasNestedList ? 'block' : ''}`}>{children}</li>
-          );
-        },
-        p: ({ children }) => {
-          // Process children to replace placeholders with custom elements
-          const processedChildren = React.Children.map(children, child => {
-            if (typeof child === 'string') {
-              const segments = child.split(/(\bCUSTOM_ELEMENT_\d+\b)/);
-              return segments.map((segment, index) => {
-                if (customElements.has(segment)) {
-                  const element = customElements.get(segment);
-                  return (
-                    <span
-                      key={index}
-                      onClick={element.onClick}
-                      className={`cursor-pointer inline ${element.type === 'link' ? 'text-blue-600 hover:underline' : ''}`}
-                      style={{ fontFamily: font, fontSize: fontSize, display: 'inline' }}
-                    >
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[rehypeRaw, rehypeKatex]}
-                        components={{
-                          ...markdownComponents,
-                          p: ({ children }) => <>{children}</>,
-                        }}
-                      >
-                        {element.content}
-                      </ReactMarkdown>
-                    </span>
-                  );
-                }
-                return segment;
-              });
-            }
-            return child;
-          });
-    
-          // Check if we should render without a p tag
-          const allInline = processedChildren.every(child => 
-            typeof child === 'string' || 
-            (React.isValidElement(child) && (
-              child.type === 'span' ||
-              child.props?.className?.includes('inline')
-            ))
-          );
-    
-          return allInline ? <>{processedChildren}</> : <p>{processedChildren}</p>;
-        }
-      };
-    
       return (
-        <div style={{ fontFamily: font, fontSize: fontSize }} className="markdown-wrapper">
-          <style>
-            {`
-              .markdown-wrapper .text-center .markdown-content > * {
-                margin-left: auto;
-                margin-right: auto;
-              }
-              .markdown-wrapper .text-center .markdown-content ul,
-              .markdown-wrapper .text-center .markdown-content ol {
-                display: inline-block;
-                text-align: left;
-                width: auto;
-              }
-              .markdown-wrapper .text-center .markdown-content li > ul,
-              .markdown-wrapper .text-center .markdown-content li > ol {
-                display: block;
-                margin-top: 0.5rem;
-                margin-bottom: 0.5rem;
-              }
-              .markdown-wrapper .text-center .markdown-content h1,
-              .markdown-wrapper .text-center .markdown-content h2,
-              .markdown-wrapper .text-center .markdown-content h3 {
-                text-align: center;
-              }
-            `}
-          </style>
-          <ReactMarkdown 
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[rehypeRaw, rehypeKatex]}
-            components={markdownComponents}
-          >
-            {processedText}
-          </ReactMarkdown>
-        </div>
+        <li className={`my-1 ${hasNestedList ? 'block' : ''}`}>{children}</li>
       );
-    }, [rect, availableFunctions, font, fontSize]);
+    },
+    p: ({ children }) => {
+      // Process children to replace placeholders with custom elements
+      const processedChildren = React.Children.map(children, child => {
+        if (typeof child === 'string') {
+          const segments = child.split(/(\bCUSTOM_ELEMENT_\d+\b)/);
+          return segments.map((segment, index) => {
+            if (customElements.has(segment)) {
+              const element = customElements.get(segment);
+              return (
+                <span
+                  key={index}
+                  onClick={element.onClick}
+                  className={`cursor-pointer inline ${element.type === 'link' ? 'text-blue-600 hover:underline' : ''}`}
+                  style={{ fontFamily: font, display: 'inline' }}
+                >
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm, remarkMath]}
+                    rehypePlugins={[rehypeRaw, rehypeKatex]}
+                    components={{
+                      ...markdownComponents,
+                      p: ({ children }) => <>{children}</>,
+                    }}
+                  >
+                    {element.content}
+                  </ReactMarkdown>
+                </span>
+              );
+            }
+            return segment;
+          });
+        }
+        return child;
+      });
+
+      const allInline = processedChildren.every(child => 
+        typeof child === 'string' || 
+        (React.isValidElement(child) && (
+          child.type === 'span' ||
+          child.props?.className?.includes('inline')
+        ))
+      );
+
+      return allInline ? <>{processedChildren}</> : <p>{processedChildren}</p>;
+    }
+  };
+
+  return (
+    <div style={{ fontFamily: font }} className="markdown-wrapper">
+      <style>
+        {/* Your existing styles here */}
+      </style>
+      <ReactMarkdown 
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeRaw, rehypeKatex]}
+        components={markdownComponents}
+      >
+        {finalProcessedText}
+      </ReactMarkdown>
+    </div>
+  );
+}, [rect, availableFunctions, font]);
   
     const parseContentWithMargins = useCallback((text) => {
       const margins = rect.margins || {
@@ -673,138 +772,141 @@ const RectangleEditor = () => {
         </div>
       );
 
-      const marginElements = Object.entries(marginContents).map(([positionKey, contents]) => 
-        contents.map((content, idx) => {
-          const [position, orientation] = positionKey.split('-');
-          const isNormal = orientation === 'normal';
-          const isSideMargin = position === 'left' || position === 'right';
-          
-          const parsePosition = (pos) => {
-            if (typeof pos !== 'string') return { value: 0, unit: 'px' };
-            const match = pos.match(/^(-?\d*\.?\d+)(px|%)$/);
-            if (!match) return { value: 0, unit: 'px' };
-            return {
-              value: parseFloat(match[1]),
-              unit: match[2]
-            };
-          };
-          
-          const verticalPos = parsePosition(content.vertical);
-          const horizontalPos = parsePosition(content.horizontal);
-          
-          const verticalOffset = verticalPos.unit === '%' 
-            ? `${verticalPos.value}%` 
-            : `${verticalPos.value}px`;
-            
-          const horizontalOffset = horizontalPos.unit === '%' 
-            ? `${horizontalPos.value}%` 
-            : `${horizontalPos.value}px`;
-          
-          const style = {
-            position: 'absolute',
-            margin: 0,
-            // padding: '8px',
-            zIndex: 10,
-            overflow: 'hidden',
-            boxSizing: 'border-box'
-          };
+// Update the marginElements section in parseContentWithMargins
+const marginElements = Object.entries(marginContents).map(([positionKey, contents]) => 
+  contents.map((content, idx) => {
+    const [position, orientation] = positionKey.split('-');
+    const isNormal = orientation === 'normal';
+    const isSideMargin = position === 'left' || position === 'right';
+    
+    const parsePosition = (pos) => {
+      if (typeof pos !== 'string') return { value: 0, unit: 'px' };
+      const match = pos.match(/^(-?\d*\.?\d+)(px|%)$/);
+      if (!match) return { value: 0, unit: 'px' };
+      return {
+        value: parseFloat(match[1]),
+        unit: match[2]
+      };
+    };
+    
+    const verticalPos = parsePosition(content.vertical);
+    const horizontalPos = parsePosition(content.horizontal);
+    
+    const verticalOffset = verticalPos.unit === '%' 
+      ? `${verticalPos.value}%` 
+      : `${verticalPos.value}px`;
       
-          const wrapperStyle = {
-            width: '100%',
-            height: isSideMargin ? '100%' : '100%',
-            fontFamily: 'Palatino',
-            fontSize: 16,
-            display: 'flex',
-            alignItems: isSideMargin ? 'flex-start' : 'center',
-            justifyContent: isSideMargin ? 'flex-start' : 'center',
-            position: 'relative',
-            overflow: 'hidden'
-          };
-      
-          const contentStyle = {
-            transform: 
-              !isNormal && position === 'left' ? 'rotate(-90deg) translate(30%, 50%)' : 
-              !isNormal && position === 'right' ? 'rotate(90deg) translate(-30%, 50%)' : 
-              'none',
-            transformOrigin: !isNormal && position === 'left' ? 
-              'left bottom' :
-              !isNormal && position === 'right' ?
-              'right bottom' :
-              'top left',
-            width: isSideMargin && !isNormal ? 'max-content' : '100%',
-            maxWidth: isSideMargin && !isNormal ? 
-              `${rect.height - margins.top - margins.bottom - 32}px` : 
-              '100%',
-            position: 'absolute',
-            overflowWrap: 'break-word',
-            ...(isSideMargin && !isNormal && {
-              position: 'absolute',
-              left: position === 'left' ? '50%' : undefined,
-              right: position === 'right' ? '50%' : undefined,
-              top: '50%'
-            })
-          };
-      
-          switch(position) {
-            case 'left':
-              style.left = horizontalOffset;
-              style.width = `${marginSizes.left}px`;
-              style.top = verticalOffset;
-              style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
-              style.overflow = 'hidden';
-              break;
-            case 'right':
-              style.right = horizontalOffset;
-              style.width = `${marginSizes.right}px`;
-              style.top = verticalOffset;
-              style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
-              style.overflow = 'hidden';
-              break;
-              case 'top':
-              style.position = 'absolute';
-              style.top = verticalOffset;
-              style.height = `${marginSizes.top}px`;
-              style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
-              style.overflow = 'visible';
-              if (content.horizontal === '0px' || !content.horizontal) {
-                style.left = '50%';
-                style.transform = 'translateX(-50%)';
-              } else {
-                style.left = horizontalOffset;
-              }
-              break;
-              case 'bottom':
-                const baseBottomOffset = 4;  // Negative to move down
-                const calculatedBottom = parseFloat(verticalOffset) || 0;
-                style.position = 'absolute';
-                style.bottom = `${calculatedBottom - baseBottomOffset}px`;
-                style.height = `${marginSizes.bottom}px`;
-                style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
-                style.overflow = 'visible';
-                style.maxHeight = '32px';  // Limit height to prevent excessive overflow
-                if (content.horizontal === '0px' || !content.horizontal) {
-                  style.left = '50%';
-                  style.transform = 'translateX(-50%)';
-                } else {
-                  style.left = horizontalOffset;
-                }
-                break;
-          }
-      
-          return (
-            <div
-              key={`margin-${positionKey}-${idx}`}
-              style={style}
-            >
-              <div style={wrapperStyle}>
-                <div style={contentStyle}>
-                  {renderContent(content.content)}
-                </div>
-              </div>
-            </div>
-          );
-        })
-      ).flat();
+    const horizontalOffset = horizontalPos.unit === '%' 
+      ? `${horizontalPos.value}%` 
+      : `${horizontalPos.value}px`;
+    
+    const style = {
+      position: 'absolute',
+      margin: 0,
+      zIndex: 10,
+      overflow: 'hidden',
+      boxSizing: 'border-box'
+    };
+
+    const wrapperStyle = {
+      width: '100%',
+      height: isSideMargin ? '100%' : '100%',
+      fontFamily: font,
+      fontSize: fontSize,
+      display: 'flex',
+      alignItems: isSideMargin ? 'flex-start' : 'center',
+      justifyContent: isSideMargin ? 'flex-start' : 'center',
+      position: 'relative',
+      overflow: 'hidden'
+    };
+
+    const contentStyle = {
+      transform: 
+        !isNormal && position === 'left' ? 'rotate(-90deg) translate(30%, 50%)' : 
+        !isNormal && position === 'right' ? 'rotate(90deg) translate(-30%, 50%)' : 
+        'none',
+      transformOrigin: !isNormal && position === 'left' ? 
+        'left bottom' :
+        !isNormal && position === 'right' ?
+        'right bottom' :
+        'top left',
+      width: isSideMargin && !isNormal ? 'max-content' : '100%',
+      maxWidth: isSideMargin && !isNormal ? 
+        `${rect.height - margins.top - margins.bottom - 32}px` : 
+        '100%',
+      position: 'absolute',
+      overflowWrap: 'break-word',
+      ...(isSideMargin && !isNormal && {
+        position: 'absolute',
+        left: position === 'left' ? '50%' : undefined,
+        right: position === 'right' ? '50%' : undefined,
+        top: '50%'
+      })
+    };
+
+    switch(position) {
+      case 'left':
+        style.left = horizontalOffset;
+        style.width = `${marginSizes.left}px`;
+        style.top = verticalOffset;
+        style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
+        style.overflow = 'hidden';
+        break;
+      case 'right':
+        style.right = horizontalOffset;
+        style.width = `${marginSizes.right}px`;
+        style.top = verticalOffset;
+        style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
+        style.overflow = 'hidden';
+        break;
+      case 'top':
+        style.position = 'absolute';
+        style.top = verticalOffset;
+        style.height = `${marginSizes.top}px`;
+        style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
+        style.overflow = 'visible';
+        if (content.horizontal === '0px' || !content.horizontal) {
+          style.left = '50%';
+          style.transform = 'translateX(-50%)';
+        } else {
+          style.left = horizontalOffset;
+        }
+        break;
+      case 'bottom':
+        const baseBottomOffset = 4;
+        const calculatedBottom = parseFloat(verticalOffset) || 0;
+        style.position = 'absolute';
+        style.bottom = `${calculatedBottom - baseBottomOffset}px`;
+        style.height = `${marginSizes.bottom}px`;
+        style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
+        style.overflow = 'visible';
+        style.maxHeight = '32px';
+        if (content.horizontal === '0px' || !content.horizontal) {
+          style.left = '50%';
+          style.transform = 'translateX(-50%)';
+        } else {
+          style.left = horizontalOffset;
+        }
+        break;
+    }
+
+    return (
+      <div
+        key={`margin-${positionKey}-${idx}`}
+        style={style}
+      >
+        <div style={wrapperStyle}>
+          <div 
+            style={contentStyle}
+            className="markdown-content"
+          >
+            {renderContent(content.content)}
+          </div>
+        </div>
+      </div>
+    );
+  })
+).flat();
     
       return [
         mainContentElement,
@@ -906,7 +1008,7 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
           style={{
             position: 'absolute',
             inset: 0,
-            backgroundColor: `hsl(192, 100.00%, 99.00%)`,
+            backgroundColor: rect.color, // Use the rectangle's color instead of a fixed color
             boxShadow: isHovered 
               ? '0 4px 6px rgba(0, 0, 0, 0.2)' 
               : '0 2px 4px rgba(0, 0, 0, 0.2)',
@@ -1038,16 +1140,32 @@ const interpolateColor = (color1, factor) => {
     b: 246
   };
 
-  // Parse the original color (assuming HSL format)
-  const hslMatch = color1.match(/hsl\((\d+),\s*([\d.]+)%,\s*([\d.]+)%\)/);
-  if (!hslMatch) return color1;
+  // Parse the original color
+  let rgbColor;
+  
+  // Check if it's an RGB format: rgb(r, g, b)
+  const rgbMatch = color1.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (rgbMatch) {
+    rgbColor = {
+      r: parseInt(rgbMatch[1]),
+      g: parseInt(rgbMatch[2]),
+      b: parseInt(rgbMatch[3])
+    };
+  } 
+  // Check if it's an HSL format: hsl(h, s%, l%)
+  else {
+    const hslMatch = color1.match(/hsl\((\d+),\s*([\d.]+)%,\s*([\d.]+)%\)/);
+    if (hslMatch) {
+      rgbColor = hslToRgb(
+        parseInt(hslMatch[1]),
+        parseFloat(hslMatch[2]),
+        parseFloat(hslMatch[3])
+      );
+    }
+  }
 
-  // Convert HSL to RGB
-  const rgbColor = hslToRgb(
-    parseInt(hslMatch[1]),
-    parseFloat(hslMatch[2]),
-    parseFloat(hslMatch[3])
-  );
+  // If no valid color format was found, return the original
+  if (!rgbColor) return color1;
 
   // Interpolate between the colors
   const r = Math.round(rgbColor.r + (bgColor.r - rgbColor.r) * factor);
@@ -1086,7 +1204,7 @@ const getInterpolatedColor = (rectId) => {
 
 const getInterpolatedDepth = (rectId) => {
   const rect = rectangles.find(r => r.id === rectId);
-  if (!rect) return "4px 4px 8px rgba(0, 0, 0, 0.2)";
+  if (!rect || !rect.castShadow) return "none";
 
   const index = selectionOrder.indexOf(rectId);
   if (index === -1 || index === 0) return "4px 4px 8px rgba(0, 0, 0, 0.2)"; // Selected rectangle keeps original shadow
@@ -1133,24 +1251,38 @@ const getInterpolatedDepth = (rectId) => {
   const handleDelete = (rectId) => {
     setRectangles(prev => {
       const updatedRectangles = prev.filter(rect => rect.id !== rectId);
-      // If this deletion would leave us with no rectangles, restore initial state
+      
+      // If this deletion would leave us with no rectangles, restore all initial rectangles
       if (updatedRectangles.length === 0) {
-        const newInitialRect = {
-          ...initialRect,
-          id: Date.now() // Ensure a new unique ID
-        };
-        // Load initial content
-        fetch(`/content/landing.md`)
-          .then(response => response.text())
-          .then(text => {
-            setRectangles([{
-              ...newInitialRect,
-              text: text
-            }]);
-          });
-        setSelectionOrder([newInitialRect.id]);
-        return [newInitialRect];
+        // Get the initial rectangles but don't set them yet
+        const initialRects = getInitialRectangles();
+        
+        // Load content for each rectangle
+        initialRects.forEach((rect, index) => {
+          loadMarkdownContent(rect.markdownFile)
+            .then(content => {
+              if (content !== null) {
+                setRectangles(prevRects => {
+                  const newRects = [...prevRects];
+                  // Make sure the rectangle still exists before updating it
+                  if (index < newRects.length) {
+                    newRects[index] = { ...newRects[index], text: content };
+                    return newRects;
+                  }
+                  return prevRects;
+                });
+              }
+            })
+            .catch(error => {
+              console.error(`Error loading ${rect.markdownFile}:`, error);
+            });
+        });
+        
+        // Set selection order for all initial rectangles
+        setSelectionOrder(initialRects.map(rect => rect.id));
+        return initialRects;
       }
+      
       return updatedRectangles;
     });
   
@@ -1159,9 +1291,11 @@ const getInterpolatedDepth = (rectId) => {
       next.delete(rectId);
       return next;
     });
+    
     if (selectedId === rectId) {
       setSelectedId(null);
     }
+    
     setSelectionOrder(prev => prev.filter(id => id !== rectId));
   };
 
@@ -2025,20 +2159,19 @@ const getInterpolatedDepth = (rectId) => {
                 />
                 {/* Shadow and clipping container */}
                 <div
-                  className="absolute"
-                  style={{
-                    left: `${padding}px`,
-                    top: `${padding}px`,
-                    width: `${rect.width}px`,
-                    height: `${rect.height}px`,
-                    boxShadow: selectedId === rect.id
-                      ? '8px 8px 16px rgba(0, 0, 0, 0.4)'
-                      : getInterpolatedDepth(rect.id),
-                    /*
-                    
-                    */
-                  }}
-                >
+                    className="absolute"
+                    style={{
+                      left: `${padding}px`,
+                      top: `${padding}px`,
+                      width: `${rect.width}px`,
+                      height: `${rect.height}px`,
+                      boxShadow: rect.castShadow ? (
+                        selectedId === rect.id
+                          ? '8px 8px 16px rgba(0, 0, 0, 0.4)'
+                          : getInterpolatedDepth(rect.id)
+                      ) : 'none',
+                    }}
+                  >
                   {/* Main content with clipping */}
                   <div
                     className="absolute inset-0 overflow-hidden"
@@ -2046,8 +2179,8 @@ const getInterpolatedDepth = (rectId) => {
                       backgroundColor: getInterpolatedColor(rect.id),
                       cursor: 'default',
                       clipPath: hoveredCorner.id === rect.id ? (() => {
-                        const size = 20;
-                        const overlap = 10;
+                        const size = 30;
+                        const overlap = 30;
                         switch (hoveredCorner.corner) {
                           case 'topleft':
                             return `polygon(${size + overlap}px 0, 100% 0, 100% 100%, 0 100%, 0 ${size + overlap}px)`;
