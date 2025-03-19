@@ -4,7 +4,7 @@
 
 ## Main Title
 
-text2
+text
 </div>
 
 [***Controls/Features***](function:addRectangle?relative=true&horizontal=left&vertical=top&x=350&y=-70&jitterAmount=50&width=400&height=350&file=controls.md)  
