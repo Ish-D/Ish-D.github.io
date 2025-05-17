@@ -97,7 +97,7 @@ const RectangleEditor = () => {
   });
 
   // Initialization
-  let initialWidth = window.innerWidth - ((isMobile ? 1.00 : 0.8) * window.innerWidth);
+  let initialWidth = window.innerWidth * (isMobile ? 0.8 : 0.175);
   let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
   let fontSize = isMobile ? 18 : 16; // Slightly larger font on mobile
@@ -220,6 +220,16 @@ const RectangleEditor = () => {
       
       // Create a copy of the current rectangles
       let updatedRectangles = [...initialRects];
+
+      if (hash) {
+        let fullWidth = window.innerWidth * 0.8;
+        let fullHeight = window.innerHeight * 0.9;
+        updatedRectangles[0].width = fullWidth;
+        updatedRectangles[0].height = fullHeight;
+        updatedRectangles[0].x = (window.outerWidth - fullWidth) / 2;
+        updatedRectangles[0].y = (window.innerHeight - fullHeight) / 2;
+
+      }
       
       // Load content for each rectangle
       const loadPromises = initialRects.map(async (rect, index) => {
