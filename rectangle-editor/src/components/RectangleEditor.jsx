@@ -6,7 +6,8 @@ import rehypeRaw from "rehype-raw";
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import 'katex/dist/katex.min.css'; // Import Katex CSS
+import 'katex/dist/katex.min.css';
+import MobileDetect from 'mobile-detect';
 
 const RectangleEditor = () => {
   // Setup Stage
@@ -44,52 +45,56 @@ const RectangleEditor = () => {
   const scrollPositions = useRef({});
   const activeRectangleRef = useRef(null);
   
-  const checkIsMobile = () => {
-    let hasTouchScreen = false;
+  // const checkIsMobile = () => {
+  //   let hasTouchScreen = false;
     
-    // First check
-    if ("maxTouchPoints" in navigator) {
-      hasTouchScreen = navigator.maxTouchPoints > 0;
-    } else if ("msMaxTouchPoints" in navigator) {
-      hasTouchScreen = navigator.msMaxTouchPoints > 0;
-    }
+  //   // First check
+  //   if ("maxTouchPoints" in navigator) {
+  //     hasTouchScreen = navigator.maxTouchPoints > 0;
+  //   } else if ("msMaxTouchPoints" in navigator) {
+  //     hasTouchScreen = navigator.msMaxTouchPoints > 0;
+  //   }
     
-    // Second check
-    const mQ = window.matchMedia && window.matchMedia("(pointer:coarse)");
-    if (mQ && mQ.media === "(pointer:coarse)") {
-      hasTouchScreen = !!mQ.matches;
-    }
+  //   // Second check
+  //   const mQ = window.matchMedia && window.matchMedia("(pointer:coarse)");
+  //   if (mQ && mQ.media === "(pointer:coarse)") {
+  //     hasTouchScreen = !!mQ.matches;
+  //   }
     
-    // Third check
-    if ('orientation' in window) {
-      hasTouchScreen = true;
-    }
+  //   // Third check
+  //   if ('orientation' in window) {
+  //     hasTouchScreen = true;
+  //   }
 
-    // Fourth check
-    const userAgent = navigator.userAgent.toLowerCase();
-    const isMobileUserAgent = /mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+  //   // Fourth check
+  //   const userAgent = navigator.userAgent.toLowerCase();
+  //   const isMobileUserAgent = /mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
 
-    // Screen size check
-    const isSmallScreen = window.innerWidth <= 768;
+  //   // Screen size check
+  //   const isSmallScreen = window.innerWidth <= 768;
 
-    return hasTouchScreen || isMobileUserAgent || isSmallScreen;
-  };
+  //   return hasTouchScreen || isMobileUserAgent || isSmallScreen;
+  // };
 
-  const [isMobile, setIsMobile] = useState(false);
+  // const [isMobile, setIsMobile] = useState(false);
   
-  useEffect(() => {
-    const checkMobileStatus = () => {
-      setIsMobile(checkIsMobile());
-    };
+  
+  // useEffect(() => {
+  //   const checkMobileStatus = () => {
+  //     setIsMobile(checkIsMobile());
+  //   };
     
-    checkMobileStatus();
-    window.addEventListener('resize', checkMobileStatus);
+  //   checkMobileStatus();
+  //   window.addEventListener('resize', checkMobileStatus);
     
-    return () => {
-      window.removeEventListener('resize', checkMobileStatus);
-    };
-  }, []);
+  //   return () => {
+  //     window.removeEventListener('resize', checkMobileStatus);
+  //   };
+  // }, []);
 
+const md = new MobileDetect(window.navigator.userAgent);
+const isMobile = !!md.mobile();
+  
   const [viewport, setViewport] = useState({
     x: 0,
     y: 0,
@@ -98,14 +103,11 @@ const RectangleEditor = () => {
 
   // Initialization
   let initialWidth = window.innerWidth * (isMobile ? 0.8 : 0.175);
-  let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
   let fontSize = isMobile ? 18 : 16; // Slightly larger font on mobile
   
   const getInitialRectangles = () => {
     const now = Date.now();
-    const centerWidth = window.innerWidth - (2 * (isMobile ? 0.05 : 0.3) * window.innerWidth);
-    const centerHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
     
     // Define which markdown files should be loaded for each rectangle
     // The key is the rectangle index (0-based), and the value is the markdown filename
@@ -180,7 +182,7 @@ const RectangleEditor = () => {
   
   // New function to load content for a specific markdown file
   const loadMarkdownContent = async (fileName) => {
-    console.log(`Attempting to load markdown file: ${fileName}`);
+    // console.log(`Attempting to load markdown file: ${fileName}`);
     
     // Try all possible path combinations
     const possiblePaths = [
@@ -191,16 +193,16 @@ const RectangleEditor = () => {
     ];
   
     for (const path of possiblePaths) {
-      console.log('Trying path:', path);
+      // console.log('Trying path:', path);
       try {
         const response = await fetch(path);
         if (response.ok) {
           const content = await response.text();
-          console.log('Successfully loaded from:', path);
+          // console.log('Successfully loaded from:', path);
           return content;
         }
       } catch (e) {
-        console.log('Failed to load from:', path);
+        // console.log('Failed to load from:', path);
       }
     }
     
@@ -221,15 +223,7 @@ const RectangleEditor = () => {
       // Create a copy of the current rectangles
       let updatedRectangles = [...initialRects];
 
-      if (hash) {
-        let fullWidth = window.innerWidth * 0.8;
-        let fullHeight = window.innerHeight * 0.9;
-        updatedRectangles[0].width = fullWidth;
-        updatedRectangles[0].height = fullHeight;
-        updatedRectangles[0].x = (window.outerWidth - fullWidth) / 2;
-        updatedRectangles[0].y = (window.innerHeight - fullHeight) / 2;
 
-      }
       
       // Load content for each rectangle
       const loadPromises = initialRects.map(async (rect, index) => {
@@ -242,9 +236,19 @@ const RectangleEditor = () => {
         
         let content = await loadMarkdownContent(mdFile);
         
+      if (hash && content != null) {
+        let fullWidth = window.innerWidth * 0.8;
+        let fullHeight = window.innerHeight * 0.9;
+        updatedRectangles[0].width = fullWidth;
+        updatedRectangles[0].height = fullHeight;
+        updatedRectangles[0].x = (window.outerWidth - fullWidth) / 2;
+        updatedRectangles[0].y = (window.innerHeight - fullHeight) / 2;
+
+      }
+
         // If couldn't load specified file for rectangle 0, try landing.md
         if (content === null && index === 0) {
-          console.log('Falling back to landing.md for main rectangle');
+          // console.log('Falling back to landing.md for main rectangle');
           content = await loadMarkdownContent('landing.md');
         }
         
@@ -295,7 +299,7 @@ useEffect(() => {
     onTouchLeave,
     children
   }) => {
-    const touchSize = isMobile ? size : size; // Increase touch target size on mobile
+    const touchSize = size; // Increase touch target size on mobile
     const [isTouch, setIsTouch] = useState(false);
     const [isActive, setIsActive] = useState(false);
 
@@ -2372,21 +2376,21 @@ const getInterpolatedDepth = (rectId) => {
       document.addEventListener('mouseup', handleCanvasMouseUp);
       
       // Add additional mobile-specific event listeners for improved interactions
-      if (isMobile) {
-        // Prevent default on content scrollable areas to allow custom handling
-        const contentAreas = canvas.querySelectorAll('.content-scrollable');
-        contentAreas.forEach(area => {
-          area.addEventListener('touchstart', (e) => {
-            // Set the active rectangle for scrolling
-            const rectElement = e.target.closest('[data-rect-id]');
-            if (rectElement) {
-              const rectId = parseInt(rectElement.getAttribute('data-rect-id'));
-              activeRectangleRef.current = rectId;
-              setIsScrollingRectangle(true);
-            }
-          }, { passive: true });
-        });
-      }
+      // if (isMobile) {
+      //   // Prevent default on content scrollable areas to allow custom handling
+      //   const contentAreas = canvas.querySelectorAll('.content-scrollable');
+      //   contentAreas.forEach(area => {
+      //     area.addEventListener('touchstart', (e) => {
+      //       // Set the active rectangle for scrolling
+      //       const rectElement = e.target.closest('[data-rect-id]');
+      //       if (rectElement) {
+      //         const rectId = parseInt(rectElement.getAttribute('data-rect-id'));
+      //         activeRectangleRef.current = rectId;
+      //         setIsScrollingRectangle(true);
+      //       }
+      //     }, { passive: true });
+      //   });
+      // }
 
       return () => {
         // Remove touch event listeners

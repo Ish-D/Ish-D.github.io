@@ -16,6 +16,7 @@
     "katex": "^0.16.21",
     "lucide-react": "^0.475.0",
     "marked": "^15.0.7",
+    "mobile-detect": "^1.4.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-frame-component": "^5.2.7",
