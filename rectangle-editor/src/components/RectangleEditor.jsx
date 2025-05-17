@@ -25,16 +25,24 @@ const RectangleEditor = () => {
   const [initialTouchAngle, setInitialTouchAngle] = useState(null);
   const [initialScale, setInitialScale] = useState(1);
   const [initialRotation, setInitialRotation] = useState(0);
-
+  const [lastTouchInfo, setLastTouchInfo] = useState(null);
+  const [selectedOperation, setSelectedOperation] = useState(null);
+  
   const [isDraggingCanvas, setIsDraggingCanvas] = useState(false);
+  const [isScrollingRectangle, setIsScrollingRectangle] = useState(false);
   const lastMousePos = useRef({ x: 0, y: 0 });
 
   const [canvasRotation, setCanvasRotation] = useState(0);
   const [isRotatingCanvas, setIsRotatingCanvas] = useState(false);
   const rotationStartPoint = useRef({ x: 0, y: 0 });
+  const longPressTimer = useRef(null);
+  const touchStartTime = useRef(0);
+  const touchStartPosition = useRef({ x: 0, y: 0 });
+  const isMobileInteraction = useRef(false);
 
   const canvasRef = useRef(null);
   const scrollPositions = useRef({});
+  const activeRectangleRef = useRef(null);
   
   const checkIsMobile = () => {
     let hasTouchScreen = false;
@@ -67,6 +75,21 @@ const RectangleEditor = () => {
     return hasTouchScreen || isMobileUserAgent || isSmallScreen;
   };
 
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkMobileStatus = () => {
+      setIsMobile(checkIsMobile());
+    };
+    
+    checkMobileStatus();
+    window.addEventListener('resize', checkMobileStatus);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobileStatus);
+    };
+  }, []);
+
   const [viewport, setViewport] = useState({
     x: 0,
     y: 0,
@@ -74,31 +97,30 @@ const RectangleEditor = () => {
   });
 
   // Initialization
-  let initialWidth = window.innerWidth - (2 * (checkIsMobile() ? 0.05 : 0.3) * window.innerWidth);
+  let initialWidth = window.innerWidth - ((isMobile ? 1.00 : 0.8) * window.innerWidth);
   let initialHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
   let font = 'Palatino'
-  let fontSize = 16;
-  
+  let fontSize = isMobile ? 18 : 16; // Slightly larger font on mobile
   
   const getInitialRectangles = () => {
     const now = Date.now();
-    const centerWidth = window.innerWidth - (2 * (checkIsMobile() ? 0.05 : 0.3) * window.innerWidth);
+    const centerWidth = window.innerWidth - (2 * (isMobile ? 0.05 : 0.3) * window.innerWidth);
     const centerHeight = window.innerHeight - (2 * 0.05 * window.innerHeight);
     
     // Define which markdown files should be loaded for each rectangle
     // The key is the rectangle index (0-based), and the value is the markdown filename
     const initialMarkdowns = {
       0: 'landing.md',
-      1: 'controls.md',
-      2: 'about.md'
+      // 1: 'controls.md',
+      // 2: 'todo.md'
     };
     
     return [{
       id: now,
       x: (window.outerWidth - initialWidth) / 2,
-      y: (window.innerHeight - initialHeight) / 2,
+      y: (window.innerHeight - initialWidth) / 2,
       width: initialWidth,
-      height: initialHeight,
+      height: initialWidth,
       rotation: 0,
       isPinned: false,
       color: `hsl(192, 100.00%, 99.00%)`,
@@ -107,52 +129,53 @@ const RectangleEditor = () => {
       pageNumber: 0,
       markdownFile: initialMarkdowns[0], // Store which markdown file this rectangle should load
       margins: {
-        top: checkIsMobile() ? 10 : 6,
-        right: checkIsMobile() ? 12 : 8,
-        bottom: checkIsMobile() ? 12 : 8,
-        left: checkIsMobile() ? 12 : 8
+        top: isMobile ? 16 : 6,
+        right: isMobile ? 16 : 8,
+        bottom: isMobile ? 16 : 8,
+        left: isMobile ? 16 : 8
       }
     },
-    {
-      id: now + 1,
-      x: (window.outerWidth - initialWidth) / 2 - 50,
-      y: (window.innerHeight - initialHeight) / 2,
-      width: initialWidth,
-      height: initialHeight,
-      rotation: 0,
-      isPinned: false,
-      color: `hsl(192, 100.00%, 99.00%)`,
-      castShadow: true,
-      text: "",
-      pageNumber: 1,
-      markdownFile: initialMarkdowns[1], // Store which markdown file this rectangle should load
-      margins: {
-        top: checkIsMobile() ? 10 : 6,
-        right: checkIsMobile() ? 12 : 8,
-        bottom: checkIsMobile() ? 12 : 8,
-        left: checkIsMobile() ? 12 : 8
-      }
-    },
-    {
-      id: now + 2,
-      x: (window.outerWidth - initialWidth) / 2 + 50,
-      y: (window.innerHeight - initialHeight) / 2,
-      width: initialWidth,
-      height: initialHeight,
-      rotation: 0,
-      isPinned: false,
-      color: `hsl(192, 100.00%, 99.00%)`,
-      castShadow: true,
-      text: "",
-      pageNumber: 2,
-      markdownFile: initialMarkdowns[2], // Store which markdown file this rectangle should load
-      margins: {
-        top: checkIsMobile() ? 10 : 6,
-        right: checkIsMobile() ? 12 : 8,
-        bottom: checkIsMobile() ? 12 : 8,
-        left: checkIsMobile() ? 12 : 8
-      }
-    }];
+    // {
+    //   id: now + 1,
+    //   x: (window.outerWidth - initialWidth) / 2 - 50,
+    //   y: (window.innerHeight - initialHeight) / 2,
+    //   width: initialWidth,
+    //   height: initialHeight,
+    //   rotation: 0,
+    //   isPinned: false,
+    //   color: `hsl(192, 100.00%, 99.00%)`,
+    //   castShadow: true,
+    //   text: "",
+    //   pageNumber: 1,
+    //   markdownFile: initialMarkdowns[1], // Store which markdown file this rectangle should load
+    //   margins: {
+    //     top: isMobile ? 16 : 6,
+    //     right: isMobile ? 16 : 8,
+    //     bottom: isMobile ? 16 : 8,
+    //     left: isMobile ? 16 : 8
+    //   }
+    // },
+    // {
+    //   id: now + 2,
+    //   x: (window.outerWidth - initialWidth) / 2 + 50,
+    //   y: (window.innerHeight - initialHeight) / 2,
+    //   width: initialWidth,
+    //   height: initialHeight,
+    //   rotation: 0,
+    //   isPinned: false,
+    //   color: `hsl(192, 100.00%, 99.00%)`,
+    //   castShadow: true,
+    //   text: "",
+    //   pageNumber: 2,
+    //   markdownFile: initialMarkdowns[2], // Store which markdown file this rectangle should load
+    //   margins: {
+    //     top: isMobile ? 16 : 6,
+    //     right: isMobile ? 16 : 8,
+    //     bottom: isMobile ? 16 : 8,
+    //     left: isMobile ? 16 : 8
+    //   }
+    // }
+  ];
   };
   
   // New function to load content for a specific markdown file
@@ -258,29 +281,32 @@ useEffect(() => {
     onTouchStart,
     onMouseEnter,
     onMouseLeave,
-    onTouchEnter,  // New prop
-    onTouchLeave   // New prop
+    onTouchEnter,
+    onTouchLeave,
+    children
   }) => {
-    const touchSize = size;
-    const [isTouch, setIsTouch] = React.useState(false);
-    const [isActive, setIsActive] = React.useState(false);
+    const touchSize = isMobile ? size : size; // Increase touch target size on mobile
+    const [isTouch, setIsTouch] = useState(false);
+    const [isActive, setIsActive] = useState(false);
 
-    React.useEffect(() => {
-      const isTouchDevice = (
-        'ontouchstart' in window ||
-        navigator.maxTouchPoints > 0 ||
-        navigator.msMaxTouchPoints > 0 ||
-        window.matchMedia('(pointer: coarse)').matches
-      );
-      setIsTouch(isTouchDevice);
-    }, []);
+    useEffect(() => {
+      setIsTouch(isMobile);
+    }, [isMobile]);
 
     const handleTouchStart = (e) => {
       e.stopPropagation();
-      e.preventDefault();
       setIsActive(true);
       onTouchStart?.(e);
       onTouchEnter?.(e); // Simulate hover on touch start
+      
+      // Add visual feedback for touch
+      const target = e.currentTarget;
+      if (target) {
+        target.style.opacity = "0.7";
+        setTimeout(() => {
+          if (target) target.style.opacity = "1";
+        }, 150);
+      }
     };
 
     const handleTouchEnd = () => {
@@ -300,8 +326,12 @@ useEffect(() => {
           cursor,
           zIndex: 30,
           touchAction: 'none',
-          background: 'rgba(0, 0, 0, 0.001)',
-          borderRadius: '50%'
+          background: isActive ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.001)',
+          borderRadius: '50%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background 0.2s ease'
         }}
         onMouseDown={(e) => {
           e.stopPropagation();
@@ -313,6 +343,7 @@ useEffect(() => {
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
       >
+        {children}
         {isTouch && (
           <div
             className="absolute inset-0 opacity-0 hover:opacity-10 transition-opacity"
@@ -331,6 +362,14 @@ useEffect(() => {
 
     const handleScroll = useCallback((e) => {
       scrollPositions.current[rect.id] = e.target.scrollTop;
+      // When content is being scrolled, prevent other interactions
+      setIsScrollingRectangle(true);
+      
+      // Clear scrolling state after scrolling stops
+      clearTimeout(window.scrollTimer);
+      window.scrollTimer = setTimeout(() => {
+        setIsScrollingRectangle(false);
+      }, 100);
     }, [rect.id, scrollPositions]);
   
     
@@ -403,8 +442,8 @@ useEffect(() => {
         y = centerY + rotatedY;
       } else {
         // Absolute positioning
-        x = parseFloat(params.x) || Math.random() * window.innerWidth;
-        y = parseFloat(params.y) || Math.random() * window.innerHeight;
+        x = parseFloat(params.x) || Math.random() * (window.innerWidth * 0.75);
+        y = parseFloat(params.y) || Math.random() * (window.innerHeight * 0.75);
       }
       
       // Add jitter if not disabled
@@ -464,6 +503,10 @@ useEffect(() => {
     }
     
     const castShadow = params.castShadow !== 'false';
+    
+    const defaultMargins = isMobile ? 
+      { top: 16, right: 16, bottom: 16, left: 16 } : 
+      { top: 6, right: 8, bottom: 8, left: 8 };
 
     const newRect = {
       id: Date.now(),
@@ -477,10 +520,10 @@ useEffect(() => {
       text,
       pageNumber: nextPageNumber,
       margins: {
-        top: parseFloat(params.marginTop) || (checkIsMobile() ? 10 : 6),
-        right: parseFloat(params.marginRight) || (checkIsMobile() ? 12 : 8),
-        bottom: parseFloat(params.marginBottom) || (checkIsMobile() ? 12 : 8),
-        left: parseFloat(params.marginLeft) || (checkIsMobile() ? 12 : 8)
+        top: parseFloat(params.marginTop) || defaultMargins.top,
+        right: parseFloat(params.marginRight) || defaultMargins.right,
+        bottom: parseFloat(params.marginBottom) || defaultMargins.bottom,
+        left: parseFloat(params.marginLeft) || defaultMargins.left
       }
     };
 
@@ -582,27 +625,50 @@ const renderContent = useCallback((text) => {
   const markdownComponents = {
     // Handle div elements, preserving className and other attributes
     div: ({ node, className, children, ...props }) => {
-      if (className?.includes('text-center')) {
-        return (
-          <div className={className} {...props}>
-            <div className="markdown-content">
-              {children}
-            </div>
-          </div>
-        );
-      }
-      return <div className={className} {...props}>{children}</div>;
-    },
+  if (className) {
+    const styles = {};
     
-    // Headers with proper styling
+    // Apply styles based on className
+    if (className.includes('text-center')) {
+      styles.textAlign = 'center';
+    }
+    
+    if (className.includes('text-vcenter')) {
+      styles.position = 'absolute';
+      styles.top = '50%';
+      styles.left = '0';
+      styles.right = '0';
+      styles.transform = 'translateY(-50%)';
+    }
+    
+    if (className.includes('text-center-all')) {
+      styles.position = 'absolute';
+      styles.top = '50%';
+      styles.left = '0';
+      styles.right = '0';
+      styles.transform = 'translateY(-50%)';
+      styles.textAlign = 'center';
+    }
+    
+    return (
+      <div className={className} style={styles} {...props}>
+        {children}
+      </div>
+    );
+  }
+  
+  return <div className={className} {...props}>{children}</div>;
+},
+    
+    // Headers with proper styling - adjusted for better mobile visibility
     h1: ({ node, children }) => (
-      <h1 className="mt-6 mb-4 text-4xl font-bold">{children}</h1>
+      <h1 className={`mt-6 mb-4 ${isMobile ? 'text-3xl' : 'text-4xl'} font-bold`}>{children}</h1>
     ),
     h2: ({ node, children }) => (
-      <h2 className="mt-5 mb-3 text-3xl font-bold">{children}</h2>
+      <h2 className={`mt-5 mb-3 ${isMobile ? 'text-2xl' : 'text-3xl'} font-bold`}>{children}</h2>
     ),
     h3: ({ node, children }) => (
-      <h3 className="mt-4 mb-2 text-2xl font-bold">{children}</h3>
+      <h3 className={`mt-4 mb-2 ${isMobile ? 'text-xl' : 'text-2xl'} font-bold`}>{children}</h3>
     ),
     
     // Support HTML in markdown, including spans with style attributes
@@ -677,7 +743,28 @@ const renderContent = useCallback((text) => {
   return (
     <div style={{ fontFamily: font }} className="markdown-wrapper">
       <style>
-        {/* Your existing styles here */}
+        {`
+          /* Enhanced styles for better mobile reading */
+          .markdown-wrapper {
+            font-size: ${isMobile ? '16px' : '14px'};
+            line-height: ${isMobile ? '1.6' : '1.5'};
+          }
+          
+          /* Improved touch targets for mobile */
+          .markdown-wrapper a, 
+          .markdown-wrapper button,
+          .markdown-wrapper [role="button"] {
+            padding: ${isMobile ? '8px 4px' : '4px 2px'};
+            min-height: ${isMobile ? '44px' : 'auto'};
+            display: inline-flex;
+            align-items: center;
+          }
+          
+          /* Better spacing for mobile content */
+          .markdown-wrapper p {
+            margin-bottom: ${isMobile ? '16px' : '12px'};
+          }
+        `}
       </style>
       <ReactMarkdown 
         remarkPlugins={[remarkGfm, remarkMath]}
@@ -688,14 +775,14 @@ const renderContent = useCallback((text) => {
       </ReactMarkdown>
     </div>
   );
-}, [rect, availableFunctions, font]);
+}, [rect, availableFunctions, font, isMobile]);
   
     const parseContentWithMargins = useCallback((text) => {
       const margins = rect.margins || {
-        top: 20,
-        right: 20,
-        bottom: 20,
-        left: 20
+        top: isMobile ? 16 : 20,
+        right: isMobile ? 16 : 20,
+        bottom: isMobile ? 16 : 20,
+        left: isMobile ? 16 : 20
       };
     
       const lines = text.split('\n');
@@ -748,24 +835,39 @@ const renderContent = useCallback((text) => {
 
       const mainContent = mainContentLines.join('\n').trim();
     
+      // Adjust margin sizes for better usability on mobile
+      const minMarginSize = isMobile ? 36 : 28;
       const marginSizes = {
-        left:   Math.max(rect.width  * (margins.left   / 100), 28),
-        right:  Math.max(rect.width  * (margins.right  / 100), 28),
-        top:    Math.max(rect.height * (margins.top    / 100), 28),
-        bottom: Math.max(rect.height * (margins.bottom / 100), 28)
+        left:   Math.max(rect.width  * (margins.left   / 100), minMarginSize),
+        right:  Math.max(rect.width  * (margins.right  / 100), minMarginSize),
+        top:    Math.max(rect.height * (margins.top    / 100), minMarginSize),
+        bottom: Math.max(rect.height * (margins.bottom / 100), minMarginSize)
       };
 
       const mainContentElement = (
         <div 
-        ref={contentRef}
-        onScroll={handleScroll}
+          ref={contentRef}
+          onScroll={handleScroll}
+          className="content-scrollable"
           style={{ 
             position: 'absolute',
             top: `${marginSizes.top}px`,
             left: `${marginSizes.left}px`,
             right: `${marginSizes.right}px`,
             bottom: `${marginSizes.bottom}px`,
-            overflow: 'auto'  // Allow scrolling within the clipped area
+            overflow: 'auto',
+            WebkitOverflowScrolling: 'touch', // Smoother scrolling on iOS
+            msOverflowStyle: 'none', // Hide scrollbars on IE/Edge
+            scrollbarWidth: 'thin', // Thin scrollbars on Firefox
+            padding: isMobile ? '8px' : '4px',
+            touchAction: 'pan-y', // Enable vertical scrolling for touch
+            overscrollBehavior: 'contain' // Prevent scroll chaining
+          }}
+          onTouchStart={(e) => {
+            // Mark this rectangle as having the active scroll
+            activeRectangleRef.current = rect.id;
+            // Don't prevent default so native scrolling works
+            e.stopPropagation();  // Stop event from bubbling to parent handlers
           }}
         >
           {renderContent(mainContent)}
@@ -805,7 +907,9 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
       margin: 0,
       zIndex: 10,
       overflow: 'hidden',
-      boxSizing: 'border-box'
+      boxSizing: 'border-box',
+      // Increase touch area for mobile
+      padding: isMobile && isSideMargin ? '8px 4px' : '0'
     };
 
     const wrapperStyle = {
@@ -836,6 +940,8 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
         '100%',
       position: 'absolute',
       overflowWrap: 'break-word',
+      // Adjust font size for better readability on mobile
+      fontSize: isMobile ? `${fontSize * 1.1}px` : `${fontSize}px`,
       ...(isSideMargin && !isNormal && {
         position: 'absolute',
         left: position === 'left' ? '50%' : undefined,
@@ -851,6 +957,10 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
         style.top = verticalOffset;
         style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
         style.overflow = 'hidden';
+        // Increase touch area for mobile
+        if (isMobile) {
+          style.minWidth = '40px';
+        }
         break;
       case 'right':
         style.right = horizontalOffset;
@@ -858,6 +968,10 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
         style.top = verticalOffset;
         style.height = `${rect.height - marginSizes.top - marginSizes.bottom - 32}px`;
         style.overflow = 'hidden';
+        // Increase touch area for mobile
+        if (isMobile) {
+          style.minWidth = '40px';
+        }
         break;
       case 'top':
         style.position = 'absolute';
@@ -865,6 +979,10 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
         style.height = `${marginSizes.top}px`;
         style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
         style.overflow = 'visible';
+        // Improve tap target size on mobile
+        if (isMobile) {
+          style.minHeight = '40px';
+        }
         if (content.horizontal === '0px' || !content.horizontal) {
           style.left = '50%';
           style.transform = 'translateX(-50%)';
@@ -873,14 +991,18 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
         }
         break;
       case 'bottom':
-        const baseBottomOffset = 4;
+        const baseBottomOffset = isMobile ? 6 : 4;
         const calculatedBottom = parseFloat(verticalOffset) || 0;
         style.position = 'absolute';
         style.bottom = `${calculatedBottom - baseBottomOffset}px`;
         style.height = `${marginSizes.bottom}px`;
         style.width = `${rect.width - marginSizes.left - marginSizes.right - 32}px`;
         style.overflow = 'visible';
-        style.maxHeight = '32px';
+        style.maxHeight = isMobile ? '40px' : '32px';
+        // Improve tap target size on mobile
+        if (isMobile) {
+          style.minHeight = '40px';
+        }
         if (content.horizontal === '0px' || !content.horizontal) {
           style.left = '50%';
           style.transform = 'translateX(-50%)';
@@ -894,6 +1016,7 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
       <div
         key={`margin-${positionKey}-${idx}`}
         style={style}
+        className="rect-margin-element"
       >
         <div style={wrapperStyle}>
           <div 
@@ -914,33 +1037,42 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
           <React.Fragment key={`margin-${index}`}>{element}</React.Fragment>
         ))
       ];
-    }, [rect, renderContent]);
+    }, [rect, renderContent, isMobile]);
 
     const pageNumberDisplay = (
       <div
         style={{
           position: 'absolute',
-          bottom: '4px',
-          left: '9px',
-          fontSize: 12,
+          bottom: isMobile ? '8px' : '4px',
+          left: isMobile ? '12px' : '9px',
+          fontSize: isMobile ? 14 : 12,
           fontFamily: font,
           color: 'black',
           zIndex: 20,
           pointerEvents: 'none'
         }}
       >
-        {(hoveredCorner.id === rect.id && hoveredCorner.corner === 'bottomleft') ?  String("") : String(rect.pageNumber).padStart(2, '0')}
+        {(hoveredCorner.id === rect.id && hoveredCorner.corner === 'bottomleft') ? 
+          String("") : 
+          String(rect.pageNumber).padStart(2, '0')}
       </div>
     );
   
     return (
       <div
-        className="absolute inset-0 overflow-auto select-text"
+        className="absolute inset-0 overflow-auto select-text rectangle-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ cursor: 'text' }}
+        style={{ 
+          cursor: 'text',
+          WebkitTapHighlightColor: 'transparent' // Remove tap highlight on mobile
+        }}
+        onTouchStart={(e) => {
+          // Track the rectangle that is being interacted with
+          activeRectangleRef.current = rect.id;
+        }}
       >
           <div 
-            className="prose prose-sm max-w-none h-full"
+            className={`prose ${isMobile ? 'prose-base' : 'prose-sm'} max-w-none h-full`}
             style={{
               padding: rect.margins ? 
                 `${rect.height * (rect.margins.top / 100)}px 
@@ -964,9 +1096,9 @@ const marginElements = Object.entries(marginContents).map(([positionKey, content
 // TopFlap component with roll-out animation
 const TopFlap = React.memo(({ rect, isSelected }) => {
   const isHovered = hoveredFlap === rect.id;
-  const flapHeight = 50;
-  const flapWidth = 140;
-  const verticalOffset = -22;
+  const flapHeight = isMobile ? 60 : 50;
+  const flapWidth = isMobile ? 160 : 140;
+  const verticalOffset = isMobile ? -26 : -22;
   
   return (
     <div
@@ -991,6 +1123,7 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
           setHoveredFlap(null);
         }
       }}
+      onTouchStart={() => setHoveredFlap(rect.id)}
     >
       <div 
         style={{
@@ -1018,7 +1151,7 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
             {[
               {
                 key: 'pin',
-                icon: rect.isPinned ? <PinOff size={20} /> : <Pin size={20} />,
+                icon: rect.isPinned ? <PinOff size={isMobile ? 24 : 20} /> : <Pin size={isMobile ? 24 : 20} />,
                 onClick: (e) => {
                   e.stopPropagation();
                   handlePin(rect.id);
@@ -1027,23 +1160,25 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
                   color: rect.isPinned ? '#2563eb' : '#6b7280'
                 },
                 className: `
-                  p-2 
+                  ${isMobile ? 'p-3' : 'p-2'}
                   rounded 
                   hover:bg-gray-100 
+                  active:bg-gray-200
                   ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
                 `
               },
               {
                 key: 'delete',
-                icon: <Trash2 size={20} />,
+                icon: <Trash2 size={isMobile ? 24 : 20} />,
                 onClick: (e) => {
                   e.stopPropagation();
                   handleDelete(rect.id);
                 },
                 className: `
-                  p-2 
+                  ${isMobile ? 'p-3' : 'p-2'}
                   rounded 
                   hover:bg-gray-100 
+                  active:bg-gray-200
                   text-gray-500 
                   hover:text-red-500
                   ${isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'}
@@ -1071,9 +1206,9 @@ const TopFlap = React.memo(({ rect, isSelected }) => {
 
 // FlapHoverArea component with adjusted hover area
 const FlapHoverArea = ({ rect, isSelected }) => {
-  const areaHeight = 50;
-  const areaWidth = 160;
-  const verticalOffset = 30;
+  const areaHeight = isMobile ? 60 : 50;
+  const areaWidth = isMobile ? 180 : 160;
+  const verticalOffset = isMobile ? 36 : 30;
 
   return (
     <div
@@ -1095,6 +1230,7 @@ const FlapHoverArea = ({ rect, isSelected }) => {
           setHoveredFlap(null);
         }
       }}
+      onTouchStart={() => setHoveredFlap(rect.id)}
     />
   );
 };
@@ -1104,6 +1240,12 @@ const getZIndex = (rectId) => {
   if (rect && pinnedRectangles.has(rectId)) {
     return 1000; // Pinned rectangles always on top
   }
+  
+  // Selected rectangles should be on top
+  if (selectedId === rectId) {
+    return 900;
+  }
+  
   const index = selectionOrder.indexOf(rectId);
   return selectionOrder.length - index;
 };
@@ -1353,6 +1495,11 @@ const getInterpolatedDepth = (rectId) => {
 
     e.preventDefault();
     e.stopPropagation();
+    
+    setSelectedOperation(actionType);
+
+    // Track that we're using mouse interaction, not mobile
+    isMobileInteraction.current = false;
 
     const rect = rectangles.find(r => r.id === id);
     if (!rect) return;
@@ -1539,6 +1686,7 @@ const getInterpolatedDepth = (rectId) => {
       document.removeEventListener('mouseup', handleUp);
       setAction(null);
       setrect(null);
+      setSelectedOperation(null);
     };
 
     document.addEventListener('mousemove', handleMove);
@@ -1558,21 +1706,91 @@ const getInterpolatedDepth = (rectId) => {
       touch2.clientX - touch1.clientX
     ) * 180 / Math.PI;
   };
+  
+  // Detect if a touch is a long press
+  const detectLongPress = (startEvent, currentEvent, duration = 500) => {
+    if (!startEvent || !currentEvent) return false;
+    
+    const startTouch = startEvent.touches[0];
+    const currentTouch = currentEvent.touches[0];
+    
+    const elapsedTime = currentEvent.timeStamp - startEvent.timeStamp;
+    
+    // Check if touch has moved significantly (tolerating small movements)
+    const dx = currentTouch.clientX - startTouch.clientX;
+    const dy = currentTouch.clientY - startTouch.clientY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // Allow small movement (10px) for long press to be valid
+    return elapsedTime >= duration && distance < 10;
+  };
+  
+  // Convert touch event to equivalent mouse event coordinates
+  const touchToMouseEvent = (touch) => {
+    return {
+      clientX: touch.clientX,
+      clientY: touch.clientY,
+      preventDefault: () => {},
+      stopPropagation: () => {}
+    };
+  };
 
   const handleTouchStart = useCallback((e) => {
     if (!canvasRef.current) return;
+    
+    // Set mobile interaction flag
+    isMobileInteraction.current = true;
+    
+    // Record touch start time and position for gestures
+    touchStartTime.current = e.timeStamp;
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      touchStartPosition.current = { x: touch.clientX, y: touch.clientY };
+    }
+
+    // Check if we're touching inside a content area
+    const contentArea = e.target.closest('.content-scrollable');
+    if (contentArea) {
+      // Let the content area handle scrolling
+      setIsScrollingRectangle(true);
+      return;
+    }
+    
+    // If touching a rectangle directly but not in a scrollable area
+    const rectElement = e.target.closest('[data-rect-id]');
+    if (rectElement && !action) {
+      const rectId = parseInt(rectElement.getAttribute('data-rect-id'));
+      
+      // Set up long press detection
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = setTimeout(() => {
+        // If still touching same position, trigger selection
+        setSelectedId(rectId);
+        setSelectionOrder(prev => {
+          const filtered = prev.filter(id => id !== rectId);
+          return [rectId, ...filtered];
+        });
+        
+        // Provide haptic feedback if available
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }, 300);
+      
+      return;
+    }
 
     // Clear selection if touching the background directly
     if (e.target === canvasRef.current) {
       setSelectedId(null);
+      e.preventDefault(); // Prevent default browser behavior for canvas
     }
 
-    // If we're touching a rectangle or have one selected during a transformation, don't handle canvas interactions
-    if (e.target.closest('[data-rect-id]') || action !== null) {
+    // If we're in the middle of a transformation, don't handle canvas interactions
+    if (action !== null) {
       return;
     }
 
-    e.preventDefault();
     const touches = Array.from(e.touches);
 
     // Update active touches
@@ -1580,12 +1798,19 @@ const getInterpolatedDepth = (rectId) => {
     touches.forEach(t => {
       newTouches.set(t.identifier, {
         clientX: t.clientX,
-        clientY: t.clientY
+        clientY: t.clientY,
+        timeStamp: e.timeStamp
       });
     });
     setActiveTouches(newTouches);
+    setLastTouchInfo({
+      touches: newTouches,
+      timeStamp: e.timeStamp
+    });
 
     if (touches.length === 2) {
+      // Two-finger gesture for zoom and rotation
+      e.preventDefault(); // Prevent default for multi-touch
       const distance = getTouchDistance(touches[0], touches[1]);
       const angle = getTouchAngle(touches[0], touches[1]);
       setInitialTouchDistance(distance);
@@ -1593,14 +1818,44 @@ const getInterpolatedDepth = (rectId) => {
       setInitialScale(viewport.scale);
       setInitialRotation(canvasRotation);
     } else if (touches.length === 1) {
+      // Single-finger gesture for dragging
       lastMousePos.current = { x: touches[0].clientX, y: touches[0].clientY };
-      setIsDraggingCanvas(true);
+      
+      // Delay setting dragging mode to detect if it's a tap or drag
+      setTimeout(() => {
+        if (activeTouches.size === 1 && !isScrollingRectangle) {
+          setIsDraggingCanvas(true);
+        }
+      }, 50);
     }
-  }, [viewport.scale, canvasRotation, action]);
+  }, [viewport.scale, canvasRotation, action, activeTouches, isScrollingRectangle]);
 
   const handleTouchMove = useCallback((e) => {
-    e.preventDefault();
+    // Clear any pending long press when touch moves
+    clearTimeout(longPressTimer.current);
+    
+    // Handle content scrolling
+    const contentArea = e.target.closest('.content-scrollable');
+    if (contentArea || isScrollingRectangle) {
+      // Allow default scrolling behavior
+      return;
+    }
+    
+    e.preventDefault(); // Prevent default for other cases
     const touches = Array.from(e.touches);
+
+    // Calculate touch movement from start
+    if (touches.length === 1 && touchStartPosition.current) {
+      const touch = touches[0];
+      const dx = touch.clientX - touchStartPosition.current.x;
+      const dy = touch.clientY - touchStartPosition.current.y;
+      const moveDistance = Math.sqrt(dx * dx + dy * dy);
+      
+      // If movement exceeds threshold, cancel any pending selection
+      if (moveDistance > 10) {
+        clearTimeout(longPressTimer.current);
+      }
+    }
 
     if (action) {
       // If we're in the middle of a rectangle transformation,
@@ -1618,15 +1873,38 @@ const getInterpolatedDepth = (rectId) => {
       return;
     }
 
+    // Update last touch info for gesture detection
+    const newTouches = new Map();
+    touches.forEach(t => {
+      newTouches.set(t.identifier, {
+        clientX: t.clientX,
+        clientY: t.clientY,
+        timeStamp: e.timeStamp
+      });
+    });
+    setLastTouchInfo(prev => ({
+      touches: newTouches,
+      timeStamp: e.timeStamp,
+      prevTouches: prev?.touches
+    }));
+
     if (touches.length === 2) {
       // Handle pinch-zoom and rotation
       const currentDistance = getTouchDistance(touches[0], touches[1]);
       const currentAngle = getTouchAngle(touches[0], touches[1]);
 
       if (initialTouchDistance && initialTouchAngle) {
-        const scaleFactor = currentDistance / initialTouchDistance;
-        const newScale = Math.min(Math.max(initialScale * scaleFactor, 0.1), 5);
-        const rotationDelta = currentAngle - initialTouchAngle;
+        // Enhanced sensitivity for mobile
+        const sensitivity = isMobile ? 1.2 : 1.0;
+        const scaleFactor = (currentDistance / initialTouchDistance) ** sensitivity;
+        
+        // Limit scale with smoother constraints for mobile
+        const minScale = isMobile ? 0.2 : 0.1;
+        const maxScale = isMobile ? 4 : 5;
+        const newScale = Math.min(Math.max(initialScale * scaleFactor, minScale), maxScale);
+        
+        // Calculate rotation with dampening for more control
+        const rotationDelta = (currentAngle - initialTouchAngle) * (isMobile ? 0.8 : 1.0);
         const newRotation = (initialRotation + rotationDelta) % 360;
 
         setViewport(prev => ({
@@ -1636,15 +1914,18 @@ const getInterpolatedDepth = (rectId) => {
         setCanvasRotation(newRotation);
       }
     } else if (touches.length === 1 && isDraggingCanvas) {
-      // Handle canvas panning
+      // Handle canvas panning with improved responsiveness on mobile
       const touch = touches[0];
       const dx = touch.clientX - lastMousePos.current.x;
       const dy = touch.clientY - lastMousePos.current.y;
-
+      
+      // Apply damping for smoother movement on mobile
+      const dampingFactor = isMobile ? 1.0 : 1.0;
+      
       setViewport(prev => ({
         ...prev,
-        x: prev.x + dx,
-        y: prev.y + dy
+        x: prev.x + (dx * dampingFactor),
+        y: prev.y + (dy * dampingFactor)
       }));
 
       lastMousePos.current = {
@@ -1658,15 +1939,63 @@ const getInterpolatedDepth = (rectId) => {
     initialTouchAngle,
     initialScale,
     initialRotation,
-    isDraggingCanvas
+    isDraggingCanvas,
+    isScrollingRectangle,
+    isMobile
   ]);
 
   const handleTouchEnd = useCallback((e) => {
+    // Clear any pending long press timer
+    clearTimeout(longPressTimer.current);
+    
+    setSelectedOperation(null);
+
+    // Check if this was a quick tap (less than 300ms)
+    const touchDuration = e.timeStamp - touchStartTime.current;
+    const isTap = touchDuration < 300;
+    
+    // Handle tap on rectangle for selection
+    if (isTap && e.changedTouches.length === 1) {
+      const touch = e.changedTouches[0];
+      
+      // Get element under touch point
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      
+      if (element) {
+        // Find closest rectangle container
+        const rectElement = element.closest('[data-rect-id]');
+        if (rectElement) {
+          const rectId = parseInt(rectElement.getAttribute('data-rect-id'));
+          
+          // Check if touch didn't move much (within 10px)
+          const dx = touch.clientX - touchStartPosition.current.x;
+          const dy = touch.clientY - touchStartPosition.current.y;
+          const moveDistance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (moveDistance < 10) {
+            // Handle tap selection
+            setSelectedId(rectId);
+            setSelectionOrder(prev => {
+              const filtered = prev.filter(id => id !== rectId);
+              return [rectId, ...filtered];
+            });
+          }
+        } else if (element === canvasRef.current && !isScrollingRectangle) {
+          // Tap on canvas background (not while scrolling)
+          setSelectedId(null);
+        }
+      }
+    }
+    
     if (e.touches.length === 0) {
       // Reset all touch states
       setInitialTouchDistance(null);
       setInitialTouchAngle(null);
       setIsDraggingCanvas(false);
+      setIsScrollingRectangle(false);
+      setLastTouchInfo(null);
+      touchStartPosition.current = { x: 0, y: 0 };
+      activeRectangleRef.current = null;
 
       if (action) {
         // Trigger mouseup to end any active transformations
@@ -1677,14 +2006,26 @@ const getInterpolatedDepth = (rectId) => {
         document.dispatchEvent(mouseEvent);
       }
     }
-  }, [action]);
+  }, [action, isScrollingRectangle]);
 
   const handleRectangleTouchStart = useCallback((e, id, actionType, corner) => {
     e.preventDefault();
     e.stopPropagation();
+    
+    setSelectedOperation(actionType);
 
+    // Set mobile interaction flag
+    isMobileInteraction.current = true;
+
+    // Provide haptic feedback for control interactions if available
+    if (navigator.vibrate) {
+      navigator.vibrate(30);
+    }
+
+    // Cancel any canvas or scrolling modes
     setIsDraggingCanvas(false);
     setIsRotatingCanvas(false);
+    setIsScrollingRectangle(false);
 
     const rect = rectangles.find(r => r.id === id);
     if (!rect) return;
@@ -1697,6 +2038,12 @@ const getInterpolatedDepth = (rectId) => {
     // Set selected ID and immediately start the transformation
     setSelectedId(id);
     setAction({ type: actionType, corner });
+    
+    // Bring this rectangle to front
+    setSelectionOrder(prev => {
+      const filtered = prev.filter(rectId => rectId !== id);
+      return [id, ...filtered];
+    });
 
     // Calculate and set the start point
     const canvasCenter = {
@@ -1858,6 +2205,7 @@ const getInterpolatedDepth = (rectId) => {
       document.removeEventListener('touchcancel', handleEnd);
       setAction(null);
       setrect(null);
+      setSelectedOperation(null);
     };
 
     document.addEventListener('touchmove', handleMove, { passive: false });
@@ -2000,18 +2348,35 @@ const getInterpolatedDepth = (rectId) => {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (canvas) {
-      // Add touch event listeners
-      canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+      // Add touch event listeners with appropriate passive settings
+      canvas.addEventListener('touchstart', handleTouchStart, { passive: true });
       canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
       canvas.addEventListener('touchend', handleTouchEnd);
       canvas.addEventListener('touchcancel', handleTouchEnd);
 
-      // Existing mouse event listeners...
+      // Existing mouse event listeners
       canvas.addEventListener('wheel', handleWheel, { passive: false });
       canvas.addEventListener('mousedown', handleCanvasMouseDown);
       canvas.addEventListener('mousemove', handleCanvasMouseMove);
       canvas.addEventListener('contextmenu', handleContextMenu);
       document.addEventListener('mouseup', handleCanvasMouseUp);
+      
+      // Add additional mobile-specific event listeners for improved interactions
+      if (isMobile) {
+        // Prevent default on content scrollable areas to allow custom handling
+        const contentAreas = canvas.querySelectorAll('.content-scrollable');
+        contentAreas.forEach(area => {
+          area.addEventListener('touchstart', (e) => {
+            // Set the active rectangle for scrolling
+            const rectElement = e.target.closest('[data-rect-id]');
+            if (rectElement) {
+              const rectId = parseInt(rectElement.getAttribute('data-rect-id'));
+              activeRectangleRef.current = rectId;
+              setIsScrollingRectangle(true);
+            }
+          }, { passive: true });
+        });
+      }
 
       return () => {
         // Remove touch event listeners
@@ -2020,438 +2385,506 @@ const getInterpolatedDepth = (rectId) => {
         canvas.removeEventListener('touchend', handleTouchEnd);
         canvas.removeEventListener('touchcancel', handleTouchEnd);
 
-        // Remove existing mouse event listeners...
+        // Remove existing mouse event listeners
         canvas.removeEventListener('wheel', handleWheel);
         canvas.removeEventListener('mousedown', handleCanvasMouseDown);
         canvas.removeEventListener('mousemove', handleCanvasMouseMove);
         canvas.removeEventListener('contextmenu', handleContextMenu);
         document.removeEventListener('mouseup', handleCanvasMouseUp);
-      };
-    }
-  }, [
-    handleWheel,
-    handleCanvasMouseDown,
-    handleCanvasMouseMove,
-    handleCanvasMouseUp,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd
-  ]);
+        
+        clearTimeout(longPressTimer.current);
+        clearTimeout(window.scrollTimer);
+        clearTimeout(window.scrollEndTimer);
+};
+}
+}, [
+handleWheel,
+handleCanvasMouseDown,
+handleCanvasMouseMove,
+handleCanvasMouseUp,
+handleTouchStart,
+handleTouchMove,
+handleTouchEnd,
+isMobile
+]);
 
-  // Rectangle transformation handlers
-  const handleCornerHover = (e, id, corner) => {
-    setHoveredCorner({ id, corner });
-    handleMouseEnter(e, id);
-  };
+// Rectangle transformation handlers
+const handleCornerHover = (e, id, corner) => {
+setHoveredCorner({ id, corner });
+handleMouseEnter(e, id);
+};
 
-  const handleCornerLeave = (e, id) => {
-    e?.stopPropagation?.(); // Make stopPropagation optional since we might not have an event
-    setHoveredCorner({ id: null, corner: null });
-    if (e) handleMouseLeave(e, id); // Only call handleMouseLeave if we have an event
-  };
+const handleCornerLeave = (e, id) => {
+e?.stopPropagation?.(); // Make stopPropagation optional since we might not have an event
+setHoveredCorner({ id: null, corner: null });
+if (e) handleMouseLeave(e, id); // Only call handleMouseLeave if we have an event
+};
 
-  const handleCornerTouchEnter = (id, corner) => {
-    setHoveredCorner({ id, corner });
-  };
+const handleCornerTouchEnter = (id, corner) => {
+setHoveredCorner({ id, corner });
+};
 
-  const handleCornerTouchLeave = () => {
-    setHoveredCorner({ id: null, corner: null });
-  };
+const handleCornerTouchLeave = () => {
+setHoveredCorner({ id: null, corner: null });
+};
 
-  // Custom cursors
-  const cursors = {
-    rotate: `url("data:image/svg+xml;base64,${btoa(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2">
-      <path d="M21 12a9 9 0 11-3-6.7"/>
-      <path d="M22 4V10H16"/>
-    </svg>
-  `)}") 12 12, crosshair`,
+// Custom cursors
+const cursors = {
+rotate: `url("data:image/svg+xml;base64,${btoa(`
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2">
+<path d="M21 12a9 9 0 11-3-6.7"/>
+<path d="M22 4V10H16"/>
+</svg>
+`)}") 12 12, crosshair`,
 
-    scale: `url("data:image/svg+xml;base64,${btoa(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2">
-      <path d="M12 12 L20 4" stroke-linecap="round"/>
-      <path d="M20 4 L16 4" stroke-linecap="round"/>
-      <path d="M20 4 L20 8" stroke-linecap="round"/>
-      <path d="M12 12 L4 20" stroke-linecap="round"/>
-      <path d="M4 20 L8 20" stroke-linecap="round"/>
-      <path d="M4 20 L4 16" stroke-linecap="round"/>
-    </svg>
-  `)}") 12 12, nw-resize`
-  };
+scale: `url("data:image/svg+xml;base64,${btoa(`
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2">
+<path d="M12 12 L20 4" stroke-linecap="round"/>
+<path d="M20 4 L16 4" stroke-linecap="round"/>
+<path d="M20 4 L20 8" stroke-linecap="round"/>
+<path d="M12 12 L4 20" stroke-linecap="round"/>
+<path d="M4 20 L8 20" stroke-linecap="round"/>
+<path d="M4 20 L4 16" stroke-linecap="round"/>
+</svg>
+`)}") 12 12, nw-resize`
+};
 
-  return (
-    <div>
-      <div
-        ref={canvasRef}
-        className="fixed inset-0 bg-gray-100"
-        style={{
-          overflow: 'hidden',
-          cursor: isDraggingCanvas ? 'grabbing' : isRotatingCanvas ? cursors.rotate : 'grab'
-        }}
-        onTouchStart={(e) => {
-          // Only clear selection if touching the background directly
-          if (e.target === e.currentTarget) {
-            setSelectedId(null);
-          }
-          handleTouchStart(e);
-        }}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseMove={handleCanvasMouseMove}
-        onContextMenu={handleContextMenu}
-      >
-        <div
+return (
+<div>
+{/* Mobile instruction overlay */}
+{/* {isMobile && selectedId && (
+  <div 
+    className="fixed top-0 left-0 right-0 z-50 bg-black bg-opacity-60 text-white text-center p-2 text-sm"
+    style={{
+      opacity: 0.8,
+      transition: 'opacity 0.3s ease',
+      pointerEvents: 'none'
+    }}
+  >
+    {action ? (
+      action.type === 'move' ?   'Moving' : 
+      action.type === 'resize' ? 'Resizing' :
+      action.type === 'rotate' ? 'Rotating' : 
+      'Tap corners to transform'
+    ) : (
+      'Tap page to select. Tap corners then drag canvas to resize/rotate/transform'
+    )}
+  </div>
+)} */}
+
+<div
+  ref={canvasRef}
+  className="fixed inset-0 bg-gray-100 touch-manipulation"
+  style={{
+    overflow: 'hidden',
+    cursor: isDraggingCanvas ? 'grabbing' : isRotatingCanvas ? cursors.rotate : 'grab',
+    touchAction: 'none', // Disable browser handling of all touch gestures
+    WebkitTapHighlightColor: 'transparent', // Remove tap highlight on iOS
+    WebkitTouchCallout: 'none', // Disable callout to copy image, etc on iOS
+    WebkitUserSelect: 'none', // Disable selection on iOS
+    userSelect: 'none' // Disable selection
+  }}
+  onTouchStart={handleTouchStart}
+  onTouchMove={handleTouchMove}
+  onTouchEnd={handleTouchEnd}
+  onMouseDown={handleCanvasMouseDown}
+  onMouseMove={handleCanvasMouseMove}
+  onContextMenu={handleContextMenu}
+>
+  <div
+    style={{
+      position: 'absolute',
+      transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale}) rotate(${canvasRotation}deg)`,
+      transformOrigin: '50% 50%',
+      width: '100%',
+      height: '100%'
+    }}
+  >
+    {rectangles.map((rect) => {
+     const isSelected = selectedId === rect.id;
+     const isPinned = rect.isPinned;
+     const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
+     const padding = 20;
+
+        return (
+          <div
+          key={rect.id}
+          data-rect-id={rect.id}
+          className="absolute"
           style={{
-            position: 'absolute',
-            transform: `translate(${viewport.x}px, ${viewport.y}px) scale(${viewport.scale}) rotate(${canvasRotation}deg)`,
-            transformOrigin: '50% 50%',
-            width: '100%',
-            height: '100%'
+            left: `${rect.x - padding}px`,
+            top: `${rect.y - padding}px`,
+            width: `${rect.width + 2 * padding}px`,
+            height: `${rect.height + 2 * padding + 32}px`,  // Add extra height for bottom margin
+            transform: `rotate(${rect.rotation}deg)`,
+            transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
+            zIndex: getZIndex(rect.id),
+            pointerEvents: isPinned ? 'auto' : 'auto',
+            touchAction: 'none'
           }}
-        >
-          {rectangles.map((rect) => {
-           const isSelected = selectedId === rect.id;
-           const isPinned = rect.isPinned;
-           const corners = ['topleft', 'topright', 'bottomleft', 'bottomright'];
-           const padding = 20;
+            onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
+            onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
+            onTouchStart={(e) => {
+              if (isPinned) return;
+              e.stopPropagation();
+              setSelectedId(rect.id);
+              setSelectionOrder(prev => {
+                const filtered = prev.filter(id => id !== rect.id);
+                return [rect.id, ...filtered];
+              });
+            }}
+          >
+          {/* Add FlapHoverArea */}
+          <FlapHoverArea rect={rect} isSelected={isSelected} />
+          
+          {/* Add TopFlap */}
+          <TopFlap rect={rect} isSelected={isSelected} />
+
+          <div
+            className="absolute inset-0"
+            style={{
+              pointerEvents: 'none',
+              cursor: 'default'
+            }}
+          />
+          {/* Shadow and clipping container */}
+          <div
+              className="absolute"
+              style={{
+                left: `${padding}px`,
+                top: `${padding}px`,
+                width: `${rect.width}px`,
+                height: `${rect.height}px`,
+                boxShadow: rect.castShadow ? (
+                  selectedId === rect.id
+                    ? '8px 8px 16px rgba(0, 0, 0, 0.4)'
+                    : getInterpolatedDepth(rect.id)
+                ) : 'none',
+              }}
+            >
+            {/* Main content with clipping */}
+            <div
+              className="absolute inset-0 overflow-hidden"
+              style={{
+                backgroundColor: getInterpolatedColor(rect.id),
+                cursor: 'default',
+                clipPath: hoveredCorner.id === rect.id ? (() => {
+                  const size = 30;
+                  const overlap = 30;
+                  switch (hoveredCorner.corner) {
+                    case 'topleft':
+                      return `polygon(${size + overlap}px 0, 100% 0, 100% 100%, 0 100%, 0 ${size + overlap}px)`;
+                    case 'topright':
+                      return `polygon(0 0, calc(100% - ${size + overlap}px) 0, 100% ${size + overlap}px, 100% 100%, 0 100%)`;
+                    case 'bottomleft':
+                      return `polygon(0 0, 100% 0, 100% 100%, ${size + overlap}px 100%, 0 calc(100% - ${size + overlap}px))`;
+                    case 'bottomright':
+                      return `polygon(0 0, 100% 0, 100% calc(100% - ${size + overlap}px), calc(100% - ${size + overlap}px) 100%, 0 100%)`;
+                    default:
+                      return 'none';
+                  }
+                })() : 'none'
+              }}
+            ></div>
+
+            {/* Folded corners */}
+            {selectedId === rect.id && corners.map(corner => {
+              const isHovered = hoveredCorner.id === rect.id && hoveredCorner.corner === corner;
+              if (!isHovered) return null;
+
+              const size = 20;
+              let placement = {};
+              let transform = 'rotate(0deg)';
+
+              switch (corner) {
+                case 'topleft':
+                  placement = { top: 0, left: 0 };
+                  break;
+                case 'topright':
+                  placement = { top: 0, right: 0 };
+                  transform = 'rotate(90deg)';
+                  break;
+                case 'bottomleft':
+                  placement = { bottom: 0, left: 0 };
+                  transform = 'rotate(270deg)';
+                  break;
+                case 'bottomright':
+                  placement = { bottom: 0, right: 0 };
+                  transform = 'rotate(180deg)';
+                  break;
+              }
 
               return (
                 <div
-                key={rect.id}
-                data-rect-id={rect.id}
-                className="absolute"
-                style={{
-                  left: `${rect.x - padding}px`,
-                  top: `${rect.y - padding}px`,
-                  width: `${rect.width + 2 * padding}px`,
-                  height: `${rect.height + 2 * padding + 32}px`,  // Add extra height for bottom margin
-                  transform: `rotate(${rect.rotation}deg)`,
-                  transformOrigin: `${rect.width / 2 + padding}px ${rect.height / 2 + padding}px`,
-                  zIndex: getZIndex(rect.id),
-                  pointerEvents: isPinned ? 'auto' : 'auto',
-                  touchAction: 'none'
-                }}
-                  onMouseEnter={(e) => handleMouseEnter(e, rect.id)}
-                  onMouseLeave={(e) => handleMouseLeave(e, rect.id)}
-                  onTouchStart={(e) => {
-                    if (isPinned) return;
-                    e.stopPropagation();
-                    setSelectedId(rect.id);
-                    setSelectionOrder(prev => {
-                      const filtered = prev.filter(id => id !== rect.id);
-                      return [rect.id, ...filtered];
-                    });
+                  key={corner}
+                  style={{
+                    position: 'absolute',
+                    width: `${size}px`,
+                    height: `${size}px`,
+                    ...placement,
+                    pointerEvents: 'none',
+                    transition: 'all 0.15s ease-in-out',
+                    zIndex: 1
                   }}
                 >
-                {/* Add FlapHoverArea */}
-                <FlapHoverArea rect={rect} isSelected={isSelected} />
-                
-                {/* Add TopFlap */}
-                <TopFlap rect={rect} isSelected={isSelected} />
-
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    pointerEvents: 'none',
-                    cursor: 'default'
-                  }}
-                />
-                {/* Shadow and clipping container */}
-                <div
-                    className="absolute"
-                    style={{
-                      left: `${padding}px`,
-                      top: `${padding}px`,
-                      width: `${rect.width}px`,
-                      height: `${rect.height}px`,
-                      boxShadow: rect.castShadow ? (
-                        selectedId === rect.id
-                          ? '8px 8px 16px rgba(0, 0, 0, 0.4)'
-                          : getInterpolatedDepth(rect.id)
-                      ) : 'none',
-                    }}
-                  >
-                  {/* Main content with clipping */}
                   <div
-                    className="absolute inset-0 overflow-hidden"
                     style={{
-                      backgroundColor: getInterpolatedColor(rect.id),
-                      cursor: 'default',
-                      clipPath: hoveredCorner.id === rect.id ? (() => {
-                        const size = 30;
-                        const overlap = 30;
-                        switch (hoveredCorner.corner) {
-                          case 'topleft':
-                            return `polygon(${size + overlap}px 0, 100% 0, 100% 100%, 0 100%, 0 ${size + overlap}px)`;
-                          case 'topright':
-                            return `polygon(0 0, calc(100% - ${size + overlap}px) 0, 100% ${size + overlap}px, 100% 100%, 0 100%)`;
-                          case 'bottomleft':
-                            return `polygon(0 0, 100% 0, 100% 100%, ${size + overlap}px 100%, 0 calc(100% - ${size + overlap}px))`;
-                          case 'bottomright':
-                            return `polygon(0 0, 100% 0, 100% calc(100% - ${size + overlap}px), calc(100% - ${size + overlap}px) 100%, 0 100%)`;
-                          default:
-                            return 'none';
-                        }
-                      })() : 'none'
+                      position: 'absolute',
+                      width: '100%',
+                      height: '100%',
+                      background: 'clear',
+                      transform,
+                      boxShadow: '2px 2px 4px rgba(0, 0, 0, 0.2)',
+                      clipPath: 'polygon(0 0, 100% 0, 0 100%)'
                     }}
-                  ></div>
+                  />
+                </div>
+              );
+            })}
+          </div>
 
-                  {/* Folded corners */}
-                  {selectedId === rect.id && corners.map(corner => {
-                    const isHovered = hoveredCorner.id === rect.id && hoveredCorner.corner === corner;
-                    if (!isHovered) return null;
+          {/* Main rectangle content */}
+          <div
+            className="absolute overflow-hidden"
+            style={{
+              left: `${padding}px`,
+              top: `${padding}px`,
+              width: `${rect.width}px`,
+              height: `${rect.height}px`,
+              backgroundColor: getInterpolatedColor(rect.id),
+              cursor: 'default',
+              overflow: 'visible',
+              clipPath: (hoveredCorner.id === rect.id && (isSelected || rect.isPinned)) ? (() => {
+                const size = 20;
+                const overlap = 10;
+                switch (hoveredCorner.corner) {
+                  case 'topleft':
+                    return `polygon(${size + overlap}px 0, 100% 0, 100% 100%, 0 100%, 0 ${size + overlap}px)`;
+                  case 'topright':
+                    return `polygon(0 0, calc(100% - ${size + overlap}px) 0, 100% ${size + overlap}px, 100% 100%, 0 100%)`;
+                  case 'bottomleft':
+                    return `polygon(0 0, 100% 0, 100% 100%, ${size + overlap}px 100%, 0 calc(100% - ${size + overlap}px))`;
+                  case 'bottomright':
+                    return `polygon(0 0, 100% 0, 100% calc(100% - ${size + overlap}px), calc(100% - ${size + overlap}px) 100%, 0 100%)`;
+                  default:
+                    return 'none';
+                }
+              })() : 'none'
+            }}
+          >
+          <RectangleContent
+            rect={rect}
+            scrollPositions={scrollPositions}
+            setRectangles={setRectangles}
+            setSelectedId={setSelectedId}
+            setSelectionOrder={setSelectionOrder}
+            canvasRotation={canvasRotation}
+          />
 
+            {/* Folded corners with enhanced shadow effect */}
+            {(selectedId === rect.id || rect.isPinned) && corners.map(corner => (
+                <div
+                key={corner}
+                style={{
+                  position: 'absolute',
+                  width: 0,
+                  height: 0,
+                  pointerEvents: 'none',
+                  transition: 'all 0.15s ease-in-out',
+                  opacity: hoveredCorner.id === rect.id && hoveredCorner.corner === corner ? 1 : 0,
+                  ...(() => {
                     const size = 20;
-                    let placement = {};
-                    let transform = 'rotate(0deg)';
+                    const isHovered = hoveredCorner.id === rect.id && hoveredCorner.corner === corner;
+                    const scale = isHovered ? 1.5 : 1;
+                    const shadowIntensity = isHovered ? '0.3' : '0.2';
+
+                    const baseStyle = {
+                      transform: `scale(${scale})`,
+                    };
 
                     switch (corner) {
                       case 'topleft':
-                        placement = { top: 0, left: 0 };
-                        break;
+                        return {
+                          ...baseStyle,
+                          top: 0,
+                          left: 0,
+                          borderTop: `${size}px solid white`,
+                          borderRight: `${size}px solid transparent`,
+                          boxShadow: `2px 2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
+                          transformOrigin: 'top left'
+                        };
                       case 'topright':
-                        placement = { top: 0, right: 0 };
-                        transform = 'rotate(90deg)';
-                        break;
+                        return {
+                          ...baseStyle,
+                          top: 0,
+                          right: 0,
+                          borderTop: `${size}px solid white`,
+                          borderLeft: `${size}px solid transparent`,
+                          boxShadow: `-2px 2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
+                          transformOrigin: 'top right'
+                        };
                       case 'bottomleft':
-                        placement = { bottom: 0, left: 0 };
-                        transform = 'rotate(270deg)';
-                        break;
+                        return {
+                          ...baseStyle,
+                          bottom: 0,
+                          left: 0,
+                          borderBottom: `${size}px solid white`,
+                          borderRight: `${size}px solid transparent`,
+                          boxShadow: `2px -2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
+                          transformOrigin: 'bottom left'
+                        };
                       case 'bottomright':
-                        placement = { bottom: 0, right: 0 };
-                        transform = 'rotate(180deg)';
-                        break;
+                        return {
+                          ...baseStyle,
+                          bottom: 0,
+                          right: 0,
+                          borderBottom: `${size}px solid white`,
+                          borderLeft: `${size}px solid transparent`,
+                          boxShadow: `-2px -2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
+                          transformOrigin: 'bottom right'
+                        };
                     }
+                  })()
+                }}
+              />
+            ))}
+          </div>
 
-                    return (
-                      <div
-                        key={corner}
-                        style={{
-                          position: 'absolute',
-                          width: `${size}px`,
-                          height: `${size}px`,
-                          ...placement,
-                          pointerEvents: 'none',
-                          transition: 'all 0.15s ease-in-out',
-                          zIndex: 1
-                        }}
-                      >
-                        <div
-                          style={{
-                            position: 'absolute',
-                            width: '100%',
-                            height: '100%',
-                            background: 'clear',
-                            transform,
-                            boxShadow: '2px 2px 4px rgba(0, 0, 0, 0.2)',
-                            clipPath: 'polygon(0 0, 100% 0, 0 100%)'
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Main rectangle content */}
-                <div
-                  className="absolute overflow-hidden"
-                  style={{
-                    left: `${padding}px`,
-                    top: `${padding}px`,
-                    width: `${rect.width}px`,
-                    height: `${rect.height}px`,
-                    backgroundColor: getInterpolatedColor(rect.id),
-                    cursor: 'default',
-                    overflow: 'visible',
-                    clipPath: (hoveredCorner.id === rect.id && (isSelected || rect.isPinned)) ? (() => {
-                      const size = 20;
-                      const overlap = 10;
-                      switch (hoveredCorner.corner) {
-                        case 'topleft':
-                          return `polygon(${size + overlap}px 0, 100% 0, 100% 100%, 0 100%, 0 ${size + overlap}px)`;
-                        case 'topright':
-                          return `polygon(0 0, calc(100% - ${size + overlap}px) 0, 100% ${size + overlap}px, 100% 100%, 0 100%)`;
-                        case 'bottomleft':
-                          return `polygon(0 0, 100% 0, 100% 100%, ${size + overlap}px 100%, 0 calc(100% - ${size + overlap}px))`;
-                        case 'bottomright':
-                          return `polygon(0 0, 100% 0, 100% calc(100% - ${size + overlap}px), calc(100% - ${size + overlap}px) 100%, 0 100%)`;
-                        default:
-                          return 'none';
-                      }
-                    })() : 'none'
-                  }}
-                >
-                <RectangleContent
-                  rect={rect}
-                  scrollPositions={scrollPositions}
-                  setRectangles={setRectangles}
-                  setSelectedId={setSelectedId}
-                  setSelectionOrder={setSelectionOrder}
-                  canvasRotation={canvasRotation}
-                />
-
-                  {/* Folded corners with enhanced shadow effect */}
-                  {(selectedId === rect.id || rect.isPinned) && corners.map(corner => (
-                      <div
-                      key={corner}
-                      style={{
-                        position: 'absolute',
-                        width: 0,
-                        height: 0,
-                        pointerEvents: 'none',
-                        transition: 'all 0.15s ease-in-out',
-                        opacity: hoveredCorner.id === rect.id && hoveredCorner.corner === corner ? 1 : 0,
-                        ...(() => {
-                          const size = 20;
-                          const isHovered = hoveredCorner.id === rect.id && hoveredCorner.corner === corner;
-                          const scale = isHovered ? 1.5 : 1;
-                          const shadowIntensity = isHovered ? '0.3' : '0.2';
-
-                          const baseStyle = {
-                            transform: `scale(${scale})`,
-                          };
-
-                          switch (corner) {
-                            case 'topleft':
-                              return {
-                                ...baseStyle,
-                                top: 0,
-                                left: 0,
-                                borderTop: `${size}px solid white`,
-                                borderRight: `${size}px solid transparent`,
-                                boxShadow: `2px 2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
-                                transformOrigin: 'top left'
-                              };
-                            case 'topright':
-                              return {
-                                ...baseStyle,
-                                top: 0,
-                                right: 0,
-                                borderTop: `${size}px solid white`,
-                                borderLeft: `${size}px solid transparent`,
-                                boxShadow: `-2px 2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
-                                transformOrigin: 'top right'
-                              };
-                            case 'bottomleft':
-                              return {
-                                ...baseStyle,
-                                bottom: 0,
-                                left: 0,
-                                borderBottom: `${size}px solid white`,
-                                borderRight: `${size}px solid transparent`,
-                                boxShadow: `2px -2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
-                                transformOrigin: 'bottom left'
-                              };
-                            case 'bottomright':
-                              return {
-                                ...baseStyle,
-                                bottom: 0,
-                                right: 0,
-                                borderBottom: `${size}px solid white`,
-                                borderLeft: `${size}px solid transparent`,
-                                boxShadow: `-2px -2px 4px rgba(0, 0, 0, ${shadowIntensity})`,
-                                transformOrigin: 'bottom right'
-                              };
-                          }
-                        })()
-                      }}
-                    />
-                  ))}
-                </div>
-                {/* Corner hover areas for pinned rectangles */}
-                {rect.isPinned && corners.map(corner => {
-                  const x = padding + (corner.includes('right') ? rect.width : 0);
-                  const y = padding + (corner.includes('bottom') ? rect.height : 0);
-                  return (
-                    <div
-                      key={corner}
-                      style={{
-                        position: 'absolute',
-                        left: x - 25,
-                        top: y - 25,
-                        width: '50px',
-                        height: '50px',
-                        pointerEvents: 'auto',
-                        zIndex: 20
-                      }}
-                      onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                      onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                    />
-                  );
-                })}
-                {/* Interactive areas */}
-                {isSelected && !isPinned && (
-                  <>
-                    {corners.map(corner => {
-                      const x = padding + (corner.includes('right') ? rect.width : 0);
-                      const y = padding + (corner.includes('bottom') ? rect.height : 0);
-
-                      const moveOffset = 30; // Increased from 30
-                      const rotationOffset = 15; // Increased from 10
-                      const scaleOffset = -5;
-
-                      const moveX = x + (corner.includes('right') ? -moveOffset : moveOffset);
-                      const moveY = y + (corner.includes('bottom') ? -moveOffset : moveOffset);
-
-                      const rotateX = x + (corner.includes('right') ? rotationOffset : -rotationOffset);
-                      const rotateY = y + (corner.includes('bottom') ? rotationOffset : -rotationOffset);
-
-                      const scaleX = x + (corner.includes('right') ? scaleOffset : -scaleOffset);
-                      const scaleY = y + (corner.includes('bottom') ? scaleOffset : -scaleOffset);
-
-                      return (
-                        <React.Fragment key={corner}>
-                          <InteractiveArea
-                            x={moveX}
-                            y={moveY}
-                            size={50}
-                            cursor='move'
-                            onMouseDown={(e) => handleMouseDown(e, rect.id, 'move')}
-                            onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'move', corner)}
-                            onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                            onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                            onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
-                            onTouchLeave={() => handleCornerTouchLeave()}
-                          />
-
-                          <InteractiveArea
-                            x={rotateX}
-                            y={rotateY}
-                            size={50}
-                            cursor={cursors.rotate}
-                            onMouseDown={(e) => handleMouseDown(e, rect.id, 'rotate')}
-                            onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'rotate', corner)}
-                            onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                            onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                            onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
-                            onTouchLeave={() => handleCornerTouchLeave()}
-                          />
-
-                          <InteractiveArea
-                            x={scaleX}
-                            y={scaleY}
-                            size={50}
-                            cursor={cursors.scale}
-                            onMouseDown={(e) => handleMouseDown(e, rect.id, 'resize', corner)}
-                            onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'resize', corner)}
-                            onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
-                            onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
-                            onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
-                            onTouchLeave={() => handleCornerTouchLeave()}
-                          />
-                        </React.Fragment>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
+          {/* Corner hover areas for pinned rectangles */}
+          {rect.isPinned && corners.map(corner => {
+            const x = padding + (corner.includes('right') ? rect.width : 0);
+            const y = padding + (corner.includes('bottom') ? rect.height : 0);
+            const touchSize = isMobile ? 60 : 50; // Larger touch target on mobile
+            
+            return (
+              <div
+                key={corner}
+                style={{
+                  position: 'absolute',
+                  left: x - touchSize/2,
+                  top: y - touchSize/2,
+                  width: `${touchSize}px`,
+                  height: `${touchSize}px`,
+                  pointerEvents: 'auto',
+                  zIndex: 20,
+                  // Transparent hit area
+                  background: 'rgba(0, 0, 0, 0.001)'
+                }}
+                onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+                onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+                onTouchStart={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleCornerTouchEnter(rect.id, corner);
+                  // Brief delay to show visual feedback before starting action
+                  setTimeout(() => {
+                    handleRectangleTouchStart(e, rect.id, 'resize', corner);
+                  }, 50);
+                }}
+              />
             );
           })}
+
+          {/* Interactive areas */}
+          {isSelected && !isPinned && (
+            <>
+              {corners.map(corner => {
+                const x = padding + (corner.includes('right') ? rect.width : 0);
+                const y = padding + (corner.includes('bottom') ? rect.height : 0);
+
+                // Adjust the offsets for better spacing between controls
+                const moveOffset = isMobile ? 40 : 30;
+                const rotationOffset = isMobile ? 20 : 15;
+                const scaleOffset = isMobile ? -8 : -5;
+
+                const moveX = x + (corner.includes('right') ? -moveOffset : moveOffset);
+                const moveY = y + (corner.includes('bottom') ? -moveOffset : moveOffset);
+
+                const rotateX = x + (corner.includes('right') ? rotationOffset : -rotationOffset);
+                const rotateY = y + (corner.includes('bottom') ? rotationOffset : -rotationOffset);
+
+                const scaleX = x + (corner.includes('right') ? scaleOffset : -scaleOffset);
+                const scaleY = y + (corner.includes('bottom') ? scaleOffset : -scaleOffset);
+
+                return (
+                  <React.Fragment key={corner}>
+                    {/* Only show/enable the move control if no operation is selected or if move is the selected operation */}
+                    {(!selectedOperation || selectedOperation === 'move') && (
+                      <InteractiveArea
+                        x={moveX}
+                        y={moveY}
+                        size={isMobile ? 60 : 50}
+                        cursor='move'
+                        onMouseDown={(e) => handleMouseDown(e, rect.id, 'move')}
+                        onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'move', corner)}
+                        onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+                        onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+                        onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+                        onTouchLeave={() => handleCornerTouchLeave()}
+                      >
+                        {isMobile && (
+                          <div className="w-6 h-6 opacity-50 flex items-center justify-center">
+                            <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                          </div>
+                        )}
+                      </InteractiveArea>
+                    )}
+
+                    {/* Only show/enable the rotate control if no operation is selected or if rotate is the selected operation */}
+                    {(!selectedOperation || selectedOperation === 'rotate') && (
+                      <InteractiveArea
+                        x={rotateX}
+                        y={rotateY}
+                        size={isMobile ? 60 : 50}
+                        cursor={cursors.rotate}
+                        onMouseDown={(e) => handleMouseDown(e, rect.id, 'rotate')}
+                        onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'rotate', corner)}
+                        onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+                        onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+                        onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+                        onTouchLeave={() => handleCornerTouchLeave()}
+                      >
+                        {isMobile && (
+                          <div className="w-6 h-6 opacity-50 flex items-center justify-center">
+                            <div className="w-4 h-4 border-2 border-gray-400 rounded-full border-t-transparent"></div>
+                          </div>
+                        )}
+                      </InteractiveArea>
+                    )}
+
+                    {/* Only show/enable the resize control if no operation is selected or if resize is the selected operation */}
+                    {(!selectedOperation || selectedOperation === 'resize') && (
+                      <InteractiveArea
+                        x={scaleX}
+                        y={scaleY}
+                        size={isMobile ? 60 : 50}
+                        cursor={cursors.scale}
+                        onMouseDown={(e) => handleMouseDown(e, rect.id, 'resize', corner)}
+                        onTouchStart={(e) => handleRectangleTouchStart(e, rect.id, 'resize', corner)}
+                        onMouseEnter={(e) => handleCornerHover(e, rect.id, corner)}
+                        onMouseLeave={(e) => handleCornerLeave(e, rect.id)}
+                        onTouchEnter={() => handleCornerTouchEnter(rect.id, corner)}
+                        onTouchLeave={() => handleCornerTouchLeave()}
+                      >
+                        {isMobile && (
+                          <div className="w-6 h-6 opacity-50 flex items-center justify-center">
+                            <div className="w-4 h-4 border-2 border-gray-400"></div>
+                          </div>
+                        )}
+                      </InteractiveArea>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </>
+          )}
         </div>
-      </div>
-    </div>
-  );
+      );
+    })}
+  </div>
+</div>
+</div>
+);
 };
 
 export default RectangleEditor;

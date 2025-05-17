@@ -1,6 +1,6 @@
 Example adding new rectangle
 [New Rectangle](function:addRectangle?x=100&y=200&width=400&height=300&file=content.md)
-[New Rectangle](function:addRectangle?relative=true&x=50&y=50)
+[New Rectangle](function:addRectangle?relative=true&x=50&y=50&colorR=250&colorG=100&colorB=100)
 
 
 [***New Page***](function:addRectangle?file=controls.md)  
@@ -23,3 +23,6 @@ Left margin text (horizontal)
 %{margin-left-normal-end}
 
 <size:24>Large Text</size> or <size:0.8em>Smaller text</size>
+
+<img src="/content/images/higuchi.png">
+class="text-center", "text-vcenter", "text-center-all"
