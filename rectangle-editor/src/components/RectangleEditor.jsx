@@ -44,53 +44,6 @@ const RectangleEditor = () => {
   const canvasRef = useRef(null);
   const scrollPositions = useRef({});
   const activeRectangleRef = useRef(null);
-  
-  // const checkIsMobile = () => {
-  //   let hasTouchScreen = false;
-    
-  //   // First check
-  //   if ("maxTouchPoints" in navigator) {
-  //     hasTouchScreen = navigator.maxTouchPoints > 0;
-  //   } else if ("msMaxTouchPoints" in navigator) {
-  //     hasTouchScreen = navigator.msMaxTouchPoints > 0;
-  //   }
-    
-  //   // Second check
-  //   const mQ = window.matchMedia && window.matchMedia("(pointer:coarse)");
-  //   if (mQ && mQ.media === "(pointer:coarse)") {
-  //     hasTouchScreen = !!mQ.matches;
-  //   }
-    
-  //   // Third check
-  //   if ('orientation' in window) {
-  //     hasTouchScreen = true;
-  //   }
-
-  //   // Fourth check
-  //   const userAgent = navigator.userAgent.toLowerCase();
-  //   const isMobileUserAgent = /mobile|android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-
-  //   // Screen size check
-  //   const isSmallScreen = window.innerWidth <= 768;
-
-  //   return hasTouchScreen || isMobileUserAgent || isSmallScreen;
-  // };
-
-  // const [isMobile, setIsMobile] = useState(false);
-  
-  
-  // useEffect(() => {
-  //   const checkMobileStatus = () => {
-  //     setIsMobile(checkIsMobile());
-  //   };
-    
-  //   checkMobileStatus();
-  //   window.addEventListener('resize', checkMobileStatus);
-    
-  //   return () => {
-  //     window.removeEventListener('resize', checkMobileStatus);
-  //   };
-  // }, []);
 
 const md = new MobileDetect(window.navigator.userAgent);
 const isMobile = !!md.mobile();
@@ -2369,7 +2322,7 @@ const getInterpolatedDepth = (rectId) => {
       canvas.addEventListener('touchcancel', handleTouchEnd);
 
       // Existing mouse event listeners
-      canvas.addEventListener('wheel', handleWheel, { passive: false });
+      canvas.addEventListener('wheel', handleWheel, { passive: true });
       canvas.addEventListener('mousedown', handleCanvasMouseDown);
       canvas.addEventListener('mousemove', handleCanvasMouseMove);
       canvas.addEventListener('contextmenu', handleContextMenu);
@@ -2465,26 +2418,6 @@ scale: `url("data:image/svg+xml;base64,${btoa(`
 
 return (
 <div>
-{/* Mobile instruction overlay */}
-{/* {isMobile && selectedId && (
-  <div 
-    className="fixed top-0 left-0 right-0 z-50 bg-black bg-opacity-60 text-white text-center p-2 text-sm"
-    style={{
-      opacity: 0.8,
-      transition: 'opacity 0.3s ease',
-      pointerEvents: 'none'
-    }}
-  >
-    {action ? (
-      action.type === 'move' ?   'Moving' : 
-      action.type === 'resize' ? 'Resizing' :
-      action.type === 'rotate' ? 'Rotating' : 
-      'Tap corners to transform'
-    ) : (
-      'Tap page to select. Tap corners then drag canvas to resize/rotate/transform'
-    )}
-  </div>
-)} */}
 
 <div
   ref={canvasRef}
