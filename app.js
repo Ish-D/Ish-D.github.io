@@ -119,6 +119,45 @@ class PaperCanvas {
             }
         });
 
+        // Touch events for canvas
+        this.canvas.addEventListener('touchstart', (e) => {
+            const isCard = e.target.closest('.card');
+            if (!isCard) {
+                if (e.touches.length === 1) {
+                    // Single finger - pan
+                    e.preventDefault();
+                    this.startPanningTouch(e);
+                } else if (e.touches.length === 2) {
+                    // Two fingers - pinch zoom and/or rotate
+                    e.preventDefault();
+                    this.startTwoFingerGesture(e);
+                }
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (this.isPanning && this.isTouchPanning) {
+                e.preventDefault();
+                this.panTouch(e);
+            }
+            if (this.isTwoFingerGesture && e.touches.length === 2) {
+                e.preventDefault();
+                this.twoFingerGesture(e);
+            }
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', (e) => {
+            if (this.isPanning && this.isTouchPanning) {
+                this.stopPanningTouch();
+            }
+            if (this.isTwoFingerGesture) {
+                // If still have 2 fingers, continue; otherwise stop
+                if (e.touches.length < 2) {
+                    this.stopTwoFingerGesture();
+                }
+            }
+        });
+
         // Prevent context menu on right click on background
         this.canvas.addEventListener('contextmenu', (e) => {
             const isCard = e.target.closest('.card');
@@ -222,7 +261,98 @@ class PaperCanvas {
 
     stopPanning() {
         this.isPanning = false;
+        this.isTouchPanning = false;
         this.canvas.style.cursor = 'grab';
+    }
+
+    // Touch panning methods
+    startPanningTouch(e) {
+        this.isPanning = true;
+        this.isTouchPanning = true;
+        const touch = e.touches[0];
+        this.panStartX = touch.clientX;
+        this.panStartY = touch.clientY;
+        this.startPanX = this.panX;
+        this.startPanY = this.panY;
+    }
+
+    panTouch(e) {
+        if (e.touches.length < 1) return;
+        const touch = e.touches[0];
+        const dx = touch.clientX - this.panStartX;
+        const dy = touch.clientY - this.panStartY;
+        this.panX = this.startPanX + dx;
+        this.panY = this.startPanY + dy;
+        this.updateCanvasTransform();
+    }
+
+    stopPanningTouch() {
+        this.isPanning = false;
+        this.isTouchPanning = false;
+    }
+
+    // Two-finger gesture methods (pinch-zoom and rotate)
+    startTwoFingerGesture(e) {
+        this.isTwoFingerGesture = true;
+        this.isPanning = false;
+        this.isTouchPanning = false;
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+
+        // Store initial touch positions
+        this.gestureStartDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        this.gestureStartAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * (180 / Math.PI);
+        this.gestureStartZoom = this.zoom;
+        this.gestureStartRotation = this.rotation;
+
+        // Gesture center point
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
+        const rect = this.canvas.getBoundingClientRect();
+        this.gestureCenterX = centerX - rect.left;
+        this.gestureCenterY = centerY - rect.top;
+
+        // Store pan at start
+        this.gestureStartPanX = this.panX;
+        this.gestureStartPanY = this.panY;
+    }
+
+    twoFingerGesture(e) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+
+        // Current distance and angle
+        const currentDistance = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        const currentAngle = Math.atan2(t2.clientY - t1.clientY, t2.clientX - t1.clientX) * (180 / Math.PI);
+
+        // Calculate zoom
+        const zoomFactor = currentDistance / this.gestureStartDistance;
+        const newZoom = Math.max(0.1, Math.min(5, this.gestureStartZoom * zoomFactor));
+
+        // Calculate rotation delta
+        let angleDelta = currentAngle - this.gestureStartAngle;
+        const newRotation = this.gestureStartRotation + angleDelta;
+
+        // Apply zoom around gesture center
+        const contentCenterX = (this.gestureCenterX - this.gestureStartPanX) / this.gestureStartZoom;
+        const contentCenterY = (this.gestureCenterY - this.gestureStartPanY) / this.gestureStartZoom;
+
+        // Account for rotation when calculating new pan
+        const deltaRotation = (newRotation - this.gestureStartRotation) * Math.PI / 180;
+        const cos = Math.cos(deltaRotation);
+        const sin = Math.sin(deltaRotation);
+
+        this.panX = this.gestureCenterX - (contentCenterX * cos - contentCenterY * sin) * newZoom;
+        this.panY = this.gestureCenterY - (contentCenterX * sin + contentCenterY * cos) * newZoom;
+
+        this.zoom = newZoom;
+        this.rotation = newRotation;
+        this.updateCanvasTransform();
+    }
+
+    stopTwoFingerGesture() {
+        this.isTwoFingerGesture = false;
     }
 
     startRotatingCanvas(e) {

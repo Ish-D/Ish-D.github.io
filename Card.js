@@ -287,6 +287,7 @@ export class Card {
         // Drag handles in corners
         this.element.querySelectorAll('.card-drag-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onDragHandleStart.bind(this));
+            handle.addEventListener('touchstart', this.onDragHandleTouchStart.bind(this), { passive: false });
         });
 
         // Bring to front on hover
@@ -294,14 +295,21 @@ export class Card {
             this.bringToFront();
         });
 
+        // Bring to front on touch
+        this.element.addEventListener('touchstart', () => {
+            this.bringToFront();
+        }, { passive: true });
+
         // Scale handles
         this.element.querySelectorAll('.card-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onScaleStart.bind(this));
+            handle.addEventListener('touchstart', this.onScaleTouchStart.bind(this), { passive: false });
         });
 
         // Rotate handles
         this.element.querySelectorAll('.card-rotate-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onRotateStart.bind(this));
+            handle.addEventListener('touchstart', this.onRotateTouchStart.bind(this), { passive: false });
         });
 
         // Corner fold unfold animation
@@ -350,6 +358,11 @@ export class Card {
         document.addEventListener('mousemove', this.onMouseMove.bind(this));
         document.addEventListener('mouseup', this.onMouseUp.bind(this));
 
+        // Global touch events
+        document.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
+        document.addEventListener('touchend', this.onTouchEnd.bind(this));
+        document.addEventListener('touchcancel', this.onTouchEnd.bind(this));
+
         // Scroll synchronization for relative margin items
         const content = this.element.querySelector('.card-content');
         if (content) {
@@ -359,6 +372,7 @@ export class Card {
         // Margin item resize handles
         this.element.querySelectorAll('.margin-item-resize-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onMarginItemResizeStart.bind(this));
+            handle.addEventListener('touchstart', this.onMarginItemResizeTouchStart.bind(this), { passive: false });
         });
 
         // Handle wheel scrolling for vertical margin content
@@ -369,6 +383,7 @@ export class Card {
         // Margin area resize handles (for resizing the margin columns/rows)
         this.element.querySelectorAll('.margin-resize-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onMarginAreaResizeStart.bind(this));
+            handle.addEventListener('touchstart', this.onMarginAreaResizeTouchStart.bind(this), { passive: false });
         });
     }
 
@@ -438,6 +453,189 @@ export class Card {
         this.startRotation = this.rotation;
 
         this.element.classList.add('dragging');
+        this.bringToFront();
+    }
+
+    // Touch event handlers
+    onDragHandleTouchStart(e) {
+        if (this.pinned) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+        this.isDragging = true;
+        this.isTouchDragging = true;
+        this.element.classList.add('dragging');
+
+        this.dragStartMouseX = touch.clientX;
+        this.dragStartMouseY = touch.clientY;
+        this.dragStartX = this.x;
+        this.dragStartY = this.y;
+
+        this.bringToFront();
+    }
+
+    onScaleTouchStart(e) {
+        if (this.pinned) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+        this.isScaling = true;
+        this.isTouchScaling = true;
+        this.scalingCorner = e.target.dataset.corner;
+
+        this.startX = touch.clientX;
+        this.startY = touch.clientY;
+        this.startWidth = this.width;
+        this.startHeight = this.height;
+        this.startPosX = this.x;
+        this.startPosY = this.y;
+
+        this.startCenterX = this.x + this.width / 2;
+        this.startCenterY = this.y + this.height / 2;
+
+        this.element.classList.add('dragging');
+        this.bringToFront();
+    }
+
+    onRotateTouchStart(e) {
+        if (this.pinned) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+        this.isRotating = true;
+        this.isTouchRotating = true;
+        this.rotatingCorner = e.target.dataset.rotateCorner;
+
+        const rect = this.element.getBoundingClientRect();
+        this.centerX = rect.left + rect.width / 2;
+        this.centerY = rect.top + rect.height / 2;
+
+        this.startAngle = Math.atan2(
+            touch.clientY - this.centerY,
+            touch.clientX - this.centerX
+        ) * (180 / Math.PI);
+
+        this.startRotation = this.rotation;
+
+        this.element.classList.add('dragging');
+        this.bringToFront();
+    }
+
+    onTouchMove(e) {
+        if (!this.isDragging && !this.isScaling && !this.isRotating &&
+            !this.isResizingMarginItem && !this.isResizingMarginArea) return;
+
+        if (e.touches.length < 1) return;
+
+        const touch = e.touches[0];
+
+        // Create a fake mouse event with touch coordinates
+        const fakeEvent = {
+            clientX: touch.clientX,
+            clientY: touch.clientY,
+            target: e.target
+        };
+
+        // Prevent scrolling while doing card operations
+        if (this.isDragging || this.isScaling || this.isRotating ||
+            this.isResizingMarginItem || this.isResizingMarginArea) {
+            e.preventDefault();
+        }
+
+        // Reuse the mouse move logic
+        this.onMouseMove(fakeEvent);
+    }
+
+    onTouchEnd(e) {
+        // Clear touch flags
+        this.isTouchDragging = false;
+        this.isTouchScaling = false;
+        this.isTouchRotating = false;
+
+        // Reuse mouse up logic
+        this.onMouseUp(e);
+    }
+
+    onMarginItemResizeTouchStart(e) {
+        if (this.pinned) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+
+        this.isResizingMarginItem = true;
+        this.resizingMarginItem = e.target.closest('.margin-item');
+        this.resizingMarginItem.classList.add('resizing');
+        e.target.classList.add('active');
+
+        this.marginItemResizeStartX = touch.clientX;
+        this.marginItemResizeStartY = touch.clientY;
+
+        this.marginItemResizeDirection = e.target.classList.contains('resize-vertical') ? 'vertical' : 'horizontal';
+
+        const contentEl = this.resizingMarginItem.querySelector('.margin-item-content');
+
+        if (this.marginItemResizeDirection === 'vertical') {
+            const currentHeight = contentEl.style.maxHeight;
+            this.marginItemResizeStartSize = currentHeight
+                ? parseInt(currentHeight)
+                : contentEl.offsetHeight;
+        } else {
+            const currentWidth = contentEl.style.maxWidth;
+            this.marginItemResizeStartSize = currentWidth
+                ? parseInt(currentWidth)
+                : contentEl.offsetWidth;
+        }
+
+        this.resizingMarginSide = this.resizingMarginItem.dataset.marginSide;
+
+        this.bringToFront();
+    }
+
+    onMarginAreaResizeTouchStart(e) {
+        if (this.pinned) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const touch = e.touches[0];
+
+        this.isResizingMarginArea = true;
+        this.resizingMarginAreaSide = e.target.dataset.marginSide;
+        e.target.classList.add('active');
+
+        this.marginAreaResizeStartX = touch.clientX;
+        this.marginAreaResizeStartY = touch.clientY;
+
+        const container = this.element.querySelector('.card-container');
+        const computedStyle = getComputedStyle(container);
+
+        this.marginAreaStartSizes = {
+            left: this.marginLeftSize || 100,
+            right: this.marginRightSize || 100,
+            top: this.marginTopSize || null,
+            bottom: this.marginBottomSize || null
+        };
+
+        const cols = computedStyle.gridTemplateColumns.split(' ');
+        if (cols.length >= 3) {
+            this.marginAreaStartSizes.left = parseFloat(cols[0]) || 100;
+            this.marginAreaStartSizes.right = parseFloat(cols[2]) || 100;
+        }
+
+        const rows = computedStyle.gridTemplateRows.split(' ');
+        if (rows.length >= 3) {
+            this.marginAreaStartSizes.top = parseFloat(rows[0]) || 40;
+            this.marginAreaStartSizes.bottom = parseFloat(rows[2]) || 40;
+        }
+
         this.bringToFront();
     }
 

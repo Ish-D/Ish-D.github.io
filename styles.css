@@ -25,6 +25,8 @@ body {
     overflow: hidden;
     cursor: grab;
     background-color: var(--color-background);
+    /* Prevent default touch behaviors (pull-to-refresh, browser zoom) */
+    touch-action: none;
 }
 
 #canvas:active {
@@ -115,6 +117,9 @@ body {
     overflow-x: hidden;
     font-size: var(--font-size-base);
     line-height: var(--line-height-base);
+    /* Allow touch scrolling in card content */
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
 }
 
 .card-content::-webkit-scrollbar {
@@ -344,6 +349,8 @@ body {
     transition: opacity var(--transition-normal);
     /* Transform origin at center for counter-rotation */
     transform-origin: center center;
+    /* Prevent default touch behaviors on handles */
+    touch-action: none;
 }
 
 /* Visual indicator for scale handles */
@@ -402,6 +409,8 @@ body {
     cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'), auto;
     /* Transform origin at center for counter-rotation */
     transform-origin: center center;
+    /* Prevent default touch behaviors on handles */
+    touch-action: none;
 }
 
 /* Visual indicator for rotate handles - curved arrow */
@@ -455,6 +464,8 @@ body {
     cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>') 12 12, move;
     /* Transform origin at center for counter-rotation */
     transform-origin: center center;
+    /* Prevent default touch behaviors on handles */
+    touch-action: none;
 }
 
 /* Visual indicator for drag handles - move cross icon */
@@ -709,6 +720,9 @@ body {
     pointer-events: auto;
     /* Default overflow behavior */
     overflow: auto;
+    /* Allow touch scrolling */
+    touch-action: pan-y pan-x;
+    -webkit-overflow-scrolling: touch;
 }
 
 /* ---- Horizontal text in margins ---- */
@@ -790,6 +804,8 @@ body {
     z-index: 5;
     opacity: 0;
     transition: opacity var(--transition-normal), background var(--transition-normal);
+    /* Prevent default touch behaviors */
+    touch-action: none;
 }
 
 .margin-item:hover .margin-item-resize-handle {
@@ -859,6 +875,8 @@ body {
     z-index: 10;
     opacity: 0;
     transition: opacity var(--transition-normal), background var(--transition-normal);
+    /* Prevent default touch behaviors */
+    touch-action: none;
 }
 
 .card:hover .margin-resize-handle {
