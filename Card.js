@@ -31,6 +31,13 @@ export class Card {
         this.image = options.image || null;
         this.caption = options.caption || '';
 
+        // Embed card (iframe)
+        this.embedUrl = options.embedUrl || null;
+
+        // Custom margin sizes (as percentage of card dimensions)
+        this.marginTB = options.marginTB || null;  // Top/bottom as % of height
+        this.marginLR = options.marginLR || null;  // Left/right as % of width
+
         // State
         this.isDragging = false;
         this.isRotating = false;
@@ -66,6 +73,16 @@ export class Card {
         const container = document.createElement('div');
         container.className = 'card-container';
 
+        // Apply margin sizes (default 10% or custom if specified)
+        const marginLR = this.marginLR !== null ? this.marginLR : 10;
+        const marginTB = this.marginTB !== null ? this.marginTB : 10;
+
+        const lrSize = `${(marginLR / 100) * this.width}px`;
+        const tbSize = `${(marginTB / 100) * this.height}px`;
+
+        container.style.gridTemplateColumns = `${lrSize} 1fr ${lrSize}`;
+        container.style.gridTemplateRows = `${tbSize} 1fr ${tbSize}`;
+
         // Margins - now with separate containers for absolute and relative items
         const marginTop = this.createMarginElement('top', this.margins.top);
         const marginLeft = this.createMarginElement('left', this.margins.left);
@@ -92,6 +109,36 @@ export class Card {
             `;
             container.appendChild(content);
             card.appendChild(container);
+        } else if (this.embedUrl) {
+            // Embed cards contain an iframe with fallback
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            content.style.padding = '0';
+            content.style.display = 'flex';
+            content.style.flexDirection = 'column';
+            content.style.height = '100%';
+            content.innerHTML = `
+                <div class="card-embed-toolbar">
+                    <span class="card-embed-url" title="${this.embedUrl}">${this.getDisplayUrl(this.embedUrl)}</span>
+                </div>
+                <div class="card-embed-container">
+                    <iframe src="${this.embedUrl}" class="card-embed-iframe"
+                        frameborder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowfullscreen></iframe>
+                    <div class="card-embed-fallback">
+                        <p>This site cannot be embedded.</p>
+                        <a href="${this.embedUrl}" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>
+                    </div>
+                </div>
+            `;
+            container.appendChild(content);
+            card.appendChild(container);
+
+            // Try to detect embedding failure
+            setTimeout(() => {
+                this.checkEmbedStatus();
+            }, 100);
         } else {
             content.innerHTML = this.content;
 
@@ -156,7 +203,14 @@ export class Card {
         // Top middle actions (pin/delete)
         const topHandle = document.createElement('div');
         topHandle.className = 'card-top-handle';
+
+        // Add external link button for embed cards
+        const externalBtn = this.embedUrl
+            ? `<a href="${this.embedUrl}" target="_blank" rel="noopener noreferrer" class="card-action-btn external-btn" title="Open in new tab">↗</a>`
+            : '';
+
         topHandle.innerHTML = `
+            ${externalBtn}
             <button class="card-action-btn pin-btn" title="Pin">📌</button>
             <button class="card-action-btn delete-btn" title="Delete">×</button>
         `;
@@ -1148,6 +1202,55 @@ export class Card {
         }
     }
 
+    /**
+     * Get a shortened display URL for the toolbar
+     */
+    getDisplayUrl(url) {
+        try {
+            const parsed = new URL(url);
+            let display = parsed.hostname.replace(/^www\./, '');
+            if (parsed.pathname && parsed.pathname !== '/') {
+                const path = parsed.pathname.length > 20
+                    ? parsed.pathname.slice(0, 20) + '...'
+                    : parsed.pathname;
+                display += path;
+            }
+            return display;
+        } catch {
+            return url.slice(0, 30) + (url.length > 30 ? '...' : '');
+        }
+    }
+
+    /**
+     * Check if the iframe loaded successfully and show fallback if not
+     */
+    checkEmbedStatus() {
+        const iframe = this.element.querySelector('.card-embed-iframe');
+        const fallback = this.element.querySelector('.card-embed-fallback');
+        if (!iframe || !fallback) return;
+
+        // Listen for load event
+        iframe.addEventListener('load', () => {
+            // Try to access iframe content - will fail if blocked
+            try {
+                // This will throw if cross-origin and blocked
+                const doc = iframe.contentDocument || iframe.contentWindow?.document;
+                // If we can access it and it's empty/error, show fallback
+                if (doc && doc.body && doc.body.innerHTML === '') {
+                    fallback.classList.add('visible');
+                }
+            } catch (e) {
+                // Cross-origin - can't check, assume it loaded
+                // The iframe will show its own error or the content
+            }
+        });
+
+        // Listen for error event (doesn't always fire for X-Frame-Options blocks)
+        iframe.addEventListener('error', () => {
+            fallback.classList.add('visible');
+        });
+    }
+
     toJSON() {
         return {
             id: this.id,
@@ -1163,6 +1266,9 @@ export class Card {
             margins: this.margins,
             image: this.image,
             caption: this.caption,
+            embedUrl: this.embedUrl,
+            marginTB: this.marginTB,
+            marginLR: this.marginLR,
             zIndex: this.zIndex
         };
     }

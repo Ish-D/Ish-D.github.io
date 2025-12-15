@@ -369,7 +369,10 @@ export class MarkdownParser {
             absX: null,
             absY: null,
             jitter: 0,
-            rotation: null
+            rotation: null,
+            embed: false,
+            marginTB: null,  // Top/bottom margin as % of card height
+            marginLR: null   // Left/right margin as % of card width
         };
 
         if (!paramsStr) return options;
@@ -401,6 +404,12 @@ export class MarkdownParser {
                 options.jitter = parseInt(value) || 0;
             } else if (key === 'rot') {
                 options.rotation = parseFloat(value);
+            } else if (key === 'embed') {
+                options.embed = value === 'true' || value === true;
+            } else if (key === 'marginTB') {
+                options.marginTB = parseFloat(value);
+            } else if (key === 'marginLR') {
+                options.marginLR = parseFloat(value);
             }
         }
 
@@ -420,7 +429,17 @@ export class MarkdownParser {
         if (options.absY !== null) attrs.push(`data-abs-y="${options.absY}"`);
         if (options.jitter) attrs.push(`data-jitter="${options.jitter}"`);
         if (options.rotation !== null) attrs.push(`data-rotation="${options.rotation}"`);
+        if (options.embed) attrs.push(`data-embed="true"`);
+        if (options.marginTB !== null) attrs.push(`data-margin-tb="${options.marginTB}"`);
+        if (options.marginLR !== null) attrs.push(`data-margin-lr="${options.marginLR}"`);
         return attrs.join(' ');
+    }
+
+    /**
+     * Check if a string is a URL
+     */
+    isURL(str) {
+        return str.startsWith('http://') || str.startsWith('https://');
     }
 
     /**
@@ -570,18 +589,41 @@ export class MarkdownParser {
             return this.renderButton(params);
         });
 
-        // Full link syntax: [[link(card, params)]]
-        html = html.replace(this.getFullLinkPattern(), (match, cardName, paramsStr) => {
+        // Full link syntax: [[link(card, params)]] or [[link(url, params)]]
+        html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
             const options = this.parseLinkOptions(paramsStr);
-            const display = options.display || cardName.trim();
+            const display = options.display || target.trim();
             const dataAttrs = this.optionsToDataAttrs(options);
-            return `<strong class="card-link" data-card="${cardName.trim()}" ${dataAttrs}>${display}</strong>`;
+            const trimmedTarget = target.trim();
+
+            // Check if target is a URL
+            if (this.isURL(trimmedTarget)) {
+                if (options.embed) {
+                    // Embed URL in a card - use card-link with data-url
+                    return `<strong class="card-link" data-url="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
+                } else {
+                    // Regular external link - open in new tab
+                    return `<a href="${trimmedTarget}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+                }
+            } else {
+                // Card link
+                return `<strong class="card-link" data-card="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
+            }
         });
 
-        // Shorthand link syntax: [[Card]] or [[Card|display]]
-        html = html.replace(this.getShortLinkPattern(), (match, cardName, display) => {
-            const displayText = display ? display.trim() : cardName.trim();
-            return `<strong class="card-link" data-card="${cardName.trim()}">${displayText}</strong>`;
+        // Shorthand link syntax: [[Card]] or [[Card|display]] or [[url]] or [[url|display]]
+        html = html.replace(this.getShortLinkPattern(), (match, target, display) => {
+            const displayText = display ? display.trim() : target.trim();
+            const trimmedTarget = target.trim();
+
+            // Check if target is a URL
+            if (this.isURL(trimmedTarget)) {
+                // URL without embed option - open in new tab
+                return `<a href="${trimmedTarget}" target="_blank" rel="noopener noreferrer">${displayText}</a>`;
+            } else {
+                // Card link
+                return `<strong class="card-link" data-card="${trimmedTarget}">${displayText}</strong>`;
+            }
         });
 
         // Headers
@@ -611,7 +653,7 @@ export class MarkdownParser {
         html = html.replace(this.getAnchorPattern(), '<span data-anchor-id="$1">$2</span>');
 
         // External links (after inline styles to avoid conflicts)
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
         // Images
         html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">');
@@ -674,17 +716,33 @@ export class MarkdownParser {
         });
 
         // Full link syntax
-        html = html.replace(this.getFullLinkPattern(), (match, cardName, paramsStr) => {
+        html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
             const options = this.parseLinkOptions(paramsStr);
-            const display = options.display || cardName.trim();
+            const display = options.display || target.trim();
             const dataAttrs = this.optionsToDataAttrs(options);
-            return `<strong class="card-link" data-card="${cardName.trim()}" ${dataAttrs}>${display}</strong>`;
+            const trimmedTarget = target.trim();
+
+            if (this.isURL(trimmedTarget)) {
+                if (options.embed) {
+                    return `<strong class="card-link" data-url="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
+                } else {
+                    return `<a href="${trimmedTarget}" target="_blank" rel="noopener noreferrer">${display}</a>`;
+                }
+            } else {
+                return `<strong class="card-link" data-card="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
+            }
         });
 
         // Shorthand link syntax
-        html = html.replace(this.getShortLinkPattern(), (match, cardName, display) => {
-            const displayText = display ? display.trim() : cardName.trim();
-            return `<strong class="card-link" data-card="${cardName.trim()}">${displayText}</strong>`;
+        html = html.replace(this.getShortLinkPattern(), (match, target, display) => {
+            const displayText = display ? display.trim() : target.trim();
+            const trimmedTarget = target.trim();
+
+            if (this.isURL(trimmedTarget)) {
+                return `<a href="${trimmedTarget}" target="_blank" rel="noopener noreferrer">${displayText}</a>`;
+            } else {
+                return `<strong class="card-link" data-card="${trimmedTarget}">${displayText}</strong>`;
+            }
         });
 
         // Inline styled spans
@@ -703,7 +761,7 @@ export class MarkdownParser {
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
         // External links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
 
         // Restore code placeholders
         for (const { placeholder, html: codeHtml } of codePlaceholders) {

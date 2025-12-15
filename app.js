@@ -204,23 +204,32 @@ class PaperCanvas {
             const cardLink = e.target.closest('.card-link');
             if (cardLink) {
                 const cardName = cardLink.dataset.card;
-                if (cardName) {
-                    // Get the parent card element
-                    const parentCardEl = cardLink.closest('.card');
-                    const parentCard = parentCardEl ? this.getCardById(parentCardEl.id) : null;
+                const embedUrl = cardLink.dataset.url;
 
-                    // Extract positioning options from data attributes
-                    const options = {
-                        width: cardLink.dataset.width ? parseInt(cardLink.dataset.width) : null,
-                        height: cardLink.dataset.height ? parseInt(cardLink.dataset.height) : null,
-                        relX: cardLink.dataset.relX ? parseInt(cardLink.dataset.relX) : null,
-                        relY: cardLink.dataset.relY ? parseInt(cardLink.dataset.relY) : null,
-                        absX: cardLink.dataset.absX ? parseInt(cardLink.dataset.absX) : null,
-                        absY: cardLink.dataset.absY ? parseInt(cardLink.dataset.absY) : null,
-                        jitter: cardLink.dataset.jitter ? parseInt(cardLink.dataset.jitter) : 0,
-                        rotation: cardLink.dataset.rotation ? parseFloat(cardLink.dataset.rotation) : null
-                    };
+                // Get the parent card element
+                const parentCardEl = cardLink.closest('.card');
+                const parentCard = parentCardEl ? this.getCardById(parentCardEl.id) : null;
 
+                // Extract positioning options from data attributes
+                const options = {
+                    width: cardLink.dataset.width ? parseInt(cardLink.dataset.width) : null,
+                    height: cardLink.dataset.height ? parseInt(cardLink.dataset.height) : null,
+                    relX: cardLink.dataset.relX ? parseInt(cardLink.dataset.relX) : null,
+                    relY: cardLink.dataset.relY ? parseInt(cardLink.dataset.relY) : null,
+                    absX: cardLink.dataset.absX ? parseInt(cardLink.dataset.absX) : null,
+                    absY: cardLink.dataset.absY ? parseInt(cardLink.dataset.absY) : null,
+                    jitter: cardLink.dataset.jitter ? parseInt(cardLink.dataset.jitter) : 0,
+                    rotation: cardLink.dataset.rotation ? parseFloat(cardLink.dataset.rotation) : null,
+                    embed: cardLink.dataset.embed === 'true',
+                    marginTB: cardLink.dataset.marginTb ? parseFloat(cardLink.dataset.marginTb) : null,
+                    marginLR: cardLink.dataset.marginLr ? parseFloat(cardLink.dataset.marginLr) : null
+                };
+
+                if (embedUrl) {
+                    // Open URL in an embedded card
+                    this.openEmbedCard(embedUrl, parentCard, options, e);
+                } else if (cardName) {
+                    // Open a card file
                     this.openCard(cardName, parentCard, options, e);
                 }
             }
@@ -507,7 +516,9 @@ class PaperCanvas {
                 pageNumber: pageNumber,
                 content: parsed.content,
                 margins: parsed.margins,
-                sourceFile: cardName
+                sourceFile: cardName,
+                marginTB: positionOptions.marginTB,
+                marginLR: positionOptions.marginLR
             };
 
             if (isImageCard) {
@@ -561,8 +572,61 @@ class PaperCanvas {
             y: y,
             width: options.width,
             height: options.height,
-            rotation: options.rotation
+            rotation: options.rotation,
+            marginTB: options.marginTB,
+            marginLR: options.marginLR
         });
+    }
+
+    /**
+     * Open an embedded URL in a card with an iframe
+     */
+    openEmbedCard(url, parentCard = null, options = {}, clickEvent = null) {
+        let x, y;
+        const jitter = options.jitter || 0;
+
+        // Determine position (same logic as openCard)
+        if (options.absX !== null && options.absY !== null) {
+            x = this.applyJitter(options.absX, jitter);
+            y = this.applyJitter(options.absY, jitter);
+        } else if (options.relX !== null && options.relY !== null && parentCard) {
+            x = this.applyJitter(parentCard.x + options.relX, jitter);
+            y = this.applyJitter(parentCard.y + options.relY, jitter);
+        } else if (clickEvent) {
+            const rect = this.canvas.getBoundingClientRect();
+            const clickX = (clickEvent.clientX - rect.left - this.panX) / this.zoom;
+            const clickY = (clickEvent.clientY - rect.top - this.panY) / this.zoom;
+            x = this.applyJitter(clickX + 60, jitter || 40);
+            y = this.applyJitter(clickY + 20, jitter || 40);
+        } else if (parentCard) {
+            x = this.applyJitter(parentCard.x + parentCard.width + 40, jitter || 20);
+            y = this.applyJitter(parentCard.y, jitter || 20);
+        } else {
+            x = this.applyJitter(this.defaultOffset.x, jitter || 20);
+            y = this.applyJitter(this.defaultOffset.y, jitter || 20);
+        }
+
+        // Default size for embed cards
+        const width = options.width || 600;
+        const height = options.height || 450;
+
+        // Calculate rotation
+        const cardRotation = (options.rotation || 0) - this.rotation;
+
+        // Assign page number
+        const pageNumber = this.getNextPageNumber();
+
+        const card = this.addCard({
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+            rotation: cardRotation,
+            pageNumber: pageNumber,
+            embedUrl: url
+        });
+
+        return card;
     }
 
     initSettings() {
