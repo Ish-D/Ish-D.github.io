@@ -298,9 +298,10 @@ body {
     box-sizing: border-box;
 }
 
-/* Horizontal text in left margin - right aligned */
+/* Horizontal text in left margin - right aligned with extra left padding to prevent clipping */
 .card-margin-left .margin-orientation-horizontal {
     text-align: right;
+    padding-left: 4px; /* Add small left padding to prevent text clipping */
 }
 
 /* Horizontal text in right margin - left aligned */
