@@ -993,11 +993,6 @@ body {
         padding: 20px 24px;
         font-size: 14px;
     }
-
-    .card-margin-left,
-    .card-margin-right {
-        display: none;
-    }
 }
 
 /* ============================================
