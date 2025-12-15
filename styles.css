@@ -1077,6 +1077,17 @@ body {
     background: var(--color-selection);
 }
 
+/* Reading progress indicator */
+.card-progress-indicator {
+    position: absolute;
+    bottom: var(--margin-bottom-padding-bottom, 12px);
+    right: var(--margin-bottom-padding-horizontal, 16px);
+    font-size: var(--font-size-page-number, 11px);
+    color: var(--color-text-primary);
+    font-style: normal;
+    z-index: 5;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .card-content {

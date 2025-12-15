@@ -524,7 +524,8 @@ class PaperCanvas {
                 margins: parsed.margins,
                 sourceFile: cardName,
                 marginTB: positionOptions.marginTB,
-                marginLR: positionOptions.marginLR
+                marginLR: positionOptions.marginLR,
+                progressBar: parsed.metadata.progressBar === 'true' || parsed.metadata.progressBar === true
             };
 
             if (isImageCard) {

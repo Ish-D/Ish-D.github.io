@@ -38,6 +38,9 @@ export class Card {
         this.marginTB = options.marginTB || null;  // Top/bottom as % of height
         this.marginLR = options.marginLR || null;  // Left/right as % of width
 
+        // Reading progress bar
+        this.progressBar = options.progressBar || false;
+
         // State
         this.isDragging = false;
         this.isRotating = false;
@@ -54,7 +57,10 @@ export class Card {
         this.bindEvents();
 
         // Initial positioning of relative margins
-        requestAnimationFrame(() => this.updateRelativeMargins());
+        requestAnimationFrame(() => {
+            this.updateRelativeMargins();
+            this.updateProgressBar();
+        });
     }
 
     createElement() {
@@ -169,6 +175,14 @@ export class Card {
             marginResizeBottom.className = 'margin-resize-handle margin-resize-bottom';
             marginResizeBottom.dataset.marginSide = 'bottom';
             container.appendChild(marginResizeBottom);
+
+            // Add reading progress bar if enabled
+            if (this.progressBar) {
+                const progressIndicator = document.createElement('span');
+                progressIndicator.className = 'card-progress-indicator';
+                progressIndicator.textContent = '0%';
+                container.appendChild(progressIndicator);
+            }
 
             card.appendChild(container);
         }
@@ -948,6 +962,26 @@ export class Card {
 
     onContentScroll(e) {
         this.updateRelativeMargins();
+        this.updateProgressBar();
+    }
+
+    updateProgressBar() {
+        if (!this.progressBar) return;
+
+        const content = this.element.querySelector('.card-content');
+        const progressIndicator = this.element.querySelector('.card-progress-indicator');
+        if (!content || !progressIndicator) return;
+
+        const scrollTop = content.scrollTop;
+        const scrollHeight = content.scrollHeight - content.clientHeight;
+
+        if (scrollHeight <= 0) {
+            // Content doesn't scroll, show full progress
+            progressIndicator.textContent = '100%';
+        } else {
+            const progress = Math.round((scrollTop / scrollHeight) * 100);
+            progressIndicator.textContent = `${progress}%`;
+        }
     }
 
     onMarginItemResizeStart(e) {
@@ -1274,6 +1308,7 @@ export class Card {
             embedUrl: this.embedUrl,
             marginTB: this.marginTB,
             marginLR: this.marginLR,
+            progressBar: this.progressBar,
             zIndex: this.zIndex
         };
     }
