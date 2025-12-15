@@ -1,6 +1,7 @@
 ---
 width: 350
 height: 450
+tags: essays,analysis
 ---
 
 [[margin(left, type: absolute)]]
@@ -11,6 +12,8 @@ height: 450
 # Writing
 
 A collection of essays, notes, and thoughts.
+
+[[tags]]
 
 ## Recent
 

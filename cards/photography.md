@@ -1,6 +1,7 @@
 ---
 width: 320
 height: 380
+tags: photography,art
 ---
 
 [[margin(right, type: relative)]]
@@ -11,6 +12,8 @@ height: 380
 # Photography
 
 Visual explorations and captured moments.
+
+[[tags]]
 
 ## Collections
 

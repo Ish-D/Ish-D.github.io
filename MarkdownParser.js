@@ -137,6 +137,10 @@ export class MarkdownParser {
         return /\[\[button\(([^)]+)\)\]\]/g;
     }
 
+    getTagsPattern() {
+        return /\[\[tags\]\]/g;
+    }
+
     parse(markdown) {
         const result = {
             content: '',
@@ -212,6 +216,12 @@ export class MarkdownParser {
         processedMarkdown = processedMarkdown.replace(
             this.getAnchorPattern(),
             '<span data-anchor-id="$1">$2</span>'
+        );
+
+        // Process [[tags]] directive with placeholder for card tags
+        processedMarkdown = processedMarkdown.replace(
+            this.getTagsPattern(),
+            '<div class="card-tags-placeholder" data-tags-placeholder="true"></div>'
         );
 
         // Parse remaining markdown to HTML

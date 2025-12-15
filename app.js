@@ -11,6 +11,15 @@ class PaperCanvas {
         // Global page counter - increments for each new card
         this.pageCounter = 0;
 
+        // Z-index counter - ensures new cards always appear on top
+        this.zIndexCounter = 1000;
+
+        // Comprehensive tag index - built from all files at startup
+        this.globalTagIndex = {}; // Individual tags (for specific tag pages)
+        this.mainTagIndex = {};   // Main tags only (for overview)
+        this.tagHierarchy = null; // Loaded from tags.json
+        this.fileTagCache = new Map(); // Cache file metadata to avoid re-parsing
+
         // Canvas transform state
         this.panX = 0;
         this.panY = 0;
@@ -38,6 +47,11 @@ class PaperCanvas {
         this.bindCanvasEvents();
         this.initSettings();
         this.initConnectionsLayer();
+
+        // Build comprehensive tag index from all files first
+        await this.buildGlobalTagIndex();
+
+        this.initContentProviders(); // Initialize the content provider system
 
         // Check URL for direct card routing
         const cardName = this.getCardNameFromURL();
@@ -431,6 +445,35 @@ class PaperCanvas {
                 this.hidePreviewAfterDelay();
             }
         }, true);
+
+        // Handle tag clicks
+        this.canvas.addEventListener('tag-click', async (e) => {
+            const { tagName, card } = e.detail;
+
+            // Remove any existing tag page for this tag to ensure fresh positioning
+            const existingTagCard = Array.from(this.cards.values()).find(c =>
+                c.sourceFile === `dynamic:tag-${tagName}`
+            );
+            if (existingTagCard) {
+                this.removeCard(existingTagCard.id);
+            }
+
+            // Register the tag page dynamically
+            const tagCardName = this.registerTagPage(tagName, card);
+
+            // Calculate random position at click time - make it more dramatic
+            const randomOffsetX = (Math.random() - 0.5) * 400; // ±200px
+            const randomOffsetY = (Math.random() - 0.5) * 600; // ±300px
+
+            // Open the tag page using the standard card opening system
+            this.openCard(tagCardName, card, {
+                width: 300,
+                height: 300,
+                relX: card.width + 50 + randomOffsetX,
+                relY: randomOffsetY,
+                jitter: 50 // Add some additional jitter on top
+            });
+        });
     }
 
     clearPreviewCard() {
@@ -685,6 +728,11 @@ class PaperCanvas {
         this.cards.set(card.id, card);
         this.canvasContent.appendChild(card.element);
 
+        // Ensure this card appears on top by assigning highest z-index
+        this.zIndexCounter++;
+        card.zIndex = this.zIndexCounter;
+        card.element.style.zIndex = this.zIndexCounter;
+
         // Apply current settings to new card
         if (this.settings) {
             if (!this.settings.cardShadow) {
@@ -698,9 +746,15 @@ class PaperCanvas {
         return card;
     }
 
-    async loadCardFromFile(cardName, positionOptions = {}) {
+    // Content provider system - abstraction layer for card content
+    async getCardContent(cardName) {
+        // Check if this is a dynamic content provider
+        if (this.contentProviders && this.contentProviders[cardName]) {
+            return await this.contentProviders[cardName]();
+        }
+
+        // Default: load from markdown file
         try {
-            // Add cache-busting query param for development
             const cacheBuster = `?t=${Date.now()}`;
             const response = await fetch(`cards/${cardName}.md${cacheBuster}`);
             if (!response.ok) {
@@ -709,82 +763,314 @@ class PaperCanvas {
             }
 
             const markdown = await response.text();
-            const parsed = this.parser.parse(markdown);
-
-            // Get dimensions from options, then metadata, then defaults
-            let width = positionOptions.width || parseInt(parsed.metadata.width) || 280;
-            let height = positionOptions.height || parseInt(parsed.metadata.height) || 360;
-
-            // Get position - if centered option is true, center on viewport
-            let x, y;
-            if (positionOptions.fillViewport) {
-                // Fill most of the viewport with padding for background access
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                const padding = 60; // Padding on each side for background access
-
-                width = viewportWidth - (padding * 2);
-                height = viewportHeight - (padding * 2);
-                x = padding;
-                y = padding;
-            } else if (positionOptions.centered) {
-                const viewportWidth = window.innerWidth;
-                const viewportHeight = window.innerHeight;
-                x = viewportWidth / 2 - width / 2;
-                y = viewportHeight / 2 - height / 2;
-            } else {
-                x = positionOptions.x !== undefined ? positionOptions.x : this.defaultOffset.x;
-                y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
-            }
-
-            // Assign incrementing page number
-            const pageNumber = this.getNextPageNumber();
-
-            // Check if this is an image card
-            const isImageCard = parsed.metadata.image ? true : false;
-
-            // Calculate rotation: counter-rotate to cancel canvas rotation,
-            // so cards appear at their specified rotation relative to the screen.
-            // This means cards appear "upright" (or at specified angle) regardless
-            // of how the canvas is rotated.
-            const cardRotation = (positionOptions.rotation || 0) - this.rotation;
-
-            const cardOptions = {
-                x: x,
-                y: y,
-                width: width,
-                height: height,
-                rotation: cardRotation,
-                pageNumber: pageNumber,
-                content: parsed.content,
-                margins: parsed.margins,
-                sourceFile: cardName,
-                marginTB: positionOptions.marginTB,
-                marginLR: positionOptions.marginLR,
-                progressBar: parsed.metadata.progressBar === 'true' || parsed.metadata.progressBar === true,
-                wordCount: parsed.metadata.wordCount === 'true' || parsed.metadata.wordCount === true,
-                readTime: parsed.metadata.readTime === 'true' || parsed.metadata.readTime === true
+            return {
+                content: markdown,
+                isDynamic: false,
+                sourceFile: cardName
             };
-
-            if (isImageCard) {
-                cardOptions.image = parsed.metadata.image;
-                cardOptions.caption = parsed.metadata.caption || '';
-            }
-
-            const card = this.addCard(cardOptions);
-            card.sourceFile = cardName;
-
-            // Add connection from parent card if exists
-            if (positionOptions.parentCard) {
-                this.addConnection(positionOptions.parentCard, card);
-            }
-
-            return card;
-
         } catch (error) {
             console.error(`Error loading card ${cardName}:`, error);
             return null;
         }
+    }
+
+    // Build comprehensive tag index from ALL card files at startup
+    async buildGlobalTagIndex() {
+        console.log('Building global tag index from all files...');
+
+        // Load tag hierarchy first
+        await this.loadTagHierarchy();
+
+        // List of all known card files - update this when adding new cards
+        const cardFiles = [
+            'about', 'bookmarks', 'controls', 'journal', 'koi', 'menu',
+            'photography', 'settings', 'tags', 'todo', 'writing'
+        ];
+
+        this.globalTagIndex = {}; // Individual tags
+        this.mainTagIndex = {};   // Main tags only
+        this.fileTagCache.clear();
+
+        // Process each file
+        for (const cardName of cardFiles) {
+            try {
+                const response = await fetch(`cards/${cardName}.md`);
+                if (!response.ok) {
+                    console.warn(`Could not fetch ${cardName}.md`);
+                    continue;
+                }
+
+                const content = await response.text();
+
+                // Parse frontmatter to extract tags
+                const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
+                if (frontmatterMatch) {
+                    const frontmatter = frontmatterMatch[1];
+                    const tagsMatch = frontmatter.match(/tags:\s*(.+)/);
+
+                    if (tagsMatch) {
+                        const tagsStr = tagsMatch[1].trim();
+                        const tags = tagsStr.split(',')
+                            .map(tag => tag.replace(/\s+/g, ' ').trim())
+                            .filter(tag => tag.length > 0);
+
+                        // Detect main tags from this card's tag list
+                        const mainTags = this.getMainTagsForCard(tags);
+
+                        const cardData = {
+                            tags: tags,
+                            mainTags: mainTags,
+                            sourceFile: cardName,
+                            title: cardName
+                        };
+
+                        // Store in cache for later use
+                        this.fileTagCache.set(cardName, cardData);
+
+                        // Add to individual tag index (for specific tag pages)
+                        tags.forEach(tag => {
+                            if (!this.globalTagIndex[tag]) {
+                                this.globalTagIndex[tag] = [];
+                            }
+                            const existing = this.globalTagIndex[tag].find(item => item.sourceFile === cardName);
+                            if (!existing) {
+                                this.globalTagIndex[tag].push(cardData);
+                            }
+                        });
+
+                        // Add to main tag index (for overview)
+                        mainTags.forEach(mainTag => {
+                            if (!this.mainTagIndex[mainTag]) {
+                                this.mainTagIndex[mainTag] = [];
+                            }
+                            const existing = this.mainTagIndex[mainTag].find(item => item.sourceFile === cardName);
+                            if (!existing) {
+                                this.mainTagIndex[mainTag].push(cardData);
+                            }
+                        });
+                    }
+                }
+            } catch (error) {
+                console.warn(`Error processing ${cardName}:`, error);
+            }
+        }
+
+        console.log('Global tag index built:', this.globalTagIndex);
+        console.log('Main tag index built:', this.mainTagIndex);
+        console.log('File tag cache:', this.fileTagCache);
+    }
+
+    // Load tag hierarchy from tags.json
+    async loadTagHierarchy() {
+        try {
+            const response = await fetch(`tags.json?t=${Date.now()}`);
+            this.tagHierarchy = response.ok ? await response.json() : { mainTags: {}, config: {} };
+        } catch (e) {
+            console.error('Failed to load tag hierarchy:', e);
+            this.tagHierarchy = { mainTags: {}, config: {} };
+        }
+    }
+
+    // Determine which main tags apply to a card based on its tag list
+    getMainTagsForCard(cardTags) {
+        if (!this.tagHierarchy || !this.tagHierarchy.mainTags) {
+            return [];
+        }
+
+        const mainTags = new Set();
+
+        cardTags.forEach(tag => {
+            // Check if this tag is already a main tag
+            if (this.tagHierarchy.mainTags[tag]) {
+                mainTags.add(tag);
+            } else {
+                // Check if this tag is a subtag of any main tag
+                for (const [mainTag, subTags] of Object.entries(this.tagHierarchy.mainTags)) {
+                    if (subTags.includes(tag)) {
+                        mainTags.add(mainTag);
+                    }
+                }
+            }
+        });
+
+        return Array.from(mainTags);
+    }
+
+    // Get cards with a specific tag from the global index
+    getGlobalCardsWithTag(tagName) {
+        return this.globalTagIndex[tagName] || [];
+    }
+
+    // Register content providers for dynamic cards
+    initContentProviders() {
+        this.contentProviders = {
+            // Tags overview page
+            'tags': async () => {
+                return await this.generateTagsContent();
+            },
+
+            // Individual tag pages (pattern: tag-{tagName})
+            // This will be handled by a more flexible system
+        };
+    }
+
+    // Generate content for tags overview
+    async generateTagsContent() {
+        // Load tags configuration (but we already have hierarchy loaded)
+        const recentLimit = this.tagHierarchy?.config?.recentLimit || 5;
+
+        // Use main tag index instead of global tag index for overview
+        const tagIndex = this.mainTagIndex;
+
+        // Generate content
+        let content = '# Tags Overview\n\n';
+
+        if (Object.keys(tagIndex).length === 0) {
+            content += 'No tagged pages found.';
+        } else {
+            // Sort main tags by usage (most used first)
+            const sortedTags = Object.entries(tagIndex).sort((a, b) => b[1].length - a[1].length);
+
+            for (const [mainTag, cards] of sortedTags) {
+                content += `## ${mainTag}\n\n`;
+
+                // Show recent pages for this main tag
+                const recentCards = cards.slice(0, recentLimit);
+                if (recentCards.length > 0) {
+                    recentCards.forEach(card => {
+                        const fileName = card.sourceFile || 'Untitled';
+                        content += `- [[${fileName}]]\n`;
+                    });
+                    if (cards.length > recentLimit) {
+                        content += `- *...and ${cards.length - recentLimit} more*\n`;
+                    }
+                    content += '\n';
+                }
+            }
+        }
+
+        return {
+            content: content,
+            isDynamic: true,
+            sourceFile: 'dynamic:tags-overview'
+        };
+    }
+
+    // Register a dynamic tag page on demand
+    registerTagPage(tagName, sourceCard) {
+        const cardName = `tag-${tagName}`;
+
+        // Register the content provider
+        this.contentProviders[cardName] = async () => {
+            // Get all cards with this tag from global index
+            const taggedCards = this.getGlobalCardsWithTag(tagName);
+
+            // Generate content for the tag page
+            let content = `# ${tagName}\n\n`;
+
+            if (taggedCards.length === 0) {
+                content += 'No pages found with this tag.';
+            } else {
+                taggedCards.forEach(card => {
+                    const fileName = card.sourceFile || 'Untitled';
+                    content += `- [[${fileName}]]\n`;
+                });
+            }
+
+            return {
+                content: content,
+                isDynamic: true,
+                sourceFile: `dynamic:${cardName}`,
+                dynamicSourceCard: sourceCard // Store the originating card for connections
+            };
+        };
+
+        return cardName;
+    }
+
+    async loadCardFromFile(cardName, positionOptions = {}) {
+        // Get content from provider system (file or dynamic)
+        const contentData = await this.getCardContent(cardName);
+        if (!contentData) {
+            return null;
+        }
+
+        // Parse the content
+        const parsed = this.parser.parse(contentData.content);
+
+        // Get dimensions from options, then metadata, then defaults
+        let width = positionOptions.width || parseInt(parsed.metadata.width) || 280;
+        let height = positionOptions.height || parseInt(parsed.metadata.height) || 360;
+
+        // Get position - if centered option is true, center on viewport
+        let x, y;
+        if (positionOptions.fillViewport) {
+            // Fill most of the viewport with padding for background access
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const padding = 60; // Padding on each side for background access
+
+            width = viewportWidth - (padding * 2);
+            height = viewportHeight - (padding * 2);
+            x = padding;
+            y = padding;
+        } else if (positionOptions.centered) {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            x = viewportWidth / 2 - width / 2;
+            y = viewportHeight / 2 - height / 2;
+        } else {
+            x = positionOptions.x !== undefined ? positionOptions.x : this.defaultOffset.x;
+            y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
+        }
+
+        // Assign incrementing page number
+        const pageNumber = this.getNextPageNumber();
+
+        // Check if this is an image card
+        const isImageCard = parsed.metadata.image ? true : false;
+
+        // Calculate rotation: counter-rotate to cancel canvas rotation,
+        // so cards appear at their specified rotation relative to the screen.
+        const cardRotation = (positionOptions.rotation || 0) - this.rotation;
+
+        const cardOptions = {
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+            rotation: cardRotation,
+            pageNumber: pageNumber,
+            content: parsed.content,
+            margins: parsed.margins,
+            sourceFile: contentData.sourceFile,
+            marginTB: positionOptions.marginTB,
+            marginLR: positionOptions.marginLR,
+            progressBar: parsed.metadata.progressBar === 'true' || parsed.metadata.progressBar === true,
+            wordCount: parsed.metadata.wordCount === 'true' || parsed.metadata.wordCount === true,
+            readTime: parsed.metadata.readTime === 'true' || parsed.metadata.readTime === true,
+            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
+            tags: parsed.metadata.tags ? parsed.metadata.tags.split(',').map(tag => tag.replace(/\s+/g, ' ').trim()).filter(tag => tag.length > 0) : [],
+            // Mark dynamic cards
+            isDynamic: contentData.isDynamic || false
+        };
+
+        if (isImageCard) {
+            cardOptions.image = parsed.metadata.image;
+            cardOptions.caption = parsed.metadata.caption || '';
+        }
+
+        const card = this.addCard(cardOptions);
+
+        // Add connection from parent card if exists
+        if (positionOptions.parentCard) {
+            this.addConnection(positionOptions.parentCard, card);
+        } else if (contentData.dynamicSourceCard) {
+            // For dynamic cards that have a source card reference
+            this.addConnection(contentData.dynamicSourceCard, card);
+        }
+
+        return card;
     }
 
     async openCard(cardName, parentCard = null, options = {}, clickEvent = null) {
@@ -792,11 +1078,11 @@ class PaperCanvas {
         const jitter = options.jitter || 0;
 
         // Determine position based on options
-        if (options.absX !== null && options.absY !== null) {
+        if (typeof options.absX === 'number' && typeof options.absY === 'number') {
             // Absolute positioning
             x = this.applyJitter(options.absX, jitter);
             y = this.applyJitter(options.absY, jitter);
-        } else if (options.relX !== null && options.relY !== null && parentCard) {
+        } else if (typeof options.relX === 'number' && typeof options.relY === 'number' && parentCard) {
             // Relative positioning from parent card
             x = this.applyJitter(parentCard.x + options.relX, jitter);
             y = this.applyJitter(parentCard.y + options.relY, jitter);
@@ -1139,6 +1425,16 @@ class PaperCanvas {
         // Create SVG layer for connection lines
         this.connectionsSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         this.connectionsSvg.classList.add('connections-layer');
+
+        // Set SVG to cover the entire canvas area with a large viewBox
+        this.connectionsSvg.setAttribute('width', '100%');
+        this.connectionsSvg.setAttribute('height', '100%');
+        this.connectionsSvg.setAttribute('viewBox', '0 0 10000 10000');
+        this.connectionsSvg.style.position = 'absolute';
+        this.connectionsSvg.style.top = '0';
+        this.connectionsSvg.style.left = '0';
+        this.connectionsSvg.style.pointerEvents = 'none'; // Don't interfere with card interactions
+
         this.connectionsSvg.innerHTML = `
             <defs>
                 <filter id="connection-shadow" x="-50%" y="-50%" width="200%" height="200%">
@@ -1305,6 +1601,25 @@ class PaperCanvas {
         });
         return JSON.stringify(cardsArray, null, 2);
     }
+
+
+
+    // Remove a card and its connections
+    removeCard(cardId) {
+        const card = this.cards.get(cardId);
+        if (card) {
+            // Remove connections for this card
+            this.removeConnectionsForCard(cardId);
+
+            // Remove from cards map
+            this.cards.delete(cardId);
+
+            // Remove DOM element
+            card.element.remove();
+        }
+    }
+
+
 }
 
 // Initialize application

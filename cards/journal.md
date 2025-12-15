@@ -4,6 +4,7 @@ height: 680
 progressBar: true
 wordCount: true
 readTime: true
+tags: fiction,horror
 ---
 
 [[margin(right, type: relative, orient: horizontal)]]

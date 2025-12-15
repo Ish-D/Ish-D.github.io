@@ -1,0 +1,14 @@
+{
+  "mainTags": {
+    "literary": ["fiction", "horror", "fantasy", "poetry", "story", "narrative", "creative"],
+    "visual": ["photography", "art", "design", "illustration", "sketch", "visual"],
+    "ideas": ["essays", "analysis", "commentary", "review", "critique", "research", "thoughts", "reflection"],
+    "life": ["journal", "diary", "personal", "experience", "memory", "update", "process"],
+    "tools": ["programming", "code", "tutorial", "documentation", "reference", "technical", "how-to", "guide"]
+  },
+  "config": {
+    "recentLimit": 5,
+    "displayStyle": "inline",
+    "showCounts": true
+  }
+}

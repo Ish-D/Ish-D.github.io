@@ -44,6 +44,10 @@ export class Card {
         this.readTime = options.readTime || false;
         this.showReadingStats = this.progressBar || this.wordCount || this.readTime;
 
+        // Tags
+        this.tags = options.tags || [];
+        this.showTags = options.showTags || false;
+
         // State
         this.isDragging = false;
         this.isRotating = false;
@@ -149,7 +153,29 @@ export class Card {
                 this.checkEmbedStatus();
             }, 100);
         } else {
+            // Set content HTML
             content.innerHTML = this.content;
+
+            // Process [[tags]] placeholders after setting content
+            if (this.tags.length > 0) {
+                const tagPlaceholders = content.querySelectorAll('[data-tags-placeholder="true"]');
+                tagPlaceholders.forEach(placeholder => {
+                    // More thorough tag cleaning - handle any whitespace issues
+                    const cleanTags = this.tags
+                        .map(tag => tag.replace(/\s+/g, ' ').trim()) // Replace multiple spaces with single space, then trim
+                        .filter(tag => tag.length > 0);
+
+                    const tagsHTML = cleanTags
+                        .map((tag, index) => {
+                            const comma = index < cleanTags.length - 1 ? ', ' : '';
+                            return `<span class="card-tag" data-tag="${tag}">${tag}${comma}</span>`;
+                        })
+                        .join('');
+
+                    placeholder.innerHTML = tagsHTML;
+                    placeholder.classList.add('card-tags-inline');
+                });
+            }
 
             // Assemble container with margins
             container.appendChild(marginTop);
@@ -459,6 +485,21 @@ export class Card {
         this.element.querySelectorAll('.margin-resize-handle').forEach(handle => {
             handle.addEventListener('mousedown', this.onMarginAreaResizeStart.bind(this));
             handle.addEventListener('touchstart', this.onMarginAreaResizeTouchStart.bind(this), { passive: false });
+        });
+
+        // Tag click handlers
+        this.element.querySelectorAll('.card-tag').forEach(tag => {
+            tag.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const tagName = tag.dataset.tag;
+
+                // Dispatch custom event for tag click
+                this.element.dispatchEvent(new CustomEvent('tag-click', {
+                    bubbles: true,
+                    detail: { tagName: tagName, card: this }
+                }));
+            });
         });
     }
 
@@ -1340,7 +1381,9 @@ export class Card {
             progressBar: this.progressBar,
             wordCount: this.wordCount,
             readTime: this.readTime,
-            zIndex: this.zIndex
+            zIndex: this.zIndex,
+            tags: this.tags,
+            showTags: this.showTags
         };
     }
 }

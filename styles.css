@@ -1096,6 +1096,47 @@ body {
     z-index: 5;
 }
 
+/* Tags display in cards - inline version for [[tags]] directive */
+.card-tags-inline {
+    text-align: center;
+    margin: 12px 0;
+    font-size: 0; /* Remove whitespace between inline elements */
+}
+
+.card-tags-inline .card-tag {
+    font-weight: bold;
+    font-size: 10px; /* Restore font-size */
+    color: var(--color-text-primary);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    display: inline-block; /* Ensure consistent spacing */
+}
+
+.card-tags-inline .card-tag:hover {
+    color: var(--color-text-secondary);
+}
+
+/* Legacy tags display (now unused) */
+.card-tags {
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.card-tag {
+    display: inline;
+    font-weight: bold;
+    font-size: 10px;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    margin-right: 8px;
+    transition: color 0.2s ease;
+}
+
+.card-tag:hover {
+    color: var(--color-text-secondary);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
     .card-content {
