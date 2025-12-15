@@ -2,6 +2,8 @@
 width: 520
 height: 680
 progressBar: true
+wordCount: true
+readTime: true
 ---
 
 [[margin(right, type: relative, orient: horizontal)]]

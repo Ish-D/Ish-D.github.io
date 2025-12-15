@@ -134,6 +134,10 @@
     --fold-size: 40px;
     --fold-duration: 0.4s;
     --unfold-duration: 0.5s;
+
+    /* Preview card timing */
+    --preview-delay: 700ms;        /* How long to hover before preview appears */
+    --preview-linger: 750ms;       /* How long preview stays after mouse leaves link */
 }
 
 /* ============================================

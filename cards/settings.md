@@ -1,6 +1,6 @@
 ---
 width: 500
-height: 510
+height: 540
 ---
 
 ## Appearance
@@ -14,6 +14,8 @@ height: 510
 [[toggle(bind: showConnections, on: true, off: false, label: Show Connections)]]
 
 [[toggle(bind: connectionsAbove, on: true, off: false, label: ↳ Connections Above Cards)]]
+
+[[toggle(bind: showPreviews, on: true, off: false, label: Card Link Previews)]]
 
 ## Typography
 

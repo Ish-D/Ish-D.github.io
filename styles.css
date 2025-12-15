@@ -95,6 +95,14 @@ body {
         drop-shadow(0 24px 24px rgba(0, 0, 0, 0.03));
 }
 
+.card.card-preview {
+    opacity: 1.0;
+    pointer-events: auto; /* Enable mouse events so we can detect hover */
+    z-index: 10000 !important;
+    transform: scale(1.0);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
 .card:hover {
     filter:
         drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1))
@@ -1077,8 +1085,8 @@ body {
     background: var(--color-selection);
 }
 
-/* Reading progress indicator */
-.card-progress-indicator {
+/* Reading stats indicator */
+.card-reading-stats {
     position: absolute;
     bottom: var(--margin-bottom-padding-bottom, 12px);
     right: var(--margin-bottom-padding-horizontal, 16px);

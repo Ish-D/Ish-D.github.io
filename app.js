@@ -212,6 +212,14 @@ class PaperCanvas {
                 const cardName = cardLink.dataset.card;
                 const embedUrl = cardLink.dataset.url;
 
+                // If there's a preview card, make it permanent
+                if (this.previewCard && this.previewCardLink === cardLink) {
+                    this.previewCard.element.classList.remove('card-preview');
+                    this.previewCard = null;
+                    this.previewCardLink = null;
+                    return;
+                }
+
                 // Get the parent card element
                 const parentCardEl = cardLink.closest('.card');
                 const parentCard = parentCardEl ? this.getCardById(parentCardEl.id) : null;
@@ -240,6 +248,234 @@ class PaperCanvas {
                 }
             }
         });
+
+        // Handle card link hover - sophisticated preview system with delays
+        this.previewLoadingId = 0; // Track loading to prevent race conditions
+        this.previewShowTimeout = null; // Timeout for delayed showing
+        this.previewHideTimeout = null; // Timeout for delayed hiding
+        this.pendingPreviewLink = null; // Track which link we're waiting to show preview for
+
+        // Get preview timing from CSS custom properties
+        this.getPreviewTimings = () => {
+            const styles = getComputedStyle(document.documentElement);
+            const delayStr = styles.getPropertyValue('--preview-delay').trim();
+            const lingerStr = styles.getPropertyValue('--preview-linger').trim();
+
+            const delay = parseInt(delayStr) || 1000;
+            const linger = parseInt(lingerStr) || 1000;
+
+            return { delay, linger };
+        };
+
+        // Clear all preview timeouts
+        this.clearPreviewTimeouts = () => {
+            if (this.previewShowTimeout) {
+                clearTimeout(this.previewShowTimeout);
+                this.previewShowTimeout = null;
+            }
+            if (this.previewHideTimeout) {
+                clearTimeout(this.previewHideTimeout);
+                this.previewHideTimeout = null;
+            }
+        };
+
+        // Show preview for a specific link after delay
+        this.showPreviewAfterDelay = async (cardLink, mouseEvent) => {
+            const cardName = cardLink.dataset.card;
+            const timings = this.getPreviewTimings();
+
+            // Track that we're pending a preview for this link
+            this.pendingPreviewLink = cardLink;
+
+            // Increment loading ID for this specific show attempt
+            const loadId = ++this.previewLoadingId;
+
+            this.previewShowTimeout = setTimeout(async () => {
+                // Check if this show is still valid and we're still pending for the same link
+                if (loadId !== this.previewLoadingId || this.pendingPreviewLink !== cardLink) {
+                    return;
+                }
+
+                // Calculate position from the mouse event
+                const rect = this.canvas.getBoundingClientRect();
+                const cursorX = (mouseEvent.clientX - rect.left - this.panX) / this.zoom;
+                const cursorY = (mouseEvent.clientY - rect.top - this.panY) / this.zoom;
+
+                const previewSize = 400;
+                const offset = 50;
+                const previewX = cursorX + offset;
+                const previewY = cursorY + offset;
+
+                // Load the preview card
+                const previewCard = await this.loadCardFromFile(cardName, {
+                    x: previewX,
+                    y: previewY,
+                    width: previewSize,
+                    height: previewSize,
+                    rotation: 0,
+                    marginTB: 8,
+                    marginLR: 8
+                });
+
+                // Check if this load is still valid
+                if (loadId !== this.previewLoadingId || !previewCard || this.pendingPreviewLink !== cardLink) {
+                    if (previewCard) {
+                        this.cards.delete(previewCard.id);
+                        previewCard.element.remove();
+                    }
+                    return;
+                }
+
+                // Set up the preview card
+                previewCard.element.classList.add('card-preview');
+                previewCard.zIndex = 10000;
+                previewCard.element.style.zIndex = 10000;
+                this.previewCard = previewCard;
+                this.previewCardLink = cardLink;
+                this.pendingPreviewLink = null; // No longer pending, now active
+
+                // Add hover listeners to the preview card itself
+                this.bindPreviewCardHover(previewCard);
+
+                this.previewShowTimeout = null;
+            }, timings.delay);
+        };
+
+        // Bind hover events to preview card to keep it visible when hovered
+        this.bindPreviewCardHover = (previewCard) => {
+            const previewElement = previewCard.element;
+
+            previewElement.addEventListener('mouseenter', () => {
+                // Mouse entered preview card - cancel any pending hide
+                this.clearPreviewTimeouts();
+            });
+
+            previewElement.addEventListener('mouseleave', () => {
+                // Mouse left preview card - start hide timer
+                this.hidePreviewAfterDelay();
+            });
+        };
+
+        // Hide preview after linger delay
+        this.hidePreviewAfterDelay = () => {
+            const timings = this.getPreviewTimings();
+
+            // Cancel any pending show
+            if (this.previewShowTimeout) {
+                clearTimeout(this.previewShowTimeout);
+                this.previewShowTimeout = null;
+                this.pendingPreviewLink = null;
+            }
+
+            this.previewHideTimeout = setTimeout(() => {
+                this.clearPreviewCard();
+                this.previewHideTimeout = null;
+            }, timings.linger);
+        };
+
+        // Handle card link mouse enter
+        this.canvas.addEventListener('mouseenter', (e) => {
+            const cardLink = e.target.closest('.card-link');
+            if (!cardLink || !cardLink.dataset.card) return;
+
+            // Check if previews are disabled
+            if (!this.getSetting('showPreviews')) return;
+
+            // Don't preview embed links
+            if (cardLink.dataset.url) return;
+
+            // Check if this link is inside a preview card - if so, ignore it
+            const parentCard = cardLink.closest('.card');
+            if (parentCard && parentCard.classList.contains('card-preview')) {
+                return; // Don't create previews from links inside preview cards
+            }
+
+            // If we're already showing a preview for this same link, do nothing
+            if (this.previewCardLink === cardLink && this.previewCard) return;
+
+            // If we're already pending for this same link, do nothing
+            if (this.pendingPreviewLink === cardLink) return;
+
+            // Clear any existing timeouts
+            this.clearPreviewTimeouts();
+
+            // Clear any existing preview from different link
+            if (this.previewCardLink !== cardLink) {
+                this.clearPreviewCard();
+            }
+
+            // Clear any pending preview from different link
+            this.pendingPreviewLink = null;
+
+            // Start delayed show for this link
+            this.showPreviewAfterDelay(cardLink, e);
+        }, true);
+
+        // Handle card link mouse leave
+        this.canvas.addEventListener('mouseleave', (e) => {
+            const cardLink = e.target.closest('.card-link');
+            if (!cardLink) return;
+
+            // Handle leaving a link we're pending a preview for
+            if (this.pendingPreviewLink === cardLink) {
+                // Cancel the pending preview
+                this.clearPreviewTimeouts();
+                this.pendingPreviewLink = null;
+                this.previewLoadingId++; // Cancel any in-progress loads
+                return;
+            }
+
+            // Handle leaving a link with an active preview
+            if (this.previewCardLink === cardLink && this.previewCard) {
+                // Start hide timer for active preview
+                this.hidePreviewAfterDelay();
+            }
+        }, true);
+    }
+
+    clearPreviewCard() {
+        // Clear any pending timeouts
+        this.clearPreviewTimeouts();
+
+        // Clear pending state
+        this.pendingPreviewLink = null;
+
+        if (this.previewCard) {
+            this.removeConnectionsForCard(this.previewCard.id);
+            this.cards.delete(this.previewCard.id);
+            this.previewCard.element.remove();
+            this.previewCard = null;
+            this.previewCardLink = null;
+        }
+    }
+
+    getPreviewPosition(parentCard, options, e) {
+        let x, y;
+
+        if (options.absX !== null && options.absY !== null) {
+            x = options.absX;
+            y = options.absY;
+        } else if (options.relX !== null && options.relY !== null && parentCard) {
+            x = parentCard.x + options.relX;
+            y = parentCard.y + options.relY;
+        } else if (parentCard) {
+            x = parentCard.x + parentCard.width + 40;
+            y = parentCard.y;
+        } else {
+            x = this.defaultOffset.x;
+            y = this.defaultOffset.y;
+        }
+
+        return {
+            x: x,
+            y: y,
+            width: options.width,
+            height: options.height,
+            rotation: options.rotation || 0,
+            marginTB: options.marginTB,
+            marginLR: options.marginLR,
+            parentCard: options.parentCard
+        };
     }
 
     getCardById(id) {
@@ -525,7 +761,9 @@ class PaperCanvas {
                 sourceFile: cardName,
                 marginTB: positionOptions.marginTB,
                 marginLR: positionOptions.marginLR,
-                progressBar: parsed.metadata.progressBar === 'true' || parsed.metadata.progressBar === true
+                progressBar: parsed.metadata.progressBar === 'true' || parsed.metadata.progressBar === true,
+                wordCount: parsed.metadata.wordCount === 'true' || parsed.metadata.wordCount === true,
+                readTime: parsed.metadata.readTime === 'true' || parsed.metadata.readTime === true
             };
 
             if (isImageCard) {
@@ -656,7 +894,8 @@ class PaperCanvas {
             cardShadow: localStorage.getItem('settings-cardShadow') !== 'false',
             showHandles: localStorage.getItem('settings-showHandles') === 'true',
             showConnections: localStorage.getItem('settings-showConnections') === 'true',
-            connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true'
+            connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true',
+            showPreviews: localStorage.getItem('settings-showPreviews') === 'true' // Default to false (off)
         };
 
         // Track connections between cards (parentId -> [childIds])
@@ -704,6 +943,11 @@ class PaperCanvas {
         // Update connections layer position if that setting changed
         if (key === 'connectionsAbove') {
             this.updateConnectionsLayer();
+        }
+
+        // Clear active preview if previews were disabled
+        if (key === 'showPreviews' && !value) {
+            this.clearPreviewCard();
         }
     }
 
@@ -1039,7 +1283,8 @@ class PaperCanvas {
             cardShadow: true,
             showHandles: false,
             showConnections: false,
-            connectionsAbove: false
+            connectionsAbove: false,
+            showPreviews: false // Default to off
         };
 
         // Clear localStorage

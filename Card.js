@@ -38,8 +38,11 @@ export class Card {
         this.marginTB = options.marginTB || null;  // Top/bottom as % of height
         this.marginLR = options.marginLR || null;  // Left/right as % of width
 
-        // Reading progress bar
+        // Reading stats options
         this.progressBar = options.progressBar || false;
+        this.wordCount = options.wordCount || false;
+        this.readTime = options.readTime || false;
+        this.showReadingStats = this.progressBar || this.wordCount || this.readTime;
 
         // State
         this.isDragging = false;
@@ -176,12 +179,11 @@ export class Card {
             marginResizeBottom.dataset.marginSide = 'bottom';
             container.appendChild(marginResizeBottom);
 
-            // Add reading progress bar if enabled
-            if (this.progressBar) {
-                const progressIndicator = document.createElement('span');
-                progressIndicator.className = 'card-progress-indicator';
-                progressIndicator.textContent = '0%';
-                container.appendChild(progressIndicator);
+            // Add reading stats indicator if any option is enabled
+            if (this.showReadingStats) {
+                const statsIndicator = document.createElement('span');
+                statsIndicator.className = 'card-reading-stats';
+                container.appendChild(statsIndicator);
             }
 
             card.appendChild(container);
@@ -962,26 +964,51 @@ export class Card {
 
     onContentScroll(e) {
         this.updateRelativeMargins();
-        this.updateProgressBar();
+        this.updateReadingStats();
     }
 
     updateProgressBar() {
-        if (!this.progressBar) return;
+        this.updateReadingStats();
+    }
+
+    updateReadingStats() {
+        if (!this.showReadingStats) return;
 
         const content = this.element.querySelector('.card-content');
-        const progressIndicator = this.element.querySelector('.card-progress-indicator');
-        if (!content || !progressIndicator) return;
+        const statsElement = this.element.querySelector('.card-reading-stats');
+        if (!content || !statsElement) return;
 
-        const scrollTop = content.scrollTop;
-        const scrollHeight = content.scrollHeight - content.clientHeight;
+        const parts = [];
 
-        if (scrollHeight <= 0) {
-            // Content doesn't scroll, show full progress
-            progressIndicator.textContent = '100%';
-        } else {
-            const progress = Math.round((scrollTop / scrollHeight) * 100);
-            progressIndicator.textContent = `${progress}%`;
+        // Word count
+        if (this.wordCount) {
+            const text = content.textContent || '';
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+            parts.push(`${words} words`);
         }
+
+        // Read time (average 200 words per minute)
+        if (this.readTime) {
+            const text = content.textContent || '';
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+            const minutes = Math.max(1, Math.round(words / 200));
+            parts.push(`${minutes}m`);
+        }
+
+        // Progress percentage
+        if (this.progressBar) {
+            const scrollTop = content.scrollTop;
+            const scrollHeight = content.scrollHeight - content.clientHeight;
+
+            if (scrollHeight <= 0) {
+                parts.push('100%');
+            } else {
+                const progress = Math.round((scrollTop / scrollHeight) * 100);
+                parts.push(`${progress}%`);
+            }
+        }
+
+        statsElement.textContent = parts.join(' | ');
     }
 
     onMarginItemResizeStart(e) {
@@ -1124,15 +1151,17 @@ export class Card {
     }
 
     bringToFront() {
-        // Get all cards and find max z-index
-        const allCards = document.querySelectorAll('.card');
+        // Get all cards and find max z-index, but exclude preview cards and cap at 9999
+        // This ensures preview cards (z-index 10000+) always stay on top
+        const allCards = document.querySelectorAll('.card:not(.card-preview)');
         let maxZ = 0;
         allCards.forEach(card => {
             const z = parseInt(card.style.zIndex || 0);
             if (z > maxZ) maxZ = z;
         });
 
-        this.zIndex = maxZ + 1;
+        // Cap regular cards at 9999 to keep preview cards (10000+) always on top
+        this.zIndex = Math.min(maxZ + 1, 9999);
         this.element.style.zIndex = this.zIndex;
     }
 
@@ -1309,6 +1338,8 @@ export class Card {
             marginTB: this.marginTB,
             marginLR: this.marginLR,
             progressBar: this.progressBar,
+            wordCount: this.wordCount,
+            readTime: this.readTime,
             zIndex: this.zIndex
         };
     }
