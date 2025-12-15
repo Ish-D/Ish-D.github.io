@@ -14,4 +14,5 @@ height: 340
 [[link(journal, display: "Journal", size: 1000x620, rel: -100:-200, jitter: 50, rot: 8, marginTB: 8, marginLR: 8)]]
 [[link(https://en.wikipedia.org/wiki/Special:Random, embed: true, display: "Random Wiki", size: 700x500, rel: -400:100, jitter: 30)]]
 [[link(https://ish-d.github.io/, embed: true, display: "This Site", size: 700x500, rel: -400:100, jitter: 30)]]
+[[link(menu, display: "Menu" ,size: 340x280, rel: 300:250, jitter: 20)]]
 }

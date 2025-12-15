@@ -335,6 +335,11 @@ export class Card {
         if (topHandle) {
             topHandle.style.transform = `translateX(-50%) rotate(${counterRotation}deg)`;
         }
+
+        // Notify app about card movement for connection updates
+        if (window.paperCanvas && window.paperCanvas.updateAllConnections) {
+            window.paperCanvas.updateAllConnections();
+        }
     }
 
     bindEvents() {

@@ -1,6 +1,6 @@
 ---
 width: 500
-height: 450
+height: 510
 ---
 
 ## Appearance
@@ -10,6 +10,10 @@ height: 450
 [[toggle(bind: cardShadow, on: true, off: false, label: Card Shadows)]]
 
 [[toggle(bind: showHandles, on: true, off: false, label: Show Card Handles)]]
+
+[[toggle(bind: showConnections, on: true, off: false, label: Show Connections)]]
+
+[[toggle(bind: connectionsAbove, on: true, off: false, label: ↳ Connections Above Cards)]]
 
 ## Typography
 

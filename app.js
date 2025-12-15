@@ -37,6 +37,7 @@ class PaperCanvas {
     async init() {
         this.bindCanvasEvents();
         this.initSettings();
+        this.initConnectionsLayer();
 
         // Check URL for direct card routing
         const cardName = this.getCardNameFromURL();
@@ -191,7 +192,12 @@ class PaperCanvas {
 
         // Handle card deletion
         this.canvas.addEventListener('card-delete', (e) => {
-            this.cards.delete(e.detail.cardId);
+            const cardId = e.detail.cardId;
+
+            // Remove connections for this card
+            this.removeConnectionsForCard(cardId);
+
+            this.cards.delete(cardId);
 
             // If no cards remain, respawn the menu card
             if (this.cards.size === 0) {
@@ -529,6 +535,11 @@ class PaperCanvas {
             const card = this.addCard(cardOptions);
             card.sourceFile = cardName;
 
+            // Add connection from parent card if exists
+            if (positionOptions.parentCard) {
+                this.addConnection(positionOptions.parentCard, card);
+            }
+
             return card;
 
         } catch (error) {
@@ -574,7 +585,8 @@ class PaperCanvas {
             height: options.height,
             rotation: options.rotation,
             marginTB: options.marginTB,
-            marginLR: options.marginLR
+            marginLR: options.marginLR,
+            parentCard: parentCard  // Pass parent for connection tracking
         });
     }
 
@@ -626,6 +638,11 @@ class PaperCanvas {
             embedUrl: url
         });
 
+        // Add connection from parent card if exists
+        if (parentCard) {
+            this.addConnection(parentCard, card);
+        }
+
         return card;
     }
 
@@ -636,8 +653,13 @@ class PaperCanvas {
             fontSize: parseInt(localStorage.getItem('settings-fontSize')) || 12,
             lineHeight: parseFloat(localStorage.getItem('settings-lineHeight')) || 1.5,
             cardShadow: localStorage.getItem('settings-cardShadow') !== 'false',
-            showHandles: localStorage.getItem('settings-showHandles') === 'true'
+            showHandles: localStorage.getItem('settings-showHandles') === 'true',
+            showConnections: localStorage.getItem('settings-showConnections') === 'true',
+            connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true'
         };
+
+        // Track connections between cards (parentId -> [childIds])
+        this.connections = new Map();
 
         // Register actions that can be called by buttons
         this.actions = {
@@ -671,6 +693,16 @@ class PaperCanvas {
         // Update handle visibility if that setting changed
         if (key === 'showHandles') {
             this.updateHandleVisibility();
+        }
+
+        // Update connections visibility if that setting changed
+        if (key === 'showConnections') {
+            this.updateConnectionsVisibility();
+        }
+
+        // Update connections layer position if that setting changed
+        if (key === 'connectionsAbove') {
+            this.updateConnectionsLayer();
         }
     }
 
@@ -858,13 +890,155 @@ class PaperCanvas {
         document.documentElement.style.setProperty('--handle-display', show ? 'block' : 'none');
     }
 
+    initConnectionsLayer() {
+        // Create SVG layer for connection lines
+        this.connectionsSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        this.connectionsSvg.classList.add('connections-layer');
+        this.connectionsSvg.innerHTML = `
+            <defs>
+                <filter id="connection-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="rgba(0,0,0,0.4)"/>
+                </filter>
+            </defs>
+        `;
+        this.canvasContent.insertBefore(this.connectionsSvg, this.canvasContent.firstChild);
+
+        // Update visibility and layer position based on settings
+        this.updateConnectionsVisibility();
+        this.updateConnectionsLayer();
+    }
+
+    updateConnectionsVisibility() {
+        if (this.connectionsSvg) {
+            this.connectionsSvg.style.display = this.settings.showConnections ? 'block' : 'none';
+        }
+    }
+
+    updateConnectionsLayer() {
+        if (this.connectionsSvg) {
+            // z-index 0 = below cards, z-index 9999 = above cards
+            this.connectionsSvg.style.zIndex = this.settings.connectionsAbove ? '9999' : '0';
+        }
+    }
+
+    addConnection(parentCard, childCard) {
+        if (!parentCard || !childCard) return;
+
+        const parentId = parentCard.id;
+        const childId = childCard.id;
+
+        // Track the connection
+        if (!this.connections.has(parentId)) {
+            this.connections.set(parentId, new Set());
+        }
+        this.connections.get(parentId).add(childId);
+
+        // Create the SVG line
+        this.createConnectionLine(parentId, childId);
+
+        // Update position immediately
+        this.updateConnectionLine(parentId, childId);
+    }
+
+    createConnectionLine(parentId, childId) {
+        const lineId = `connection-${parentId}-${childId}`;
+
+        // Don't create duplicate lines
+        if (this.connectionsSvg.querySelector(`#${CSS.escape(lineId)}`)) return;
+
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.id = lineId;
+        line.classList.add('connection-line');
+        line.setAttribute('filter', 'url(#connection-shadow)');
+        this.connectionsSvg.appendChild(line);
+    }
+
+    updateConnectionLine(parentId, childId) {
+        const lineId = `connection-${parentId}-${childId}`;
+        const line = this.connectionsSvg.querySelector(`#${CSS.escape(lineId)}`);
+        if (!line) return;
+
+        const parentCard = this.cards.get(parentId);
+        const childCard = this.cards.get(childId);
+
+        if (!parentCard || !childCard) {
+            // One of the cards was deleted, remove the line
+            line.remove();
+            return;
+        }
+
+        // Calculate top center points accounting for rotation
+        const parentPos = this.getCardTopCenter(parentCard);
+        const childPos = this.getCardTopCenter(childCard);
+
+        line.setAttribute('x1', parentPos.x);
+        line.setAttribute('y1', parentPos.y);
+        line.setAttribute('x2', childPos.x);
+        line.setAttribute('y2', childPos.y);
+    }
+
+    getCardTopCenter(card) {
+        // Get slightly below top center of the card, accounting for rotation
+        const centerX = card.x + card.width / 2;
+        const centerY = card.y + card.height / 2;
+
+        // Slightly below top center (offset by 10px from top edge)
+        const topCenterRelX = 0;
+        const topCenterRelY = -card.height / 2 + 10;
+
+        // Apply rotation
+        const rad = card.rotation * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+
+        const rotatedX = topCenterRelX * cos - topCenterRelY * sin;
+        const rotatedY = topCenterRelX * sin + topCenterRelY * cos;
+
+        return {
+            x: centerX + rotatedX,
+            y: centerY + rotatedY
+        };
+    }
+
+    updateAllConnections() {
+        this.connections.forEach((children, parentId) => {
+            children.forEach(childId => {
+                this.updateConnectionLine(parentId, childId);
+            });
+        });
+    }
+
+    removeConnectionsForCard(cardId) {
+        // Remove connections where this card is the parent
+        if (this.connections.has(cardId)) {
+            this.connections.get(cardId).forEach(childId => {
+                const lineId = `connection-${cardId}-${childId}`;
+                const line = this.connectionsSvg.querySelector(`#${CSS.escape(lineId)}`);
+                if (line) line.remove();
+            });
+            this.connections.delete(cardId);
+        }
+
+        // Remove connections where this card is the child
+        this.connections.forEach((children, parentId) => {
+            if (children.has(cardId)) {
+                children.delete(cardId);
+                const lineId = `connection-${parentId}-${cardId}`;
+                const line = this.connectionsSvg.querySelector(`#${CSS.escape(lineId)}`);
+                if (line) line.remove();
+            }
+        });
+    }
+
     resetSettings() {
         this.settings = {
             theme: 'light',
             fontSize: 12,
             lineHeight: 1.5,
             cardShadow: true,
-            showHandles: false
+            showHandles: false,
+            showConnections: false,
+            connectionsAbove: false
         };
 
         // Clear localStorage
