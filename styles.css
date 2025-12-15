@@ -1,0 +1,1255 @@
+/* Reset and base styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+body {
+    font-family: var(--font-family-serif);
+    background-color: var(--color-background);
+    color: var(--color-text-primary);
+}
+
+/* Canvas - the infinite workspace */
+#canvas {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    cursor: grab;
+    background-color: var(--color-background);
+}
+
+#canvas:active {
+    cursor: grabbing;
+}
+
+#canvas.rotating {
+    cursor: crosshair;
+}
+
+/* Canvas content wrapper - receives transforms for pan/zoom/rotate */
+#canvas-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 10000px;
+    height: 10000px;
+    transform-origin: 0 0;
+    will-change: transform;
+}
+
+/* Card base styles */
+.card {
+    position: absolute;
+    /* Background moved to card-container for fold transparency */
+    transform-origin: center center;
+    cursor: default;
+    /* GPU acceleration for smooth rotation */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    /* Shadow on card element - follows visible shape of children */
+    filter:
+        drop-shadow(0 1px 1px rgba(0, 0, 0, 0.04))
+        drop-shadow(0 2px 2px rgba(0, 0, 0, 0.04))
+        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.04))
+        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.04))
+        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.03));
+}
+
+.card.dragging {
+    z-index: 1000;
+    filter:
+        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1))
+        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.08))
+        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.05))
+        drop-shadow(0 24px 24px rgba(0, 0, 0, 0.03));
+}
+
+.card:hover {
+    filter:
+        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1))
+        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.08))
+        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.05))
+        drop-shadow(0 24px 24px rgba(0, 0, 0, 0.03));
+}
+
+.card.pinned {
+    cursor: default;
+}
+
+/* Card inner structure */
+.card-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-areas:
+        "margin-top margin-top margin-top"
+        "margin-left content margin-right"
+        "margin-bottom margin-bottom margin-bottom";
+    grid-template-columns: minmax(60px, var(--margin-column-max-width)) 1fr minmax(60px, var(--margin-column-max-width));
+    grid-template-rows: auto 1fr auto;
+    /* Background on container for fold transparency */
+    background: var(--color-card-background);
+    /* Prevent layout issues during rotation */
+    contain: layout style;
+    backface-visibility: hidden;
+    /* Clip any overflow to keep content within card bounds */
+    overflow: hidden;
+}
+
+/* Main content area */
+.card-content {
+    grid-area: content;
+    padding: var(--card-padding-vertical) var(--card-padding-horizontal);
+    overflow-y: auto;
+    overflow-x: hidden;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+}
+
+.card-content::-webkit-scrollbar {
+    width: 0;
+    background: transparent;
+}
+
+/* Margin areas */
+.card-margin {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--font-size-margin);
+    line-height: var(--line-height-margin);
+    color: var(--color-text-primary);
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+    /* Prevent rendering issues during card rotation */
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform-style: preserve-3d;
+}
+
+/* Container for relative margin items - these scroll with content */
+.margin-relative-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    /* Clip items at margin boundaries */
+    overflow: hidden;
+    /* Ensure container doesn't extend beyond parent */
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.margin-relative-container .margin-item {
+    pointer-events: auto;
+    position: absolute;
+    transition: top 0.08s ease-out;
+    /* Constrain width with consistent small padding on both sides */
+    left: 2px;
+    right: 2px;
+    overflow: hidden;
+}
+
+/* Ensure scrollable content works in relative containers */
+.margin-relative-container .margin-item-content {
+    position: relative;
+}
+
+/* Container for absolute margin items - these stay fixed */
+.margin-absolute-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+/* Absolute margin items with pos offset need absolute positioning */
+.margin-absolute-container .margin-item[style*="top:"],
+.margin-absolute-container .margin-item[style*="left:"] {
+    position: absolute;
+}
+
+.card-margin-left {
+    grid-area: margin-left;
+    text-align: right;
+    padding-right: var(--margin-padding-inner);
+    padding-left: var(--margin-padding-outer);
+    padding-top: var(--margin-padding-top);
+    padding-bottom: var(--margin-padding-bottom);
+    overflow: hidden;
+    /* Ensure horizontal content doesn't get clipped */
+    min-width: 0;
+}
+
+.card-margin-left .margin-item {
+    font-size: var(--font-size-margin-small);
+}
+
+/* Removed side-specific left positioning for consistency */
+
+.card-margin-left .margin-annotation-title {
+    font-size: var(--font-size-margin-title);
+    font-weight: var(--font-weight-margin-title);
+    letter-spacing: var(--margin-title-letter-spacing);
+}
+
+.card-margin-right {
+    grid-area: margin-right;
+    text-align: left;
+    padding-left: var(--margin-padding-inner);
+    padding-right: var(--margin-padding-outer);
+    padding-top: var(--margin-padding-top);
+    padding-bottom: var(--margin-padding-bottom);
+    overflow: hidden;
+    /* Ensure horizontal content doesn't get clipped */
+    min-width: 0;
+}
+
+.card-margin-right .margin-item {
+    font-size: var(--font-size-margin-small);
+}
+
+/* Removed side-specific left positioning for consistency */
+
+.card-margin-right .margin-annotation-title {
+    font-size: var(--font-size-margin-title);
+    font-weight: var(--font-weight-margin-title);
+    letter-spacing: var(--margin-title-letter-spacing);
+}
+
+/* ============================================
+   Margin Orientation Classes
+   ============================================ */
+
+/* Vertical text orientation (for left/right margins) */
+.margin-orientation-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    /* Fill the available width in the margin column */
+    width: 100%;
+}
+
+/* Left margin vertical text reads bottom-to-top */
+.card-margin-left .margin-orientation-vertical {
+    transform: rotate(180deg);
+    transform-origin: center center;
+}
+
+/* Right margin vertical text reads top-to-bottom (no rotation needed) */
+.card-margin-right .margin-orientation-vertical {
+    /* Default vertical-rl is fine */
+}
+
+/* Horizontal text orientation (default readable direction) */
+.margin-orientation-horizontal {
+    writing-mode: horizontal-tb;
+    text-orientation: mixed;
+    white-space: normal;
+    word-wrap: break-word;
+    /* Constrain width to parent */
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* Horizontal text in left margin - right aligned */
+.card-margin-left .margin-orientation-horizontal {
+    text-align: right;
+}
+
+/* Horizontal text in right margin - left aligned */
+.card-margin-right .margin-orientation-horizontal {
+    text-align: left;
+}
+
+/* Top/bottom margins default to horizontal */
+.card-margin-top .margin-item,
+.card-margin-bottom .margin-item {
+    writing-mode: horizontal-tb;
+}
+
+.card-margin-top {
+    grid-area: margin-top;
+    flex-direction: row;
+    justify-content: center;
+    text-align: center;
+    padding-top: var(--margin-top-padding-top);
+    padding-bottom: var(--margin-top-padding-bottom);
+    min-height: 20px;
+}
+
+.card-margin-bottom {
+    grid-area: margin-bottom;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: flex-end;
+    text-align: left;
+    padding-bottom: var(--margin-bottom-padding-bottom);
+    padding-top: var(--margin-bottom-padding-top);
+    padding-left: var(--margin-bottom-padding-horizontal);
+    padding-right: var(--margin-bottom-padding-horizontal);
+    min-height: 32px;
+    position: relative;
+}
+
+/* Margin item that anchors to content */
+.margin-item {
+    position: relative;
+    transition: transform 0.1s ease-out;
+    /* Prevent rendering artifacts during rotation */
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    /* Allow item to fill container width */
+    width: 100%;
+    /* Content scrolling is handled by .margin-item-content */
+}
+
+/* Auto-generated anchor for relative margin positioning */
+.margin-anchor {
+    display: block;
+    height: 0;
+    width: 0;
+    overflow: hidden;
+    visibility: hidden;
+}
+
+/* Page number styling */
+.page-number {
+    font-size: var(--font-size-page-number);
+    color: var(--color-text-primary);
+    font-style: normal;
+}
+
+/* Corner handles for rotation/scaling */
+.card-handle {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    /* Transform origin at center for counter-rotation */
+    transform-origin: center center;
+}
+
+/* Visual indicator for scale handles */
+.card-handle::after {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--color-text-primary);
+    opacity: 0.4;
+    display: var(--handle-display, block);
+}
+
+.card-handle-tl::after { top: 12px; left: 12px; border-right: none; border-bottom: none; }
+.card-handle-tr::after { top: 12px; right: 12px; border-left: none; border-bottom: none; }
+.card-handle-bl::after { bottom: 12px; left: 12px; border-right: none; border-top: none; }
+.card-handle-br::after { bottom: 12px; right: 12px; border-left: none; border-top: none; }
+
+.card:hover .card-handle {
+    opacity: 1;
+}
+
+/* Position scale handles on corners */
+.card-handle-tl {
+    top: -12px;
+    left: -12px;
+    cursor: nwse-resize;
+}
+
+.card-handle-tr {
+    top: -12px;
+    right: -12px;
+    cursor: nesw-resize;
+}
+
+.card-handle-bl {
+    bottom: -12px;
+    left: -12px;
+    cursor: nesw-resize;
+}
+
+.card-handle-br {
+    bottom: -12px;
+    right: -12px;
+    cursor: nwse-resize;
+}
+
+/* Rotate handles (outside corners) */
+.card-rotate-handle {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    z-index: 9;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>'), auto;
+    /* Transform origin at center for counter-rotation */
+    transform-origin: center center;
+}
+
+/* Visual indicator for rotate handles - curved arrow */
+.card-rotate-handle::after {
+    content: '↻';
+    position: absolute;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    opacity: 0.4;
+    display: var(--handle-display, block);
+}
+
+.card-rotate-handle-tl::after { top: 8px; left: 8px; transform: rotate(-90deg); }
+.card-rotate-handle-tr::after { top: 8px; right: 8px; transform: rotate(0deg); }
+.card-rotate-handle-bl::after { bottom: 8px; left: 8px; transform: rotate(180deg); }
+.card-rotate-handle-br::after { bottom: 8px; right: 8px; transform: rotate(90deg); }
+
+.card:hover .card-rotate-handle {
+    opacity: 1;
+}
+
+/* Position rotate handles just outside the scale handles */
+.card-rotate-handle-tl {
+    top: -24px;
+    left: -24px;
+}
+
+.card-rotate-handle-tr {
+    top: -24px;
+    right: -24px;
+}
+
+.card-rotate-handle-bl {
+    bottom: -24px;
+    left: -24px;
+}
+
+.card-rotate-handle-br {
+    bottom: -24px;
+    right: -24px;
+}
+
+/* Drag handles (inside corners) */
+.card-drag-handle {
+    position: absolute;
+    width: 48px;
+    height: 48px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>') 12 12, move;
+    /* Transform origin at center for counter-rotation */
+    transform-origin: center center;
+}
+
+/* Visual indicator for drag handles - move cross icon */
+.card-drag-handle::after {
+    content: '✥';
+    position: absolute;
+    font-size: 16px;
+    color: var(--color-text-primary);
+    opacity: 0.4;
+    display: var(--handle-display, block);
+}
+
+.card-drag-handle-tl::after { top: 16px; left: 16px; }
+.card-drag-handle-tr::after { top: 16px; right: 16px; }
+.card-drag-handle-bl::after { bottom: 16px; left: 16px; }
+.card-drag-handle-br::after { bottom: 16px; right: 16px; }
+
+.card-drag-handle:active {
+    cursor: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>') 12 12, move;
+}
+
+.card:hover .card-drag-handle {
+    opacity: 1;
+}
+
+/* Position drag handles inside the card corners */
+.card-drag-handle-tl {
+    top: 12px;
+    left: 12px;
+}
+
+.card-drag-handle-tr {
+    top: 12px;
+    right: 12px;
+}
+
+.card-drag-handle-bl {
+    bottom: 12px;
+    left: 12px;
+}
+
+.card-drag-handle-br {
+    bottom: 12px;
+    right: 12px;
+}
+
+/* Top middle handle for pin/delete */
+.card-top-handle {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+    z-index: 11;
+}
+
+.card:hover .card-top-handle {
+    opacity: 1;
+}
+
+.card-action-btn {
+    width: 20px;
+    height: 20px;
+    border: none;
+    background: var(--color-card-background);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    cursor: pointer;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card-action-btn:hover {
+    background: var(--color-background);
+}
+
+/* Typography within cards */
+.card-content h1 {
+    font-size: var(--font-size-h1);
+    font-weight: var(--font-weight-h1);
+    margin-bottom: var(--heading-margin-h1);
+    text-align: center;
+}
+
+.card-content h2 {
+    font-size: var(--font-size-h2);
+    font-weight: var(--font-weight-h2);
+    margin-bottom: var(--heading-margin-h2);
+}
+
+.card-content h3 {
+    font-size: var(--font-size-h3);
+    font-weight: var(--font-weight-h3);
+    margin-bottom: var(--heading-margin-h3);
+}
+
+.card-content p {
+    margin-bottom: var(--paragraph-margin);
+    text-align: left;
+}
+
+.card-content p.centered {
+    text-align: center;
+}
+
+.card-content ul, .card-content ol {
+    margin-left: var(--list-margin-left);
+    margin-bottom: var(--list-margin-bottom);
+}
+
+.card-content li {
+    margin-bottom: var(--list-item-margin);
+}
+
+.card-content a {
+    color: var(--color-link);
+    text-decoration: underline;
+}
+
+/* Card links - clickable links to other cards */
+.card-link {
+    cursor: pointer;
+    font-weight: bold;
+    font-style: italic;
+    transition: color var(--transition-fast);
+}
+
+.card-link:hover {
+    color: var(--color-link-hover);
+}
+
+.card-content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+}
+
+.card-content blockquote {
+    border-left: var(--blockquote-border-width) solid var(--blockquote-border-color);
+    padding-left: var(--blockquote-padding);
+    margin: var(--blockquote-margin) 0;
+    font-style: italic;
+}
+
+.card-content hr {
+    border: none;
+    border-top: 1px solid var(--color-text-tertiary, #ccc);
+    margin: var(--paragraph-margin) 0;
+}
+
+.card-content code {
+    font-family: var(--font-family-mono);
+    background: var(--code-background);
+    padding: var(--code-padding);
+    font-size: var(--font-size-code);
+}
+
+.card-content pre {
+    background: var(--code-background);
+    padding: var(--code-block-padding);
+    overflow-x: auto;
+    margin-bottom: var(--paragraph-margin);
+}
+
+.card-content pre code {
+    background: none;
+    padding: 0;
+}
+
+/* Margin annotation styling */
+.margin-annotation {
+    font-size: var(--font-size-margin);
+    line-height: var(--line-height-margin);
+}
+
+/* ============================================
+   Custom Styled Blocks & Inline Styles
+   ============================================ */
+
+/* Styled block - div with custom inline styles */
+.styled-block {
+    /* Base styles that can be overridden by inline styles */
+    display: block;
+}
+
+/* Styled inline span - inherits context but allows overrides */
+.styled-inline {
+    /* No base styles needed - all styling comes from inline */
+}
+
+/* Center block - centers content both horizontally and vertically */
+.center-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    height: 100%;
+    width: 100%;
+}
+
+.margin-annotation .annotation-marker {
+    font-size: 9px;
+    vertical-align: super;
+    margin-right: 2px;
+}
+
+.margin-annotation-title {
+    font-weight: bold;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+.margin-annotation ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.margin-annotation li {
+    position: relative;
+    padding-left: 12px;
+    margin-bottom: 2px;
+}
+
+.margin-annotation li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+}
+
+/* ============================================
+   Scrollable & Resizable Margin Items
+   ============================================ */
+
+/* Base content wrapper - all margin items scroll their content */
+.margin-item-content {
+    display: block;
+    scroll-behavior: smooth;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    /* Contain scroll within this element, don't propagate to parents */
+    overscroll-behavior: contain;
+    /* Ensure pointer events work for scrolling */
+    pointer-events: auto;
+    /* Default overflow behavior */
+    overflow: auto;
+}
+
+/* ---- Horizontal text in margins ---- */
+/* Width fills available space, height is constrained and scrollable */
+.margin-orientation-horizontal .margin-item-content {
+    max-height: 300px;
+    width: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+    /* Ensure text wraps properly in narrow columns */
+    word-break: break-word;
+    hyphens: auto;
+}
+
+.card-margin-left .margin-orientation-horizontal .margin-item-content,
+.card-margin-right .margin-orientation-horizontal .margin-item-content {
+    /* Constrain width and allow vertical scrolling */
+    max-width: 100%;
+    width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    /* Increase max-height since horizontal text wraps more */
+    max-height: 400px;
+    box-sizing: border-box;
+}
+
+/* ---- Vertical text in margins ---- */
+/* Height fills available space (up to max), width is constrained */
+/* Width should adapt to margin column width */
+.margin-orientation-vertical .margin-item-content {
+    max-height: 300px;
+    max-width: 100%;
+    width: 100%;
+    overflow: auto;
+    /* Consistent padding for both margins */
+    padding: 4px 2px;
+    box-sizing: border-box;
+}
+
+/* Vertical text in right margin - text starts at physical top */
+.card-margin-right .margin-orientation-vertical .margin-item-content {
+    padding-top: 4px;
+    padding-left: 2px;
+}
+
+/* Vertical text in left margin (rotated 180deg) - text starts at physical bottom (visual top) */
+.card-margin-left .margin-orientation-vertical .margin-item-content {
+    padding-bottom: 4px;
+    padding-right: 2px;
+}
+
+/* Subtle scrollbar styling */
+.margin-item-content::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+}
+
+.margin-item-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.margin-item-content::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 3px;
+}
+
+.margin-item-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+/* ============================================
+   Margin Item Resize Handles
+   ============================================ */
+
+/* Resize handle for individual margin items */
+.margin-item-resize-handle {
+    position: absolute;
+    background: transparent;
+    z-index: 5;
+    opacity: 0;
+    transition: opacity var(--transition-normal), background var(--transition-normal);
+}
+
+.margin-item:hover .margin-item-resize-handle {
+    opacity: 1;
+}
+
+.margin-item-resize-handle:hover,
+.margin-item-resize-handle.active {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+}
+
+/* Horizontal resize handle (for adjusting width) - used in left/right margins */
+.margin-item-resize-handle.resize-horizontal {
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+}
+
+/* Vertical resize handle (for adjusting height) - used in top/bottom margins and vertical text */
+.margin-item-resize-handle.resize-vertical {
+    left: 0;
+    right: 0;
+    height: 8px;
+    cursor: ns-resize;
+}
+
+/* Left margin items: resize handle on right side */
+.card-margin-left .margin-item-resize-handle.resize-horizontal {
+    right: -4px;
+}
+
+/* Right margin items: resize handle on left side */
+.card-margin-right .margin-item-resize-handle.resize-horizontal {
+    left: -4px;
+}
+
+/* Top margin items: resize handle on bottom */
+.card-margin-top .margin-item-resize-handle.resize-vertical {
+    bottom: -4px;
+}
+
+/* Bottom margin items: resize handle on top */
+.card-margin-bottom .margin-item-resize-handle.resize-vertical {
+    top: -4px;
+}
+
+/* For vertical text, height resize handle at bottom */
+.margin-orientation-vertical .margin-item-resize-handle.resize-vertical {
+    bottom: -4px;
+}
+
+/* Margin item resizing state */
+.margin-item.resizing {
+    z-index: 100;
+}
+
+/* ============================================
+   Margin Area Resize Handles
+   ============================================ */
+
+/* Base resize handle - invisible until hover */
+.margin-resize-handle {
+    position: absolute;
+    background: transparent;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity var(--transition-normal), background var(--transition-normal);
+}
+
+.card:hover .margin-resize-handle {
+    opacity: 1;
+}
+
+.margin-resize-handle:hover,
+.margin-resize-handle.active {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+/* Left margin resize handle - vertical bar on right edge of left margin */
+.margin-resize-left {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    /* Position at the right edge of left margin column */
+    grid-area: margin-left;
+    justify-self: end;
+    margin-right: -4px;
+}
+
+/* Right margin resize handle - vertical bar on left edge of right margin */
+.margin-resize-right {
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    /* Position at the left edge of right margin column */
+    grid-area: margin-right;
+    justify-self: start;
+    margin-left: -4px;
+}
+
+/* Top margin resize handle - horizontal bar on bottom edge of top margin */
+.margin-resize-top {
+    left: 0;
+    right: 0;
+    top: 0;
+    height: 8px;
+    cursor: ns-resize;
+    /* Position at the bottom edge of top margin row */
+    grid-area: margin-top;
+    align-self: end;
+    margin-bottom: -4px;
+}
+
+/* Bottom margin resize handle - horizontal bar on top edge of bottom margin */
+.margin-resize-bottom {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 8px;
+    cursor: ns-resize;
+    /* Position at the top edge of bottom margin row */
+    grid-area: margin-bottom;
+    align-self: start;
+    margin-top: -4px;
+}
+
+/* Vertical text in margins */
+.vertical-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+}
+
+.vertical-text-reversed {
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+}
+
+/* Large section titles (like "Photography") */
+.section-title {
+    font-size: 42px;
+    font-weight: normal;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 3px;
+    font-family: var(--font-family-serif);
+}
+
+/* Image cards */
+.card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.card-image-container {
+    position: relative;
+    overflow: hidden;
+    height: calc(100% - 50px);
+}
+
+.card-image-caption {
+    padding: 12px 16px;
+    font-size: 12px;
+    text-align: center;
+    font-style: italic;
+}
+
+/* Selection highlight for text */
+::selection {
+    background: var(--color-selection);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .card-content {
+        padding: 20px 24px;
+        font-size: 14px;
+    }
+
+    .card-margin-left,
+    .card-margin-right {
+        display: none;
+    }
+}
+
+/* ============================================
+   Corner Fold Effect
+   ============================================ */
+
+:root {
+    --fold-size: 40px;
+}
+
+/* Base fold element */
+.card-corner-fold {
+    position: absolute;
+    width: var(--fold-size);
+    height: var(--fold-size);
+    pointer-events: none;
+    z-index: 5;
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity var(--transition-slow), transform var(--transition-slow), filter var(--transition-slow);
+    overflow: visible; /* Allow shadow to extend beyond */
+}
+
+/* Transform origins for each corner */
+.card-corner-fold-tl { top: 0; left: 0; transform-origin: 0% 0%; }
+.card-corner-fold-tr { top: 0; right: 0; transform-origin: 100% 0%; }
+.card-corner-fold-bl { bottom: 0; left: 0; transform-origin: 0% 100%; }
+.card-corner-fold-br { bottom: 0; right: 0; transform-origin: 100% 100%; }
+
+/* Base pseudo-elements */
+.card-corner-fold::before,
+.card-corner-fold::after {
+    content: '';
+    position: absolute;
+}
+
+/* Fold flap - the folded paper */
+.card-corner-fold::after {
+    width: 100%;
+    height: 100%;
+}
+
+/* ---- Bottom Right Corner ---- */
+.card-corner-fold-br::before {
+    display: none;
+}
+
+.card-corner-fold-br::after {
+    top: 0;
+    left: 0;
+    background: linear-gradient(
+        315deg,
+        var(--fold-gradient-start) 0%,
+        var(--fold-gradient-mid1) 8%,
+        var(--fold-gradient-mid2) 20%,
+        var(--fold-gradient-mid3) 40%,
+        var(--fold-gradient-mid4) 70%,
+        var(--fold-gradient-end) 100%
+    );
+    clip-path: polygon(0% 100%, 100% 0%, 0% 0%);
+}
+
+/* ---- Bottom Left Corner ---- */
+.card-corner-fold-bl::before {
+    display: none;
+}
+
+.card-corner-fold-bl::after {
+    top: 0;
+    left: 0;
+    background: linear-gradient(
+        45deg,
+        var(--fold-gradient-start) 0%,
+        var(--fold-gradient-mid1) 8%,
+        var(--fold-gradient-mid2) 20%,
+        var(--fold-gradient-mid3) 40%,
+        var(--fold-gradient-mid4) 70%,
+        var(--fold-gradient-end) 100%
+    );
+    clip-path: polygon(0% 0%, 100% 100%, 100% 0%);
+}
+
+/* ---- Top Right Corner ---- */
+.card-corner-fold-tr::before {
+    display: none;
+}
+
+.card-corner-fold-tr::after {
+    top: 0;
+    left: 0;
+    background: linear-gradient(
+        225deg,
+        var(--fold-gradient-start) 0%,
+        var(--fold-gradient-mid1) 8%,
+        var(--fold-gradient-mid2) 20%,
+        var(--fold-gradient-mid3) 40%,
+        var(--fold-gradient-mid4) 70%,
+        var(--fold-gradient-end) 100%
+    );
+    clip-path: polygon(0% 0%, 100% 100%, 0% 100%);
+}
+
+/* ---- Top Left Corner ---- */
+.card-corner-fold-tl::before {
+    display: none;
+}
+
+.card-corner-fold-tl::after {
+    top: 0;
+    left: 0;
+    background: linear-gradient(
+        135deg,
+        var(--fold-gradient-start) 0%,
+        var(--fold-gradient-mid1) 8%,
+        var(--fold-gradient-mid2) 20%,
+        var(--fold-gradient-mid3) 40%,
+        var(--fold-gradient-mid4) 70%,
+        var(--fold-gradient-end) 100%
+    );
+    clip-path: polygon(100% 0%, 0% 100%, 100% 100%);
+}
+
+/* ============================================
+   Corner Fold Hover States (using :has())
+   ============================================ */
+
+/* Corner fold hover states */
+
+/* Keyframe animations for clip-path - synced with fold animation */
+@keyframes clip-corner-br {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% calc(100% - var(--fold-size)), calc(100% - var(--fold-size)) 100%, 0% 100%); }
+}
+
+@keyframes clip-corner-bl {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 100%); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, var(--fold-size) 100%, 0% calc(100% - var(--fold-size))); }
+}
+
+@keyframes clip-corner-tr {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% 0%, 100% 100%, 0% 100%); }
+    100% { clip-path: polygon(0% 0%, calc(100% - var(--fold-size)) 0%, 100% var(--fold-size), 100% 100%, 0% 100%); }
+}
+
+@keyframes clip-corner-tl {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%); }
+    100% { clip-path: polygon(var(--fold-size) 0%, 100% 0%, 100% 100%, 0% 100%, 0% var(--fold-size)); }
+}
+
+/* Reverse animations for unfold */
+@keyframes clip-corner-br-unfold {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% calc(100% - var(--fold-size)), calc(100% - var(--fold-size)) 100%, 0% 100%); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 100% 100%, 0% 100%); }
+}
+
+@keyframes clip-corner-bl-unfold {
+    0% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, var(--fold-size) 100%, 0% calc(100% - var(--fold-size))); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 100%); }
+}
+
+@keyframes clip-corner-tr-unfold {
+    0% { clip-path: polygon(0% 0%, calc(100% - var(--fold-size)) 0%, 100% var(--fold-size), 100% 100%, 0% 100%); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% 0%, 100% 100%, 0% 100%); }
+}
+
+@keyframes clip-corner-tl-unfold {
+    0% { clip-path: polygon(var(--fold-size) 0%, 100% 0%, 100% 100%, 0% 100%, 0% var(--fold-size)); }
+    100% { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%); }
+}
+
+/* Unfold animations triggered by class */
+.card.unfolding-br > .card-container {
+    animation: clip-corner-br-unfold 0.5s ease forwards;
+}
+
+.card.unfolding-bl > .card-container {
+    animation: clip-corner-bl-unfold 0.5s ease forwards;
+}
+
+.card.unfolding-tr > .card-container {
+    animation: clip-corner-tr-unfold 0.5s ease forwards;
+}
+
+.card.unfolding-tl > .card-container {
+    animation: clip-corner-tl-unfold 0.5s ease forwards;
+}
+
+/* Fold animations triggered by class or hover */
+.card.folding-br > .card-container,
+.card:has(.card-handle-br:hover) > .card-container,
+.card:has(.card-rotate-handle-br:hover) > .card-container {
+    animation: clip-corner-br 0.4s ease forwards;
+}
+
+.card.folding-bl > .card-container,
+.card:has(.card-handle-bl:hover) > .card-container,
+.card:has(.card-rotate-handle-bl:hover) > .card-container {
+    animation: clip-corner-bl 0.4s ease forwards;
+}
+
+.card.folding-tr > .card-container,
+.card:has(.card-handle-tr:hover) > .card-container,
+.card:has(.card-rotate-handle-tr:hover) > .card-container {
+    animation: clip-corner-tr 0.4s ease forwards;
+}
+
+.card.folding-tl > .card-container,
+.card:has(.card-handle-tl:hover) > .card-container,
+.card:has(.card-rotate-handle-tl:hover) > .card-container {
+    animation: clip-corner-tl 0.4s ease forwards;
+}
+
+/* Bottom Right - fold casts shadow onto card */
+.card:has(.card-handle-br:hover) .card-corner-fold-br,
+.card:has(.card-rotate-handle-br:hover) .card-corner-fold-br,
+.card.folding-br .card-corner-fold-br {
+    filter: drop-shadow(-5px -5px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Bottom Left - fold casts shadow onto card */
+.card:has(.card-handle-bl:hover) .card-corner-fold-bl,
+.card:has(.card-rotate-handle-bl:hover) .card-corner-fold-bl,
+.card.folding-bl .card-corner-fold-bl {
+    filter: drop-shadow(5px -5px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Top Right - fold casts shadow onto card */
+.card:has(.card-handle-tr:hover) .card-corner-fold-tr,
+.card:has(.card-rotate-handle-tr:hover) .card-corner-fold-tr,
+.card.folding-tr .card-corner-fold-tr {
+    filter: drop-shadow(-5px 5px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Top Left - fold casts shadow onto card */
+.card:has(.card-handle-tl:hover) .card-corner-fold-tl,
+.card:has(.card-rotate-handle-tl:hover) .card-corner-fold-tl,
+.card.folding-tl .card-corner-fold-tl {
+    filter: drop-shadow(5px 5px 4px rgba(0, 0, 0, 0.15));
+}
+
+/* Show fold on corner hover or when folding class is active */
+
+/* Bottom Right */
+.card:has(.card-handle-br:hover) .card-corner-fold-br,
+.card:has(.card-rotate-handle-br:hover) .card-corner-fold-br,
+.card.folding-br .card-corner-fold-br {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Bottom Left */
+.card:has(.card-handle-bl:hover) .card-corner-fold-bl,
+.card:has(.card-rotate-handle-bl:hover) .card-corner-fold-bl,
+.card.folding-bl .card-corner-fold-bl {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Top Right */
+.card:has(.card-handle-tr:hover) .card-corner-fold-tr,
+.card:has(.card-rotate-handle-tr:hover) .card-corner-fold-tr,
+.card.folding-tr .card-corner-fold-tr {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Top Left */
+.card:has(.card-handle-tl:hover) .card-corner-fold-tl,
+.card:has(.card-rotate-handle-tl:hover) .card-corner-fold-tl,
+.card.folding-tl .card-corner-fold-tl {
+    opacity: 1;
+    transform: scale(1);
+}

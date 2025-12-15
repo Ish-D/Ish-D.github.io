@@ -1,0 +1,307 @@
+/**
+ * Theme Configuration
+ *
+ * Edit these variables to customize the appearance of the application.
+ * All text, color, and spacing settings are centralized here.
+ */
+
+:root {
+    /* ============================================
+       Colors - Light Mode (Default)
+       ============================================ */
+
+    /* Background colors */
+    --color-background: #f0f2f5;           /* Main canvas/page background */
+    --color-card-background: #ffffff;       /* Card background */
+
+    /* Text colors */
+    --color-text-primary: #1a1a1a;          /* Main text color */
+    --color-text-secondary: #555555;        /* Secondary/muted text */
+    --color-link: #1a1a1a;                  /* Link color */
+    --color-link-hover: #555555;            /* Link hover color */
+
+    /* UI colors */
+    --color-shadow: rgba(0, 0, 0, 0.04);    /* Shadow color */
+    --color-border: #cccccc;                /* Border color */
+    --color-selection: rgba(0, 0, 0, 0.1);  /* Text selection highlight */
+
+    /* Fold effect colors */
+    --fold-gradient-start: #a8a5a0;
+    --fold-gradient-mid1: #c5c2bd;
+    --fold-gradient-mid2: #d8d5d0;
+    --fold-gradient-mid3: #e8e5e0;
+    --fold-gradient-mid4: #f0f2f5;
+    --fold-gradient-end: #faf8f6;
+
+    /* ============================================
+       Typography - Main Content
+       ============================================ */
+
+    /* Font families */
+    --font-family-serif: 'Times New Roman', Times, Georgia, serif;
+    --font-family-mono: 'Courier New', Courier, monospace;
+
+    /* Base font settings (card content) */
+    --font-size-base: 12px;
+    --line-height-base: 1.5;
+
+    /* Headings */
+    --font-size-h1: 28px;
+    --font-size-h2: 22px;
+    --font-size-h3: 16px;
+    --font-weight-h1: normal;
+    --font-weight-h2: normal;
+    --font-weight-h3: bold;
+    --heading-margin-h1: 16px;
+    --heading-margin-h2: 12px;
+    --heading-margin-h3: 8px;
+
+    /* Paragraphs */
+    --paragraph-margin: 12px;
+
+    /* Lists */
+    --list-margin-left: 24px;
+    --list-margin-bottom: 12px;
+    --list-item-margin: 4px;
+
+    /* Code */
+    --font-size-code: 13px;
+    --code-background: #f5f5f5;
+    --code-padding: 2px 6px;
+    --code-block-padding: 16px;
+
+    /* Blockquotes */
+    --blockquote-border-width: 2px;
+    --blockquote-border-color: #cccccc;
+    --blockquote-padding: 16px;
+    --blockquote-margin: 16px;
+
+    /* ============================================
+       Typography - Margins
+       ============================================ */
+
+    --font-size-margin: 11px;
+    --font-size-margin-small: 10px;
+    --line-height-margin: 1.5;
+    --font-size-margin-title: 11px;
+    --font-weight-margin-title: bold;
+    --margin-title-letter-spacing: 0.5px;
+
+    /* Page number */
+    --font-size-page-number: 11px;
+
+    /* ============================================
+       Spacing - Card Content
+       ============================================ */
+
+    --card-padding-vertical: 32px;
+    --card-padding-horizontal: 40px;
+
+    /* ============================================
+       Spacing - Margins
+       ============================================ */
+
+    --margin-padding-top: 32px;
+    --margin-padding-bottom: 32px;
+    --margin-padding-inner: 12px;      /* Padding toward content */
+    --margin-padding-outer: 4px;       /* Padding toward edge - closer to edge */
+
+    /* Top/bottom margin spacing */
+    --margin-top-padding-top: 12px;
+    --margin-top-padding-bottom: 8px;
+    --margin-bottom-padding-top: 8px;
+    --margin-bottom-padding-bottom: 12px;
+    --margin-bottom-padding-horizontal: 16px;
+
+    /* ============================================
+       Card Dimensions
+       ============================================ */
+
+    --card-default-width: 280px;
+    --card-default-height: 360px;
+    --card-min-size: 150px;
+    --margin-column-max-width: 120px;
+
+    /* ============================================
+       Animations & Transitions
+       ============================================ */
+
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.2s ease;
+    --transition-slow: 0.5s ease;
+
+    /* Corner fold */
+    --fold-size: 40px;
+    --fold-duration: 0.4s;
+    --unfold-duration: 0.5s;
+}
+
+/* ============================================
+   Dark Mode Theme
+   ============================================ */
+
+[data-theme="dark"] {
+    /* Background colors */
+    --color-background: #1a1a1a;           /* Main canvas/page background */
+    --color-card-background: #2a2a2a;       /* Card background */
+
+    /* Text colors */
+    --color-text-primary: #e0e0e0;          /* Main text color */
+    --color-text-secondary: #a0a0a0;        /* Secondary/muted text */
+    --color-link: #e0e0e0;                  /* Link color */
+    --color-link-hover: #b0b0b0;            /* Link hover color */
+
+    /* UI colors */
+    --color-shadow: rgba(0, 0, 0, 0.3);     /* Shadow color */
+    --color-border: #444444;                /* Border color */
+    --color-selection: rgba(255, 255, 255, 0.15); /* Text selection highlight */
+
+    /* Code background */
+    --code-background: #333333;
+
+    /* Fold effect colors - darker variants */
+    --fold-gradient-start: #3a3a3a;
+    --fold-gradient-mid1: #424242;
+    --fold-gradient-mid2: #4a4a4a;
+    --fold-gradient-mid3: #525252;
+    --fold-gradient-mid4: #5a5a5a;
+    --fold-gradient-end: #626262;
+}
+
+/* ============================================
+   Settings Button
+   ============================================ */
+
+.settings-btn {
+    position: fixed;
+    bottom: 20px;
+    left: 20px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.settings-btn:hover {
+    transform: scale(1.1) rotate(30deg);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.settings-btn:active {
+    transform: scale(0.95);
+}
+
+/* ============================================
+   Settings Card Styles
+   ============================================ */
+
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-section-title {
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+}
+
+.settings-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+
+.settings-label {
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+}
+
+.settings-toggle {
+    position: relative;
+    width: 36px;
+    height: 18px;
+    background: var(--color-border);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.settings-toggle.active {
+    background: var(--color-text-primary);
+}
+
+.settings-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--color-card-background);
+    border-radius: 50%;
+    transition: transform 0.2s ease;
+}
+
+.settings-toggle.active::after {
+    transform: translateX(18px);
+}
+
+.settings-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 120px;
+    height: 4px;
+    background: var(--color-border);
+    border-radius: 2px;
+    outline: none;
+}
+
+.settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--color-text-primary);
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.settings-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--color-text-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+}
+
+.settings-value {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    min-width: 36px;
+    text-align: right;
+}
