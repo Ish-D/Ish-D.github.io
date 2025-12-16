@@ -55,6 +55,7 @@ class PaperCanvas {
 
         // Check URL for direct card routing
         const cardName = this.getCardNameFromURL();
+
         if (cardName) {
             // Reset canvas view
             this.panX = 0;
@@ -100,6 +101,12 @@ class PaperCanvas {
 
         return null;
     }
+
+
+
+
+
+
 
     async loadMenuCard() {
         // Reset canvas view to default
@@ -220,11 +227,12 @@ class PaperCanvas {
         });
 
         // Handle card link clicks
-        this.canvas.addEventListener('click', (e) => {
+        this.canvas.addEventListener('click', async (e) => {
             const cardLink = e.target.closest('.card-link');
             if (cardLink) {
                 const cardName = cardLink.dataset.card;
                 const embedUrl = cardLink.dataset.url;
+
 
                 // If there's a preview card, make it permanent
                 if (this.previewCard && this.previewCardLink === cardLink) {
@@ -748,6 +756,7 @@ class PaperCanvas {
     addCard(options) {
         const card = new Card(options);
         this.cards.set(card.id, card);
+
         this.canvasContent.appendChild(card.element);
 
         // Ensure this card appears on top by assigning highest z-index
@@ -798,8 +807,6 @@ class PaperCanvas {
 
     // Build comprehensive tag index from ALL card files at startup
     async buildGlobalTagIndex() {
-        console.log('Building global tag index from all files...');
-
         // Load tag hierarchy first
         await this.loadTagHierarchy();
 
@@ -876,10 +883,6 @@ class PaperCanvas {
                 console.warn(`Error processing ${cardName}:`, error);
             }
         }
-
-        console.log('Global tag index built:', this.globalTagIndex);
-        console.log('Main tag index built:', this.mainTagIndex);
-        console.log('File tag cache:', this.fileTagCache);
     }
 
     // Load tag hierarchy from tags.json
@@ -1014,11 +1017,16 @@ class PaperCanvas {
         // Get content from provider system (file or dynamic)
         const contentData = await this.getCardContent(cardName);
         if (!contentData) {
+            console.error('No content data returned for:', cardName);
             return null;
         }
 
         // Parse the content
         const parsed = this.parser.parse(contentData.content);
+        if (!parsed) {
+            console.error('Parser returned null for:', cardName);
+            return null;
+        }
 
         // Get dimensions from options, then metadata, then defaults
         let width = positionOptions.width || parseInt(parsed.metadata.width) || 280;
@@ -1674,63 +1682,66 @@ class PaperCanvas {
             cardElement = cardElementOrId;
         }
 
-        // Find the target anchor element within the card
-        const targetElement = cardElement.querySelector(`[data-anchor-id="${targetId}"]`);
+        // Use requestAnimationFrame to ensure DOM has updated after any content changes
+        requestAnimationFrame(() => {
+            // Find the target anchor element within the card
+            const targetElement = cardElement.querySelector(`[data-anchor-id="${targetId}"]`);
 
-        if (!targetElement) {
-            console.warn(`Jump target "${targetId}" not found in card`);
-            return;
-        }
-
-        // Determine which container the target is in and scroll accordingly
-        const container = this.findScrollableContainer(targetElement);
-
-        if (!container) {
-            console.warn(`No scrollable container found for target "${targetId}"`);
-            return;
-        }
-
-        // If target is in a margin, we need to scroll both the margin container AND the main content
-        if (container.type === 'margin-content') {
-            // First, scroll within the margin container to center the target
-            const targetPosition = this.calculateTargetPosition(targetElement, container);
-            this.smoothScrollTo(container, targetPosition);
-
-            // Then, scroll the main content area to bring the margin area into view
-            const mainContent = cardElement.querySelector('.card-content');
-            if (mainContent) {
-                // Calculate where the margin area appears relative to the main content
-                const marginItem = targetElement.closest('.margin-item');
-                if (marginItem) {
-                    // Get the vertical position of the margin item
-                    const marginRect = marginItem.getBoundingClientRect();
-                    const mainContentRect = mainContent.getBoundingClientRect();
-
-                    // Calculate the margin's center position relative to main content scroll area
-                    const marginCenterY = marginRect.top + marginRect.height / 2 - mainContentRect.top + mainContent.scrollTop;
-                    const mainContentHeight = mainContent.clientHeight;
-
-                    // Calculate scroll position to center the margin area in main content
-                    const mainScrollTarget = marginCenterY - (mainContentHeight / 2);
-
-                    const mainContainer = {
-                        element: mainContent,
-                        type: 'main-content',
-                        scrollDirection: 'vertical'
-                    };
-
-                    // Smooth scroll the main content to center the margin area
-                    this.smoothScrollTo(mainContainer, Math.max(0, mainScrollTarget));
-                }
+            if (!targetElement) {
+                console.warn(`Jump target "${targetId}" not found in card`);
+                return;
             }
-        } else {
-            // Target is in main content, scroll normally
-            const targetPosition = this.calculateTargetPosition(targetElement, container);
-            this.smoothScrollTo(container, targetPosition);
-        }
 
-        // Add highlight effect to the target element
-        this.highlightJumpTarget(targetElement);
+            // Determine which container the target is in and scroll accordingly
+            const container = this.findScrollableContainer(targetElement);
+
+            if (!container) {
+                console.warn(`No scrollable container found for target "${targetId}"`);
+                return;
+            }
+
+            // If target is in a margin, we need to scroll both the margin container AND the main content
+            if (container.type === 'margin-content') {
+                // First, scroll within the margin container to center the target
+                const targetPosition = this.calculateTargetPosition(targetElement, container);
+                this.smoothScrollTo(container, targetPosition);
+
+                // Then, scroll the main content area to bring the margin area into view
+                const mainContent = cardElement.querySelector('.card-content');
+                if (mainContent) {
+                    // Calculate where the margin area appears relative to the main content
+                    const marginItem = targetElement.closest('.margin-item');
+                    if (marginItem) {
+                        // Get the vertical position of the margin item
+                        const marginRect = marginItem.getBoundingClientRect();
+                        const mainContentRect = mainContent.getBoundingClientRect();
+
+                        // Calculate the margin's center position relative to main content scroll area
+                        const marginCenterY = marginRect.top + marginRect.height / 2 - mainContentRect.top + mainContent.scrollTop;
+                        const mainContentHeight = mainContent.clientHeight;
+
+                        // Calculate scroll position to center the margin area in main content
+                        const mainScrollTarget = marginCenterY - (mainContentHeight / 2);
+
+                        const mainContainer = {
+                            element: mainContent,
+                            type: 'main-content',
+                            scrollDirection: 'vertical'
+                        };
+
+                        // Smooth scroll the main content to center the margin area
+                        this.smoothScrollTo(mainContainer, Math.max(0, mainScrollTarget));
+                    }
+                }
+            } else {
+                // Target is in main content, scroll normally
+                const targetPosition = this.calculateTargetPosition(targetElement, container);
+                this.smoothScrollTo(container, targetPosition);
+            }
+
+            // Add highlight effect to the target element
+            this.highlightJumpTarget(targetElement);
+        });
     }
 
     /**
@@ -1861,6 +1872,9 @@ class PaperCanvas {
      */
     calculateTargetPosition(targetElement, container) {
         if (container.scrollDirection === 'vertical') {
+            // Force DOM layout update before calculating positions
+            container.element.offsetHeight; // Trigger reflow
+
             // Calculate the target's position relative to the container's scroll area
             let targetOffsetTop = 0;
             let element = targetElement;
@@ -1880,7 +1894,12 @@ class PaperCanvas {
             if (element !== container.element) {
                 const containerRect = container.element.getBoundingClientRect();
                 const targetRect = targetElement.getBoundingClientRect();
-                targetOffsetTop = targetRect.top - containerRect.top + container.element.scrollTop;
+
+                // getBoundingClientRect values are affected by canvas zoom, but scroll values are not
+                // So we need to convert the rect-based calculation to unscaled coordinates
+                const canvasZoom = this.zoom || 1;
+                const unscaledTop = (targetRect.top - containerRect.top) / canvasZoom;
+                targetOffsetTop = unscaledTop + container.element.scrollTop;
             }
 
             // Center the target in the visible area
@@ -1910,7 +1929,12 @@ class PaperCanvas {
             if (element !== container.element) {
                 const containerRect = container.element.getBoundingClientRect();
                 const targetRect = targetElement.getBoundingClientRect();
-                targetOffsetLeft = targetRect.left - containerRect.left + container.element.scrollLeft;
+
+                // getBoundingClientRect values are affected by canvas zoom, but scroll values are not
+                // So we need to convert the rect-based calculation to unscaled coordinates
+                const canvasZoom = this.zoom || 1;
+                const unscaledLeft = (targetRect.left - containerRect.left) / canvasZoom;
+                targetOffsetLeft = unscaledLeft + container.element.scrollLeft;
             }
 
             // Center the target in the visible area

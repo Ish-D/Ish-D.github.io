@@ -168,6 +168,20 @@ export class MarkdownParser {
         return /\[\[bibliography\]\]/g;
     }
 
+    /**
+     * Get LaTeX patterns for inline and display math
+     */
+    getInlineMathPattern() {
+        // Inline math: $...$ (simpler pattern without lookbehind)
+        // This will match single $ pairs, we'll filter out double $ in processing
+        return /\$([^$\n]+?)\$/g;
+    }
+
+    getDisplayMathPattern() {
+        // Display math: $$...$$ (multiline allowed)
+        return /\$\$([^]*?)\$\$/g;
+    }
+
     parse(markdown) {
         // Reset citations for each document
         this.citations.clear();
@@ -623,6 +637,11 @@ export class MarkdownParser {
             return placeholder;
         });
 
+        // Process LaTeX expressions after protecting code
+        const latexResult = this.processLaTeX(html);
+        html = latexResult.processed;
+        const mathPlaceholders = latexResult.mathPlaceholders;
+
         // Interactive elements (process before other patterns)
         html = html.replace(this.getTogglePattern(), (match, params) => {
             return this.renderToggle(params);
@@ -766,6 +785,9 @@ export class MarkdownParser {
             html = html.replace(placeholder, codeHtml);
         }
 
+        // Restore LaTeX placeholders
+        html = this.restoreLaTeX(html, mathPlaceholders);
+
         return html;
     }
 
@@ -782,6 +804,11 @@ export class MarkdownParser {
             codePlaceholders.push({ placeholder, html: `<code>${code}</code>` });
             return placeholder;
         });
+
+        // Process LaTeX expressions after protecting code
+        const latexResult = this.processLaTeX(html);
+        html = latexResult.processed;
+        const mathPlaceholders = latexResult.mathPlaceholders;
 
         // Full link syntax
         html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
@@ -846,6 +873,9 @@ export class MarkdownParser {
         for (const { placeholder, html: codeHtml } of codePlaceholders) {
             html = html.replace(placeholder, codeHtml);
         }
+
+        // Restore LaTeX placeholders
+        html = this.restoreLaTeX(html, mathPlaceholders);
 
         return html;
     }
@@ -934,6 +964,36 @@ export class MarkdownParser {
             // Fallback for invalid URLs
             return url;
         }
+    }
+
+    /**
+     * Process LaTeX expressions in text content
+     * For KaTeX auto-render, we keep the original $ delimiters in the final HTML
+     */
+    processLaTeX(text) {
+        // Return the original text unchanged - let KaTeX auto-render handle it
+        return { processed: text, mathPlaceholders: [] };
+    }
+
+    /**
+     * Escape LaTeX content for safe HTML embedding
+     */
+    escapeLatex(latex) {
+        return latex
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#x27;');
+    }
+
+    /**
+     * Restore LaTeX placeholders with their rendered HTML
+     * Since we're now using auto-render, this just returns the text unchanged
+     */
+    restoreLaTeX(text, mathPlaceholders) {
+        // No placeholders to restore - return text as-is for auto-render
+        return text;
     }
 }
 

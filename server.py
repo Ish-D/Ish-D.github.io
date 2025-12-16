@@ -30,8 +30,9 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         if os.path.isfile(file_path):
             return super().do_GET()
 
-        # If path starts with /cards/, return 404 (for proper card not found handling)
-        if path.startswith('/cards/'):
+        # Don't route static assets (JS, CSS, images, etc.) - return 404 instead
+        static_extensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot']
+        if any(path.lower().endswith(ext) for ext in static_extensions):
             self.send_error(404, 'File not found')
             return
 

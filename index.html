@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Paper Canvas</title>
-    <link rel="stylesheet" href="theme.css">
-    <link rel="stylesheet" href="styles.css">
+    <!-- KaTeX CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
+    <link rel="stylesheet" href="/theme.css">
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div id="canvas">
@@ -19,6 +21,11 @@
         <span>⚙</span>
     </button>
 
-    <script type="module" src="app.js"></script>
+    <!-- KaTeX JS - load synchronously before module -->
+    <script src="https://unpkg.com/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
+    <!-- KaTeX auto-render extension -->
+    <script src="https://unpkg.com/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+
+    <script type="module" src="/app.js"></script>
 </body>
 </html>

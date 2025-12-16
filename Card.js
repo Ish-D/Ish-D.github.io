@@ -67,6 +67,8 @@ export class Card {
         requestAnimationFrame(() => {
             this.updateRelativeMargins();
             this.updateProgressBar();
+            // Also render LaTeX in margins after DOM is ready
+            this.renderLaTeX();
         });
     }
 
@@ -176,6 +178,11 @@ export class Card {
                     placeholder.classList.add('card-tags-inline');
                 });
             }
+
+            // Render LaTeX in content after DOM is ready
+            requestAnimationFrame(() => {
+                this.renderLaTeX();
+            });
 
             // Assemble container with margins
             container.appendChild(marginTop);
@@ -1312,6 +1319,129 @@ export class Card {
         const contentEl = this.element.querySelector('.card-content');
         if (contentEl) {
             contentEl.innerHTML = html;
+
+            // Render LaTeX in updated content
+            requestAnimationFrame(() => {
+                this.renderLaTeX();
+            });
+        }
+    }
+
+    /**
+     * Render LaTeX expressions using KaTeX
+     * Processes all math elements in the card content and margins
+     */
+    renderLaTeX() {
+        // Check if KaTeX is available
+        if (typeof window.katex === 'undefined' && typeof window.renderMathInElement === 'undefined') {
+            // KaTeX not loaded yet, try again with simple retry
+            const retryDelay = 100;
+            this.katexRetryCount = (this.katexRetryCount || 0) + 1;
+
+            if (this.katexRetryCount < 10) { // Max 10 retries (1 second)
+                setTimeout(() => this.renderLaTeX(), retryDelay);
+                return;
+            } else {
+                console.error('KaTeX failed to load after retries');
+                return;
+            }
+        }
+
+        this.katexRetryCount = 0; // Reset retry count on success
+
+        // Use auto-render on the entire card element if available
+        if (typeof window.renderMathInElement !== 'undefined') {
+            try {
+                window.renderMathInElement(this.element, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+                return;
+            } catch (error) {
+                console.warn('Auto-render failed:', error);
+            }
+        }
+
+        // Fallback to manual processing
+        this.renderLaTeXManually();
+    }
+
+    /**
+     * Manual LaTeX rendering for fallback
+     */
+    renderLaTeXManually() {
+        // Process LaTeX in main content
+        const contentEl = this.element.querySelector('.card-content');
+        if (contentEl) {
+            this.renderLaTeXInElement(contentEl);
+        }
+
+        // Process LaTeX in all margin content
+        this.element.querySelectorAll('.margin-item-content').forEach(marginContent => {
+            this.renderLaTeXInElement(marginContent);
+        });
+    }
+
+    /**
+     * Render LaTeX in a specific element
+     */
+    renderLaTeXInElement(container) {
+        if (!container) return;
+
+        // Find all LaTeX elements that haven't been processed yet
+        const mathElements = container.querySelectorAll('.katex-math:not(.katex-processed)');
+
+        if (mathElements.length === 0) return;
+
+        // Try auto-render first (simpler approach)
+        if (typeof window.renderMathInElement !== 'undefined') {
+            try {
+                window.renderMathInElement(container, {
+                    delimiters: [
+                        { left: '$$', right: '$$', display: true },
+                        { left: '$', right: '$', display: false }
+                    ],
+                    throwOnError: false
+                });
+
+                // Mark all as processed
+                mathElements.forEach(element => {
+                    element.classList.add('katex-processed');
+                });
+                return;
+            } catch (error) {
+                console.warn('Auto-render failed, falling back to manual rendering:', error);
+            }
+        }
+
+        // Fallback to manual rendering
+        if (typeof window.katex !== 'undefined') {
+            mathElements.forEach((element) => {
+                try {
+                    const latex = element.textContent;
+                    const isDisplay = element.dataset.mathType === 'display';
+
+                    // Render LaTeX with KaTeX
+                    window.katex.render(latex, element, {
+                        throwOnError: false,
+                        displayMode: isDisplay,
+                        output: 'html',
+                        strict: false
+                    });
+
+                    // Mark as processed to avoid re-processing
+                    element.classList.add('katex-processed');
+                } catch (error) {
+                    console.warn('KaTeX rendering error:', error);
+                    // Show error in a user-friendly way
+                    element.textContent = `[Math Error: ${element.textContent}]`;
+                    element.style.color = 'red';
+                    element.classList.add('katex-processed');
+                }
+            });
         }
     }
 

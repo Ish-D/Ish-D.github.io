@@ -1523,3 +1523,39 @@ sup.jump-link {
     opacity: 1;
     transform: scale(1);
 }
+
+/* ============================================
+   LaTeX Math Styling
+   ============================================ */
+
+/* Display math containers */
+.katex-display-container {
+    margin: 16px 0;
+    text-align: center;
+}
+
+.katex-display-container .katex {
+    font-size: 1.1em;
+}
+
+.katex-math {
+    font-size: inherit;
+}
+
+/* Display math in margins should be smaller */
+.card-margin .katex-display-container .katex {
+    font-size: 0.9em;
+}
+
+/* Inline math in margins */
+.card-margin .katex-math {
+    font-size: 0.85em;
+}
+
+/* Error styling for failed LaTeX */
+.katex-math[style*="color: red"] {
+    font-family: var(--font-family-mono);
+    background-color: rgba(255, 0, 0, 0.1);
+    padding: 2px 4px;
+    border-radius: 3px;
+}
