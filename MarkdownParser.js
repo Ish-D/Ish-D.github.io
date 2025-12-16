@@ -16,6 +16,7 @@
  *   margin(side, type: absolute|relative, orient: vertical|horizontal, size: pixels, anchor: id, pos: pixels)
  *   center
  *   style(css properties separated by semicolons)
+ *   image(src, scale: percentage, fit: cover|contain|fill, align: left|center|right, caption: text)
  *
  * Margin Parameters:
  *   side      - left, right, top, bottom (first positional param)
@@ -39,6 +40,11 @@
  *   [[style(background: #eee; padding: 12px)]]
  *   {
  *   Styled paragraph
+ *   }
+ *
+ *   [[image(cards/images/photo.jpg, scale: 75%, fit: cover, align: center, caption: Photo caption)]]
+ *   {
+ *   Optional detailed caption text that appears below the image and supports markdown
  *   }
  *
  * INTERACTIVE ELEMENTS
@@ -288,7 +294,7 @@ export class MarkdownParser {
     }
 
     /**
-     * Process center and style blocks, converting them to HTML
+     * Process center, style, and image blocks, converting them to HTML
      */
     processBlocks(markdown) {
         return markdown.replace(this.getBlockPattern(), (match, type, params, content) => {
@@ -300,6 +306,8 @@ export class MarkdownParser {
                     return content.trim();
                 }
                 return `<div class="styled-block" style="${sanitizedStyles}">${content.trim()}</div>`;
+            } else if (type === 'image') {
+                return this.renderImageBlock(params || '', content.trim());
             }
             // Return unchanged for unknown types
             return match;
@@ -601,6 +609,65 @@ export class MarkdownParser {
             : 'style="padding: 8px 16px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
 
         return `<button class="settings-btn-action" data-action="${action}" ${styleAttr}>${label}</button>`;
+    }
+
+    /**
+     * Render an image block element
+     */
+    renderImageBlock(paramsStr, content) {
+        const params = this.parseParams(paramsStr);
+
+        // First positional parameter is the src
+        const src = params.positional[0] || '';
+
+        // Extract named parameters with defaults
+        const scale = params.named.scale || '100%';
+        const fit = params.named.fit || 'cover'; // cover, contain, fill
+        const align = params.named.align || 'center'; // left, center, right
+        const captionParam = params.named.caption || ''; // optional caption from params
+
+        // Parse scale percentage
+        let scaleValue = 1;
+        if (scale.endsWith('%')) {
+            scaleValue = parseFloat(scale) / 100;
+        } else if (!isNaN(parseFloat(scale))) {
+            scaleValue = parseFloat(scale) / 100;
+        }
+
+        // Build style attributes
+        const styles = [];
+        if (scaleValue !== 1) {
+            styles.push(`transform: scale(${scaleValue})`);
+            styles.push(`transform-origin: top ${align === 'left' ? 'left' : align === 'right' ? 'right' : 'center'}`);
+        }
+
+        // Object-fit for how image scales within container
+        const validFits = ['cover', 'contain', 'fill', 'scale-down', 'none'];
+        if (validFits.includes(fit)) {
+            styles.push(`object-fit: ${fit}`);
+        }
+
+        const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : '';
+
+        // Container alignment class
+        const alignClass = align === 'left' ? 'image-align-left' :
+                          align === 'right' ? 'image-align-right' :
+                          'image-align-center';
+
+        // Determine caption text (param takes precedence over content)
+        const captionText = captionParam || content.trim();
+
+        // Build the image HTML
+        let html = `<div class="image-block ${alignClass}">`;
+        html += `<img src="${src}" alt="${captionText}" class="image-block-img"${styleAttr}>`;
+
+        if (captionText) {
+            html += `<div class="image-block-caption">${captionText}</div>`;
+        }
+
+        html += '</div>';
+
+        return html;
     }
 
     parseFrontMatter(frontMatter) {

@@ -1559,3 +1559,64 @@ sup.jump-link {
     padding: 2px 4px;
     border-radius: 3px;
 }
+
+/* ============================================
+   Image Block Styling
+   ============================================ */
+
+/* Base image block container */
+.image-block {
+    margin: 16px 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Alignment options */
+.image-align-left {
+    align-items: flex-start;
+}
+
+.image-align-center {
+    align-items: center;
+}
+
+.image-align-right {
+    align-items: flex-end;
+}
+
+/* Image styling */
+.image-block-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s ease;
+}
+
+.image-block-img:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* Caption styling */
+.image-block-caption {
+    margin-top: 8px;
+    font-size: var(--font-size-base, 14px);
+    line-height: var(--line-height-base, 1.5);
+    color: var(--color-text-secondary, #666);
+    font-style: italic;
+    text-align: center;
+    max-width: 100%;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .image-block {
+        margin: 12px 0;
+    }
+
+    .image-block-caption {
+        font-size: 12px;
+        margin-top: 6px;
+    }
+}
