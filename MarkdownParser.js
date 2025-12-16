@@ -58,12 +58,20 @@
  * [[link(card, options)]]        - Card link with options
  * [[card]] or [[card|display]]   - Shorthand card links
  * [[anchor(id)]]{text}           - Anchor point
+ * [[jump(target-id)]]            - Jump to anchor (uses target-id as display)
+ * [[jump(target-id)]]{text}      - Jump to anchor with custom display text
+ * [[cite(url)]]                  - Citation with auto-numbered superscript
+ * [[cite(url, title)]]           - Citation with custom title
+ * [[bibliography]]               - Auto-generated bibliography from citations
  *
  * Examples:
  *   [[style(color: red; font-weight: bold)]]{important text}
  *   [[link(About, display: "Read more", size: 300x400)]]
  *   [[About]] or [[About|Click here]]
  *   [[anchor(section1)]]{Section 1}
+ *   [[jump(section1)]] or [[jump(section1)]]{Go to Section 1}
+ *   [[cite(https://example.com)]] or [[cite(https://example.com, Example Site)]]
+ *   [[bibliography]]
  *
  * STANDARD MARKDOWN
  * -----------------
@@ -95,6 +103,10 @@ export class MarkdownParser {
     constructor() {
         // Front matter (non-global, only matches at start)
         this.frontMatterPattern = /^---\s*([\s\S]*?)---/;
+
+        // Citation tracking for bibliography
+        this.citations = new Map(); // URL -> { number, title, count }
+        this.citationCounter = 0;
     }
 
     // Factory methods for regex patterns - creates fresh instances to avoid global state issues
@@ -124,6 +136,11 @@ export class MarkdownParser {
         return /\[\[anchor\(([^)]+)\)\]\]\{([^}]*)\}/g;
     }
 
+    getJumpPattern() {
+        // Jump link: [[jump(target-id)]] or [[jump(target-id)]]{display text}
+        return /\[\[jump\(([^)]+)\)\]\](?:\{([^}]*)\})?/g;
+    }
+
     // Interactive element patterns
     getTogglePattern() {
         return /\[\[toggle\(([^)]+)\)\]\]/g;
@@ -141,7 +158,21 @@ export class MarkdownParser {
         return /\[\[tags\]\]/g;
     }
 
+    getCitePattern() {
+        // Citation: [[cite(url)]] or [[cite(url, title)]] or [[cite(url)]]{text}
+        return /\[\[cite\(([^,)]+)(?:,\s*([^)]*))?\)\]\](?:\{([^}]*)\})?/g;
+    }
+
+    getBibliographyPattern() {
+        // Bibliography placeholder: [[bibliography]]
+        return /\[\[bibliography\]\]/g;
+    }
+
     parse(markdown) {
+        // Reset citations for each document
+        this.citations.clear();
+        this.citationCounter = 0;
+
         const result = {
             content: '',
             margins: {
@@ -226,6 +257,12 @@ export class MarkdownParser {
 
         // Parse remaining markdown to HTML
         result.content = this.parseMarkdown(processedMarkdown.trim());
+
+        // Auto-generate bibliography at the end of main content if there are citations
+        if (this.citations.size > 0) {
+            const bibliography = this.generateBibliography();
+            result.content += bibliography;
+        }
 
         // Replace margin anchor placeholders with actual anchor spans
         result.content = result.content.replace(
@@ -599,6 +636,16 @@ export class MarkdownParser {
             return this.renderButton(params);
         });
 
+        // Process citations (before other links to avoid conflicts)
+        html = html.replace(this.getCitePattern(), (match, url, title, text) => {
+            return this.processCitation(url.trim(), title ? title.trim() : null, text ? text.trim() : null);
+        });
+
+        // Process bibliography placeholder
+        html = html.replace(this.getBibliographyPattern(), () => {
+            return this.generateBibliography();
+        });
+
         // Full link syntax: [[link(card, params)]] or [[link(url, params)]]
         html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
             const options = this.parseLinkOptions(paramsStr);
@@ -661,6 +708,17 @@ export class MarkdownParser {
 
         // Anchors: [[anchor(id)]]{text}
         html = html.replace(this.getAnchorPattern(), '<span data-anchor-id="$1">$2</span>');
+
+        // Jump links: [[jump(target-id)]] or [[jump(target-id)]]{display text}
+        html = html.replace(this.getJumpPattern(), (match, targetId, displayText) => {
+            if (displayText) {
+                // Custom display text with underline and superscript upward arrow
+                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link); text-decoration: underline;">${displayText}<sup style="margin-left: 1px;">↑</sup></span>`;
+            } else {
+                // No custom text, show arrow with target id
+                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link);">→ ${targetId}</span>`;
+            }
+        });
 
         // External links (after inline styles to avoid conflicts)
         html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
@@ -764,6 +822,17 @@ export class MarkdownParser {
             return `<span class="styled-inline" style="${sanitizedStyles}">${spanText}</span>`;
         });
 
+        // Jump links: [[jump(target-id)]] or [[jump(target-id)]]{display text}
+        html = html.replace(this.getJumpPattern(), (match, targetId, displayText) => {
+            if (displayText) {
+                // Custom display text with underline and superscript upward arrow
+                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link); text-decoration: underline;">${displayText}<sup style="margin-left: 1px;">↑</sup></span>`;
+            } else {
+                // No custom text, show arrow with target id
+                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link);">→ ${targetId}</span>`;
+            }
+        });
+
         // Bold
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
@@ -779,6 +848,92 @@ export class MarkdownParser {
         }
 
         return html;
+    }
+
+    /**
+     * Process a citation and return the formatted citation with superscript number
+     */
+    processCitation(url, title, text) {
+        let citationNumber;
+
+        // Check if we've seen this URL before
+        if (this.citations.has(url)) {
+            const citation = this.citations.get(url);
+            citation.count++;
+            citationNumber = citation.number;
+        } else {
+            // New citation - assign next number
+            this.citationCounter++;
+            const citationData = {
+                number: this.citationCounter,
+                url: url,
+                title: title || this.extractTitleFromUrl(url),
+                count: 1
+            };
+            this.citations.set(url, citationData);
+            citationNumber = this.citationCounter;
+        }
+
+        if (text) {
+            // Citation with text: text opens URL, superscript jumps to bibliography
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">${text}</a><span class="jump-link" data-jump-target="ref-${citationNumber}" style="cursor: pointer; color: var(--color-link);"><sup style="font-size: 0.7em;">${citationNumber}</sup></span>`;
+        } else {
+            // Citation without text: just the superscript that jumps to bibliography
+            return `<span class="jump-link" data-jump-target="ref-${citationNumber}" style="cursor: pointer; color: var(--color-link);"><sup style="font-size: 0.7em;">${citationNumber}</sup></span>`;
+        }
+    }
+
+    /**
+     * Generate the bibliography section from collected citations
+     */
+    generateBibliography() {
+        if (this.citations.size === 0) {
+            return '';
+        }
+
+        // Create proper bibliography for main content area
+        let html = '<div id="bibliography-section" style="margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--color-border); font-size: var(--font-size-base); line-height: var(--line-height-base);">';
+        html += '<h3 style="margin-bottom: 12px; font-size: var(--font-size-h3); font-weight: var(--font-weight-h3);">References</h3>';
+
+        // Sort citations by number
+        const sortedCitations = Array.from(this.citations.values()).sort((a, b) => a.number - b.number);
+
+        // Traditional academic format showing URLs
+        for (const citation of sortedCitations) {
+            html += `<p id="ref-${citation.number}" data-anchor-id="ref-${citation.number}" style="margin-bottom: 8px; text-indent: -20px; padding-left: 20px;">`;
+            html += `${citation.number}. <a href="${citation.url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: none;">${citation.url}</a>`;
+            html += '</p>';
+        }
+
+        html += '</div>';
+        return html;
+    }
+
+    /**
+     * Extract a basic title from URL for display
+     */
+    extractTitleFromUrl(url) {
+        try {
+            const urlObj = new URL(url);
+            const domain = urlObj.hostname.replace(/^www\./, '');
+            const path = urlObj.pathname;
+
+            if (path && path !== '/') {
+                // Use the last part of the path as title
+                const pathParts = path.split('/').filter(part => part.length > 0);
+                if (pathParts.length > 0) {
+                    const lastPart = pathParts[pathParts.length - 1];
+                    // Remove common file extensions and clean up
+                    const cleaned = lastPart.replace(/\.[^.]*$/, '').replace(/[-_]/g, ' ');
+                    return `${cleaned} - ${domain}`;
+                }
+            }
+
+            return domain;
+        } catch (e) {
+            // Fallback for invalid URLs
+            return url;
+        }
     }
 }
 

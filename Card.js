@@ -212,6 +212,14 @@ export class Card {
                 container.appendChild(statsIndicator);
             }
 
+            // Add page number inside container so it gets clipped by fold animations
+            if (this.pageNumber) {
+                const pageNumberEl = document.createElement('span');
+                pageNumberEl.className = 'card-page-number-absolute';
+                pageNumberEl.textContent = this.pageNumber;
+                container.appendChild(pageNumberEl);
+            }
+
             card.appendChild(container);
         }
 
@@ -269,14 +277,10 @@ export class Card {
         const absoluteItems = items ? items.filter(item => item.type !== 'relative') : [];
         const relativeItems = items ? items.filter(item => item.type === 'relative') : [];
 
-        // Container for absolute items (fixed position)
-        if (absoluteItems.length > 0 || includePageNumber) {
+        // Container for absolute items (fixed position) - don't include page number here
+        if (absoluteItems.length > 0) {
             const absoluteContainer = document.createElement('div');
             absoluteContainer.className = 'margin-absolute-container';
-
-            if (includePageNumber && this.pageNumber) {
-                absoluteContainer.innerHTML = `<span class="page-number">${this.pageNumber}</span>`;
-            }
 
             absoluteItems.forEach(item => {
                 absoluteContainer.innerHTML += this.renderMarginItem(item, 'absolute', side);

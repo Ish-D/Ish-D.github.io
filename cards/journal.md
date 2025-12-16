@@ -25,7 +25,7 @@ tags: fiction,horror
 
 ## Day One
 
-I have arrived at the manor. The journey from London was [[style(text-decoration: line-through)]]{unremarkable} exhausting in a way I cannot adequately describe. I recall boarding the train at King's Cross. I recall the rhythmic clatter of wheels on track, the grey countryside sliding past the window like a dream half-remembered. I recall closing my eyes for what I believed to be a moment.
+I have arrived at the manor. The journey from [[cite(https://www.britannica.com/place/London)]]{London} was [[style(text-decoration: line-through)]]{unremarkable} exhausting in a way I cannot adequately describe. I recall boarding the train at King's Cross. I recall the rhythmic clatter of wheels on track, the grey countryside sliding past the window like a dream half-remembered. I recall closing my eyes for what I believed to be a moment.
 
 When I opened them, the train had stopped. The conductor informed me this was my station. I do not recall the name he spoke. The platform was empty save for a single carriage, black as a hearse, the driver's face obscured beneath a wide-brimmed hat. He did not speak. He did not need to. He knew where I was going.
 
@@ -33,7 +33,7 @@ When I opened them, the train had stopped. The conductor informed me this was my
 {
 [[style(font-weight: bold; color: #2c3e50)]]{October 12th, 1892}
 
-I have resolved to keep a detailed account of my time at Ashworth Manor. A man of science does not succumb to fancy. He observes. He documents. He draws conclusions from evidence.
+[[anchor(initial-resolve)]]{I have resolved} to keep a detailed account of my time at Ashworth Manor. A [[cite(https://www.scientificamerican.com, Scientific Method)]]{man of science} does not succumb to fancy. He observes. He documents. He draws conclusions from evidence.
 
 The solicitor's letter was vague. I do not recall any relatives in this county. I do not recall responding to any advertisement.
 
@@ -52,9 +52,9 @@ The solicitor's letter was vague. I do not recall any relatives in this county. 
 
 The coachman—if that is what he was—refused to approach within a quarter mile of the gates. He stopped the carriage at a bend in the road where the trees grew thick and the light seemed to fail despite the hour. When I asked why, he simply pointed toward the manor and made a sound that might have been laughter or might have been a sob. I could not tell. I did not ask again.
 
-[[anchor(gates)]]{The gates} were already open when I arrived. Wrought iron, twisted into patterns I could not quite follow—shapes that seemed to move when viewed from the corner of one's eye. I stood before them for some time, my hand on the latch that did not need lifting, staring at the house that waited at the end of the drive.
+[[anchor(gates)]]{The gates} were already open when I arrived. Wrought iron, twisted into patterns I could not quite follow—shapes that seemed to move when viewed from the corner of one's eye. I stood before them for some time, my hand on the latch that did not need lifting, staring at the house that waited at the end of the drive. [[jump(initial-resolve)]]{My earlier resolve} seemed distant now.
 
-The house is larger than the photographs suggested. Three stories of grey stone, Georgian in style but with additions that speak to later, less harmonious periods. The windows are tall and numerous, and as I approached I had the distinct impression of being watched from every one of them simultaneously. A trick of the light, I told myself. The reflection of clouds.
+The house is larger than the photographs suggested. Three stories of grey stone, [[cite(https://www.britannica.com/topic/Georgian-architecture)]]{Georgian in style} but with additions that speak to later, less harmonious periods. The windows are tall and numerous, and as I approached I had the distinct impression of being watched from every one of them simultaneously. A trick of the light, I told myself. The reflection of clouds.
 
 From certain angles I count [[style(text-decoration: line-through)]]{four} three stories. Always three when I look directly. But in my peripheral vision, there is something else—a darkness above the roofline that might be a fourth floor, might be an attic, might be nothing at all.
 
@@ -74,7 +74,7 @@ From certain angles I count [[style(text-decoration: line-through)]]{four} three
 
 *They are always open.*
 
-*The groundskeeper has been dead for six years. I found his grave behind the chapel. 1824-1886.*
+*[[anchor(groundskeeper)]]{The groundskeeper} has been dead for six years. I found his grave behind the chapel. 1824-1886.*
 
 *Six years the gates have opened themselves.*
 
@@ -93,28 +93,32 @@ The solicitor left provisions in the kitchen and a brief letter on the study des
 
 Return. As if I had been here before. As if I was coming back to something rather than arriving for the first time.
 
-I have never been to this house. I am certain of this. Almost certain.
+I have never been to this house. I am certain of this. Almost certain. Though I wonder about [[jump(groundskeeper)]]{the previous caretaker}.
 
 ---
 
-## Day Two
+## [[anchor(day-two)]]{Day Two}
 
 I slept poorly, though I cannot say why. The bed is comfortable—more comfortable than any I have known. The linens smell of lavender and something else, something older, something that reminds me of [[style(text-decoration: line-through)]]{her} hospitals. The room is warm despite the season. And yet I woke repeatedly throughout the night, convinced each time that someone had just left the room, that the door was just closing, that footsteps were just fading down the corridor.
 
+Looking back now, I realize the signs were there from [[jump(day-two)]]{the very beginning}.
+
 [[margin(left, type: relative, orient: horizontal, size: 300)]]
 {
-*He slept fourteen hours. He dreamed of water. He dreamed of hands reaching up from darkness, fingers pale as bone, grasping at nothing, grasping at everything, grasping at him. He dreamed of a woman's face beneath the surface, eyes open, mouth open, screaming without sound. He dreamed of her hair spreading like ink, like blood, like the dark between stars. He woke with his pillow damp. He woke with her name on his lips—a name he does not remember, a name he cut out of himself like a tumor, a name that lives in the walls now, in the water, in the spaces between his heartbeats.*
+*[[anchor(dream-sequence)]]{He slept fourteen hours. He dreamed of water.} He dreamed of hands reaching up from darkness, fingers pale as bone, grasping at nothing, grasping at everything, grasping at him. He dreamed of a woman's face beneath the surface, eyes open, mouth open, screaming without sound. He dreamed of her hair spreading like ink, like blood, like the dark between stars. He woke with his pillow damp. He woke with her name on his lips—a name he does not remember, a name he cut out of himself like a tumor, a name that lives in the walls now, in the water, in the spaces between his heartbeats.*
 
 [[style(color: #7f1d1d)]]{He told himself it was sweat. It was not sweat. It was her. It is always her. It will always be her.}
 }
 
 I explored the ground floor today. The house is well-maintained, though I have seen no servants. The floors are swept, the surfaces dusted, the fires laid and ready for lighting. In the kitchen I found fresh bread cooling on the counter, though I had heard no one enter, no one baking, no one at all.
 
-The library is extensive. Thousands of volumes line the walls, many of them old, some of them very old indeed. I found several that predate the house itself—medieval manuscripts in languages I do not recognize, illuminated texts with illustrations that seem to move when the candlelight flickers. I have resolved not to open these. Some knowledge is better left undisturbed.
+The [[anchor(library)]]{library} is extensive. Thousands of volumes line the walls, many of them old, some of them very old indeed. I found several that predate the house itself—medieval manuscripts in languages I do not recognize, illuminated texts with illustrations that seem to move when the candlelight flickers. I have resolved not to open these. Some knowledge is better left undisturbed.
+
+But the [[jump(books-know)]]{books seemed to know things} about me that I had forgotten.
 
 [[margin(right, type: relative, orient: vertical, size: 320)]]
 {
-**THE BOOKS KNOW THINGS.**
+**[[anchor(books-know)]]{THE BOOKS KNOW THINGS.}**
 
 I found one today—leather-bound, no title on the spine. When I opened it, the pages were blank. Every one of them, blank.
 
@@ -122,7 +126,7 @@ But the margins were filled with handwriting. *My* handwriting.
 
 *"Do not trust the mirrors."*
 
-*"The well is not empty."*
+*"[[anchor(well-warning)]]{The well is not empty}."*
 
 *"She is still here."*
 
@@ -148,7 +152,9 @@ I burned the book. I watched it turn to ash.
 
 *Over and over and over.*
 
-**ELEANOR ELEANOR ELEANOR ELEANOR**
+**[[anchor(eleanor-name)]]{ELEANOR ELEANOR ELEANOR ELEANOR}**
+
+*See [[jump(dream-sequence)]]{what he dreams} and [[jump(well-warning)]]{what the well contains}.*
 }
 
 In the study I found the previous owner's effects: letters tied with black ribbon, a collection of pressed flowers (dead now, brown and crumbling at the edges), a mirror turned to face the wall. I did not turn the mirror around. Something in the way it had been placed—hastily, desperately, the cloth draped over it torn as if in urgent haste—suggested that whoever had done so had good reason.
@@ -272,6 +278,8 @@ On the back of the photograph, in handwriting that matches the letters, a single
 
 Eleanor. [[style(text-decoration: line-through)]]{I know that name} The name means nothing to me.
 
+Yet I have seen it written [[jump(eleanor-name)]]{over and over} in my own hand.
+
 ---
 
 ## Day Seven
@@ -284,6 +292,8 @@ Eleanor. [[style(text-decoration: line-through)]]{I know that name} The name mea
 I am beginning to understand that I am not alone in this house. I do not mean ghosts—I am a man of science, I do not believe in ghosts—but there is a presence here, a consciousness that exists alongside my own, that watches me from the shadows, that whispers to me in the moments between waking and sleeping.
 
 It knows things. It knows things about me that I do not know myself. It speaks in a voice that is almost familiar, almost my own, but twisted somehow, filtered through water and darkness and three years of waiting.
+
+Perhaps one day I will [[jump(final)]]{understand} what it wants from me.
 
 [[margin(right, type: relative, orient: vertical, size: 300)]]
 {
@@ -328,7 +338,7 @@ I went to the well today. I do not know why. I found myself there as if my feet 
 
 [[margin(left, type: relative, orient: horizontal, size: 280)]]
 {
-**I found a wedding ring today.** It was in my pocket. I do not own a wedding ring. I have never been married. I am certain of this. *I am certain.* The ring is gold, worn thin with years of wearing. The inside is engraved: *"E & E, until the waters take us."* E & E. Edward and [[style(text-decoration: line-through)]]{Elizabeth} [[style(text-decoration: line-through)]]{Emma} [[style(text-decoration: line-through)]]{I don't remember I don't remember I don't remember} Eleanor. *The waters take us.* The waters. *Take us.* **The well is full of water.** *I don't remember any Eleanor.* **I DON'T REMEMBER.** *Then why am I crying? Why can't I stop crying? Why does the ring fit perfectly? Why does it feel like it has always been there? Why does my hand feel naked without it? Why do I keep hearing her voice? Why is she calling my name? Why won't she stop? Why won't she ever stop?*
+**[[anchor(wedding-ring)]]{I found a wedding ring today.}** It was in my pocket. I do not own a wedding ring. I have never been married. I am certain of this. *I am certain.* The ring is gold, worn thin with years of wearing. The inside is engraved: *"E & E, until the waters take us."* E & E. Edward and [[style(text-decoration: line-through)]]{Elizabeth} [[style(text-decoration: line-through)]]{Emma} [[style(text-decoration: line-through)]]{I don't remember I don't remember I don't remember} Eleanor. *The waters take us.* The waters. *Take us.* **The well is full of water.** *I don't remember any Eleanor.* **I DON'T REMEMBER.** *Then why am I crying? Why can't I stop crying? Why does the ring fit perfectly? Why does it feel like it has always been there? Why does my hand feel naked without it? Why do I keep hearing her voice? Why is she calling my name? Why won't she stop? Why won't she ever stop?*
 }
 
 The well has been sealed for a long time. The stones that cover it are thick, heavy, mortared in place. The iron bands are rusted but solid. Whatever is down there—if anything is down there—cannot get out.
@@ -338,6 +348,8 @@ And yet.
 I heard something. A sound from beneath the stones. A tapping. A scratching. A voice, too muffled to make out the words, but unmistakably a voice. A woman's voice.
 
 She was saying my name.
+
+But how could she know it? How could she know about [[jump(wedding-ring)]]{what I found}?
 
 [[style(background: #1a1a2e; color: #eee; padding: 24px)]]
 {
@@ -716,7 +728,7 @@ We will be together forever.
 
 Check your pockets.
 
-Is there a ring?
+Is there [[jump(wedding-ring)]]{a ring}?
 
 Is there a name you've forgotten?
 

@@ -77,22 +77,13 @@ body {
     will-change: transform;
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
-    /* Shadow on card element - follows visible shape of children */
-    filter:
-        drop-shadow(0 1px 1px rgba(0, 0, 0, 0.04))
-        drop-shadow(0 2px 2px rgba(0, 0, 0, 0.04))
-        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.04))
-        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.04))
-        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.03));
+    /* Optimized drop-shadow for corner fold compatibility */
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.15));
 }
 
 .card.dragging {
     z-index: 1000;
-    filter:
-        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1))
-        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.08))
-        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.05))
-        drop-shadow(0 24px 24px rgba(0, 0, 0, 0.03));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
 }
 
 .card.card-preview {
@@ -104,11 +95,7 @@ body {
 }
 
 .card:hover {
-    filter:
-        drop-shadow(0 4px 4px rgba(0, 0, 0, 0.1))
-        drop-shadow(0 8px 8px rgba(0, 0, 0, 0.08))
-        drop-shadow(0 16px 16px rgba(0, 0, 0, 0.05))
-        drop-shadow(0 24px 24px rgba(0, 0, 0, 0.03));
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.25));
 }
 
 .card.pinned {
@@ -333,7 +320,7 @@ body {
     text-align: left;
     padding-bottom: var(--margin-bottom-padding-bottom);
     padding-top: var(--margin-bottom-padding-top);
-    padding-left: var(--margin-bottom-padding-horizontal);
+    padding-left: calc(var(--margin-bottom-padding-horizontal) + 40px); /* Extra left padding to avoid page number */
     padding-right: var(--margin-bottom-padding-horizontal);
     min-height: 32px;
     position: relative;
@@ -365,6 +352,18 @@ body {
     font-size: var(--font-size-page-number);
     color: var(--color-text-primary);
     font-style: normal;
+}
+
+/* Absolute positioned page number at bottom-left corner */
+.card-page-number-absolute {
+    position: absolute;
+    bottom: 12px;
+    left: 16px;
+    font-size: var(--font-size-page-number);
+    color: var(--color-text-primary);
+    font-style: normal;
+    z-index: 4; /* Above card content (z-index 1-3) but below fold effects (z-index 5) */
+    pointer-events: none; /* Don't interfere with margin interactions */
 }
 
 /* Corner handles for rotation/scaling */
@@ -633,6 +632,61 @@ body {
 
 .card-link:hover {
     color: var(--color-link-hover);
+}
+
+/* Jump links - intra-card navigation */
+.jump-link {
+    cursor: pointer;
+    font-weight: normal;
+    font-style: normal;
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+    padding: 1px 3px;
+    border-radius: 2px;
+}
+
+.jump-link:hover {
+    color: var(--color-link-hover);
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Superscript jump symbols */
+sup.jump-link {
+    font-size: 0.7em;
+    vertical-align: super;
+    padding: 0;
+    margin-left: 2px;
+}
+
+/* Superscript arrows within jump links */
+.jump-link sup {
+    font-size: 0.5em;
+    vertical-align: super;
+}
+
+/* Jump target highlight effect */
+.jump-target-highlight {
+    background-color: var(--jump-highlight-color);
+    border-radius: 2px;
+    transition: background-color 0.2s ease-in;
+    animation: jump-pulse 0.4s ease-out;
+}
+
+.jump-target-highlight.fade-out {
+    background-color: transparent;
+    transition: background-color var(--jump-highlight-fade-duration) ease-out;
+}
+
+/* Eye-catching pulse animation */
+@keyframes jump-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.2);
+    }
+    100% {
+        transform: scale(1);
+    }
 }
 
 .card-content img {
@@ -1136,6 +1190,58 @@ body {
 
 .card-tag:hover {
     color: var(--color-text-secondary);
+}
+
+/* Bibliography and Citation Styles */
+.bibliography {
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+}
+
+.bibliography h3 {
+    font-size: var(--font-size-h3);
+    font-weight: var(--font-weight-h3);
+    margin-bottom: 12px;
+    color: var(--color-text-primary);
+}
+
+.bibliography-list {
+    list-style: decimal;
+    margin-left: 20px;
+    margin-bottom: 0;
+}
+
+.bibliography-item {
+    margin-bottom: 8px;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+}
+
+.bibliography-item a {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: normal;
+}
+
+.bibliography-item a:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+.citation-url {
+    color: var(--color-text-secondary);
+    font-size: 0.9em;
+    font-style: italic;
+}
+
+.citation-link {
+    cursor: pointer;
+    transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.citation-link:hover {
+    color: var(--color-link-hover);
 }
 
 /* Responsive adjustments */

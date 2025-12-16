@@ -328,7 +328,8 @@ class PaperCanvas {
                     height: previewSize,
                     rotation: 0,
                     marginTB: 8,
-                    marginLR: 8
+                    marginLR: 8,
+                    isPreview: true  // Mark as preview to avoid incrementing page counter
                 });
 
                 // Check if this load is still valid
@@ -474,6 +475,21 @@ class PaperCanvas {
                 jitter: 50 // Add some additional jitter on top
             });
         });
+
+        // Handle jump link clicks for intra-card navigation
+        this.canvas.addEventListener('click', (e) => {
+            const jumpLink = e.target.closest('.jump-link');
+
+            if (jumpLink) {
+                e.preventDefault();
+                const targetId = jumpLink.dataset.jumpTarget;
+                const sourceCard = jumpLink.closest('.card');
+
+                if (sourceCard && targetId) {
+                    this.jumpToAnchor(sourceCard, targetId);
+                }
+            }
+        });
     }
 
     clearPreviewCard() {
@@ -528,6 +544,12 @@ class PaperCanvas {
     getNextPageNumber() {
         this.pageCounter++;
         return String(this.pageCounter).padStart(2, '0');
+    }
+
+    // Get page number for preview cards without incrementing the counter
+    getPreviewPageNumber() {
+        const nextNumber = this.pageCounter + 1;
+        return String(nextNumber).padStart(2, '0');
     }
 
     applyJitter(value, jitter) {
@@ -1024,8 +1046,8 @@ class PaperCanvas {
             y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
         }
 
-        // Assign incrementing page number
-        const pageNumber = this.getNextPageNumber();
+        // Assign page number - use preview numbering if this is a preview card
+        const pageNumber = positionOptions.isPreview ? this.getPreviewPageNumber() : this.getNextPageNumber();
 
         // Check if this is an image card
         const isImageCard = parsed.metadata.image ? true : false;
@@ -1235,6 +1257,9 @@ class PaperCanvas {
         if (key === 'showPreviews' && !value) {
             this.clearPreviewCard();
         }
+
+        // Sync all settings cards to reflect the change
+        this.syncAllSettingsCards();
     }
 
     // Execute a registered action
@@ -1349,6 +1374,16 @@ class PaperCanvas {
         });
     }
 
+    /**
+     * Sync all settings cards with current setting values
+     */
+    syncAllSettingsCards() {
+        const allSettingsCards = document.querySelectorAll('.card[data-settings-card]');
+        allSettingsCards.forEach(cardElement => {
+            this.syncInteractiveElements(cardElement);
+        });
+    }
+
     applySettings() {
         // Theme
         if (this.settings.theme === 'dark') {
@@ -1363,15 +1398,11 @@ class PaperCanvas {
         // Line height
         document.documentElement.style.setProperty('--line-height-base', this.settings.lineHeight);
 
-        // Card shadow
-        if (!this.settings.cardShadow) {
-            document.documentElement.style.setProperty('--card-shadow-opacity', '0');
-        } else {
-            document.documentElement.style.removeProperty('--card-shadow-opacity');
-        }
-
         // Handle visibility
         this.updateHandleVisibility();
+
+        // Card shadows (handled via direct style updates)
+        this.updateCardShadows();
     }
 
     saveSetting(key, value) {
@@ -1381,24 +1412,22 @@ class PaperCanvas {
     }
 
     async openSettingsCard() {
-        // Check if settings card already exists
-        const existingSettings = document.querySelector('.card[data-settings-card]');
-        if (existingSettings) {
-            // Bring existing card to front
-            const card = this.cards.get(existingSettings.id);
-            if (card) card.bringToFront();
-            return;
-        }
-
-        // Calculate position further from the corner
+        // Calculate position further from the corner with some jitter for multiple cards
         const btnRect = document.getElementById('settings-btn').getBoundingClientRect();
-        const x = (btnRect.left + 100 - this.panX) / this.zoom;
-        const y = (btnRect.top - 450 - this.panY) / this.zoom;
+        const baseX = (btnRect.left + 100 - this.panX) / this.zoom;
+        const baseY = (btnRect.top - 450 - this.panY) / this.zoom;
+
+        // Add some jitter so multiple settings cards don't stack exactly
+        const jitterX = (Math.random() - 0.5) * 100;
+        const jitterY = (Math.random() - 0.5) * 100;
+
+        const x = baseX + jitterX;
+        const y = Math.max(40, baseY + jitterY);
 
         // Load settings card from file
         const card = await this.loadCardFromFile('settings', {
             x: x,
-            y: Math.max(40, y)
+            y: y
         });
 
         if (card) {
@@ -1591,6 +1620,9 @@ class PaperCanvas {
         this.applySettings();
         this.updateCardShadows();
         this.updateHandleVisibility();
+
+        // Sync all settings cards to reflect the reset
+        this.syncAllSettingsCards();
     }
 
     // Export all cards to JSON
@@ -1619,6 +1651,307 @@ class PaperCanvas {
         }
     }
 
+    /**
+     * Generic jump-to system for intra-card navigation
+     * Handles jumping to anchors in main content or margins with proper scrolling
+     * @param {Element|string} cardElementOrId - Card DOM element or card ID for cross-card jumps
+     * @param {string} targetId - The anchor ID to jump to
+     */
+    jumpToAnchor(cardElementOrId, targetId) {
+        let cardElement;
+
+        // Handle both card element and card ID for future extensibility
+        if (typeof cardElementOrId === 'string') {
+            // Cross-card jump (future feature)
+            const card = this.cards.get(cardElementOrId);
+            if (!card) {
+                console.warn(`Card "${cardElementOrId}" not found for jump`);
+                return;
+            }
+            cardElement = card.element;
+        } else {
+            // Intra-card jump (current implementation)
+            cardElement = cardElementOrId;
+        }
+
+        // Find the target anchor element within the card
+        const targetElement = cardElement.querySelector(`[data-anchor-id="${targetId}"]`);
+
+        if (!targetElement) {
+            console.warn(`Jump target "${targetId}" not found in card`);
+            return;
+        }
+
+        // Determine which container the target is in and scroll accordingly
+        const container = this.findScrollableContainer(targetElement);
+
+        if (!container) {
+            console.warn(`No scrollable container found for target "${targetId}"`);
+            return;
+        }
+
+        // If target is in a margin, we need to scroll both the margin container AND the main content
+        if (container.type === 'margin-content') {
+            // First, scroll within the margin container to center the target
+            const targetPosition = this.calculateTargetPosition(targetElement, container);
+            this.smoothScrollTo(container, targetPosition);
+
+            // Then, scroll the main content area to bring the margin area into view
+            const mainContent = cardElement.querySelector('.card-content');
+            if (mainContent) {
+                // Calculate where the margin area appears relative to the main content
+                const marginItem = targetElement.closest('.margin-item');
+                if (marginItem) {
+                    // Get the vertical position of the margin item
+                    const marginRect = marginItem.getBoundingClientRect();
+                    const mainContentRect = mainContent.getBoundingClientRect();
+
+                    // Calculate the margin's center position relative to main content scroll area
+                    const marginCenterY = marginRect.top + marginRect.height / 2 - mainContentRect.top + mainContent.scrollTop;
+                    const mainContentHeight = mainContent.clientHeight;
+
+                    // Calculate scroll position to center the margin area in main content
+                    const mainScrollTarget = marginCenterY - (mainContentHeight / 2);
+
+                    const mainContainer = {
+                        element: mainContent,
+                        type: 'main-content',
+                        scrollDirection: 'vertical'
+                    };
+
+                    // Smooth scroll the main content to center the margin area
+                    this.smoothScrollTo(mainContainer, Math.max(0, mainScrollTarget));
+                }
+            }
+        } else {
+            // Target is in main content, scroll normally
+            const targetPosition = this.calculateTargetPosition(targetElement, container);
+            this.smoothScrollTo(container, targetPosition);
+        }
+
+        // Add highlight effect to the target element
+        this.highlightJumpTarget(targetElement);
+    }
+
+    /**
+     * Highlight the jump target element briefly
+     */
+    highlightJumpTarget(targetElement) {
+        // Get highlight duration from CSS custom property
+        const styles = getComputedStyle(document.documentElement);
+        const durationStr = styles.getPropertyValue('--jump-highlight-duration').trim();
+
+        // Parse duration - handle both "5000ms" and "5000" formats
+        let duration = 2000; // Default
+        if (durationStr) {
+            const numericValue = parseFloat(durationStr.replace(/ms$/, ''));
+            if (!isNaN(numericValue)) {
+                duration = numericValue;
+            }
+        }
+
+        // Calculate when to start fade-out (60% through the total duration)
+        const fadeStartDelay = duration * 0.6;
+
+        // Clear any existing highlight
+        targetElement.classList.remove('jump-target-highlight', 'fade-out');
+
+        // Add highlight class
+        targetElement.classList.add('jump-target-highlight');
+
+        // Start fade out after staying visible for 60% of the duration
+        setTimeout(() => {
+            targetElement.classList.add('fade-out');
+        }, fadeStartDelay);
+
+        // Remove all highlight classes after the full duration
+        setTimeout(() => {
+            targetElement.classList.remove('jump-target-highlight', 'fade-out');
+        }, duration);
+    }
+
+    /**
+     * Find the scrollable container for a target element
+     * Returns the container element and its type
+     */
+    findScrollableContainer(targetElement) {
+        // Check if target is in main content
+        const mainContent = targetElement.closest('.card-content');
+        if (mainContent) {
+            return {
+                element: mainContent,
+                type: 'main-content',
+                scrollDirection: 'vertical'
+            };
+        }
+
+        // Check if target is in a margin item content
+        const scrollableContent = targetElement.closest('.margin-item-content');
+        if (scrollableContent) {
+            const marginItem = scrollableContent.closest('.margin-item');
+            const marginElement = scrollableContent.closest('.card-margin');
+            if (marginElement && marginItem) {
+                // Check orientation on the margin item (parent of margin-item-content)
+                const isVerticalText = marginItem.classList.contains('margin-orientation-vertical');
+                const isHorizontalText = marginItem.classList.contains('margin-orientation-horizontal');
+
+                let scrollDirection = 'vertical';
+                if (isVerticalText && !isHorizontalText) {
+                    scrollDirection = 'horizontal';
+                } else if (isHorizontalText) {
+                    scrollDirection = 'vertical';
+                }
+
+                return {
+                    element: scrollableContent,
+                    type: 'margin-content',
+                    scrollDirection: scrollDirection,
+                    marginSide: this.getMarginSide(marginElement)
+                };
+            }
+        }
+
+        // Fallback: check if target is in a margin but not in scrollable content
+        const marginElement = targetElement.closest('.card-margin');
+        if (marginElement) {
+            // Find the scrollable content within the margin that contains the target
+            const allScrollableContent = marginElement.querySelectorAll('.margin-item-content');
+
+            for (const content of allScrollableContent) {
+                if (content.contains(targetElement)) {
+                    const marginItem = content.closest('.margin-item');
+
+                    // Check orientation on the margin item
+                    const isVerticalText = marginItem && marginItem.classList.contains('margin-orientation-vertical');
+                    const isHorizontalText = marginItem && marginItem.classList.contains('margin-orientation-horizontal');
+
+                    let scrollDirection = 'vertical';
+                    if (isVerticalText && !isHorizontalText) {
+                        scrollDirection = 'horizontal';
+                    } else if (isHorizontalText) {
+                        scrollDirection = 'vertical';
+                    }
+
+                    return {
+                        element: content,
+                        type: 'margin-content',
+                        scrollDirection: scrollDirection,
+                        marginSide: this.getMarginSide(marginElement)
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Determine which margin side an element belongs to
+     */
+    getMarginSide(marginElement) {
+        if (marginElement.classList.contains('card-margin-left')) return 'left';
+        if (marginElement.classList.contains('card-margin-right')) return 'right';
+        if (marginElement.classList.contains('card-margin-top')) return 'top';
+        if (marginElement.classList.contains('card-margin-bottom')) return 'bottom';
+        return 'unknown';
+    }
+
+    /**
+     * Calculate the target scroll position within a container to center the target
+     */
+    calculateTargetPosition(targetElement, container) {
+        if (container.scrollDirection === 'vertical') {
+            // Calculate the target's position relative to the container's scroll area
+            let targetOffsetTop = 0;
+            let element = targetElement;
+
+            // Walk up the DOM tree accumulating offsets until we reach the container
+            while (element && element !== container.element) {
+                targetOffsetTop += element.offsetTop;
+                element = element.offsetParent;
+
+                // If we hit the container during the walk, break
+                if (element === container.element) {
+                    break;
+                }
+            }
+
+            // If we didn't find the container via offsetParent, use direct calculation
+            if (element !== container.element) {
+                const containerRect = container.element.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                targetOffsetTop = targetRect.top - containerRect.top + container.element.scrollTop;
+            }
+
+            // Center the target in the visible area
+            const containerHeight = container.element.clientHeight;
+            const targetHeight = targetElement.offsetHeight || 0;
+
+            // Calculate scroll position to center the target
+            const centeredPosition = targetOffsetTop - (containerHeight / 2) + (targetHeight / 2);
+            return Math.max(0, centeredPosition);
+        } else {
+            // Calculate the target's position relative to the container's scroll area (horizontal)
+            let targetOffsetLeft = 0;
+            let element = targetElement;
+
+            // Walk up the DOM tree accumulating offsets until we reach the container
+            while (element && element !== container.element) {
+                targetOffsetLeft += element.offsetLeft;
+                element = element.offsetParent;
+
+                // If we hit the container during the walk, break
+                if (element === container.element) {
+                    break;
+                }
+            }
+
+            // If we didn't find the container via offsetParent, use direct calculation
+            if (element !== container.element) {
+                const containerRect = container.element.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                targetOffsetLeft = targetRect.left - containerRect.left + container.element.scrollLeft;
+            }
+
+            // Center the target in the visible area
+            const containerWidth = container.element.clientWidth;
+            const targetWidth = targetElement.offsetWidth || 0;
+
+            // Calculate scroll position to center the target
+            const centeredPosition = targetOffsetLeft - (containerWidth / 2) + (targetWidth / 2);
+            return Math.max(0, centeredPosition);
+        }
+    }
+
+    /**
+     * Perform smooth scrolling to a target position
+     */
+    smoothScrollTo(container, targetPosition) {
+        const element = container.element;
+        const scrollProperty = container.scrollDirection === 'vertical' ? 'scrollTop' : 'scrollLeft';
+        const startPosition = element[scrollProperty];
+        const distance = targetPosition - startPosition;
+        const duration = 500; // 500ms animation
+        const startTime = performance.now();
+
+        // Easing function (ease-out cubic)
+        const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easedProgress = easeOutCubic(progress);
+
+            element[scrollProperty] = startPosition + (distance * easedProgress);
+
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+
+        requestAnimationFrame(animate);
+    }
+
 
 }
 
@@ -1631,4 +1964,9 @@ window.paperCanvas = app;
 // Helper to load a card programmatically
 window.openCard = (cardName, options = {}) => {
     return app.loadCardFromFile(cardName, options);
+};
+
+// Helper to jump to an anchor within a card (for debugging and future extensions)
+window.jumpToAnchor = (cardElementOrId, targetId) => {
+    return app.jumpToAnchor(cardElementOrId, targetId);
 };

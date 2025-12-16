@@ -138,6 +138,11 @@
     /* Preview card timing */
     --preview-delay: 700ms;        /* How long to hover before preview appears */
     --preview-linger: 750ms;       /* How long preview stays after mouse leaves link */
+
+    /* Jump highlight timing */
+    --jump-highlight-duration: 2000ms;  /* How long jump targets stay highlighted */
+    --jump-highlight-color: rgba(255, 255, 0, 0.4);  /* Yellow highlight for visibility */
+    --jump-highlight-fade-duration: calc(var(--jump-highlight-duration) * 0.4);  /* Fade out duration (40% of total) */
 }
 
 /* ============================================
@@ -170,6 +175,9 @@
     --fold-gradient-mid3: #525252;
     --fold-gradient-mid4: #5a5a5a;
     --fold-gradient-end: #626262;
+
+    /* Jump highlight color for dark mode */
+    --jump-highlight-color: rgba(255, 255, 100, 0.5);  /* Bright yellow highlight for dark mode */
 }
 
 /* ============================================
