@@ -1,6 +1,117 @@
 import { Card } from './Card.js';
 import { MarkdownParser } from './MarkdownParser.js';
 
+/**
+ * FileWatcherClient - Connects to WebSocket server for live markdown updates
+ */
+class FileWatcherClient {
+    constructor(paperCanvas) {
+        this.canvas = paperCanvas;
+        this.ws = null;
+        this.watchedFiles = new Set();
+        this.reconnectDelay = 1000;
+        this.maxReconnectDelay = 30000;
+        this.connected = false;
+        this.enabled = true;
+    }
+
+    connect() {
+        if (!this.enabled) return;
+
+        // WebSocket server runs on HTTP port + 1
+        const port = location.port || '8000';
+        const wsPort = parseInt(port) + 1;
+        const wsUrl = `ws://${location.hostname || 'localhost'}:${wsPort}`;
+
+        console.log(`Live-reload: Connecting to ${wsUrl}...`);
+
+        try {
+            this.ws = new WebSocket(wsUrl);
+        } catch (e) {
+            console.log('Live-reload: WebSocket not available -', e.message);
+            this.enabled = false;
+            return;
+        }
+
+        this.ws.onopen = () => {
+            this.connected = true;
+            this.reconnectDelay = 1000;
+            console.log('Live-reload: Connected');
+
+            // Re-subscribe to watched files after reconnect
+            this.watchedFiles.forEach(file => {
+                this.sendWatch(file);
+            });
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'update') {
+                    this.handleFileUpdate(data.file, data.content);
+                }
+            } catch (e) {
+                console.error('Live-reload: Error parsing message', e);
+            }
+        };
+
+        this.ws.onclose = (event) => {
+            if (this.connected) {
+                console.log('Live-reload: Disconnected, reconnecting...');
+            } else {
+                console.log(`Live-reload: Connection failed (code: ${event.code})`);
+            }
+            this.connected = false;
+
+            // Exponential backoff reconnection
+            if (this.enabled) {
+                setTimeout(() => this.connect(), this.reconnectDelay);
+                this.reconnectDelay = Math.min(
+                    this.reconnectDelay * 2,
+                    this.maxReconnectDelay
+                );
+            }
+        };
+
+        this.ws.onerror = (error) => {
+            console.log('Live-reload: WebSocket error', error);
+        };
+    }
+
+    sendWatch(fileName) {
+        if (this.connected && this.ws) {
+            this.ws.send(JSON.stringify({
+                type: 'watch',
+                file: fileName
+            }));
+        }
+    }
+
+    watch(fileName) {
+        if (!fileName || this.watchedFiles.has(fileName)) return;
+
+        this.watchedFiles.add(fileName);
+        this.sendWatch(fileName);
+    }
+
+    unwatch(fileName) {
+        if (!fileName || !this.watchedFiles.has(fileName)) return;
+
+        this.watchedFiles.delete(fileName);
+        if (this.connected && this.ws) {
+            this.ws.send(JSON.stringify({
+                type: 'unwatch',
+                file: fileName
+            }));
+        }
+    }
+
+    handleFileUpdate(fileName, content) {
+        // Find all cards displaying this file and update them
+        this.canvas.updateCardsWithFile(fileName, content);
+    }
+}
+
 class PaperCanvas {
     constructor() {
         this.canvas = document.getElementById('canvas');
@@ -40,6 +151,9 @@ class PaperCanvas {
         // Default card placement
         this.defaultOffset = { x: 100, y: 100 };
 
+        // Live-reload file watcher
+        this.fileWatcher = new FileWatcherClient(this);
+
         this.init();
     }
 
@@ -47,6 +161,9 @@ class PaperCanvas {
         this.bindCanvasEvents();
         this.initSettings();
         this.initConnectionsLayer();
+
+        // Connect to live-reload WebSocket server
+        this.fileWatcher.connect();
 
         // Build comprehensive tag index from all files first
         await this.buildGlobalTagIndex();
@@ -214,6 +331,22 @@ class PaperCanvas {
         // Handle card deletion
         this.canvas.addEventListener('card-delete', (e) => {
             const cardId = e.detail.cardId;
+            const card = this.cards.get(cardId);
+
+            // Cleanup file watcher if no other cards display this file
+            if (card && card.sourceFile && !card.isDynamic) {
+                const sourceFile = card.sourceFile;
+                // Count cards displaying this file (excluding the one being deleted)
+                let count = 0;
+                this.cards.forEach(c => {
+                    if (c.id !== cardId && c.sourceFile === sourceFile) {
+                        count++;
+                    }
+                });
+                if (count === 0) {
+                    this.fileWatcher.unwatch(sourceFile);
+                }
+            }
 
             // Remove connections for this card
             this.removeConnectionsForCard(cardId);
@@ -777,6 +910,40 @@ class PaperCanvas {
         return card;
     }
 
+    /**
+     * Get all cards displaying content from a specific source file
+     */
+    getCardsDisplayingFile(fileName) {
+        const matchingCards = [];
+        this.cards.forEach(card => {
+            if (card.sourceFile === fileName) {
+                matchingCards.push(card);
+            }
+        });
+        return matchingCards;
+    }
+
+    /**
+     * Update all cards displaying a file with new content (for live-reload)
+     */
+    updateCardsWithFile(fileName, markdownContent) {
+        const cards = this.getCardsDisplayingFile(fileName);
+        if (cards.length === 0) return;
+
+        // Parse the new content
+        const parsed = this.parser.parse(markdownContent);
+        if (!parsed) return;
+
+        // Update each card while preserving state
+        cards.forEach(card => {
+            card.setContent(parsed);
+            // Re-bind interactive elements after content update
+            this.bindInteractiveElements(card.element);
+        });
+
+        console.log(`Live-reload: Updated ${cards.length} card(s) displaying "${fileName}"`);
+    }
+
     // Content provider system - abstraction layer for card content
     async getCardContent(cardName) {
         // Check if this is a dynamic content provider
@@ -1098,6 +1265,11 @@ class PaperCanvas {
         } else if (contentData.dynamicSourceCard) {
             // For dynamic cards that have a source card reference
             this.addConnection(contentData.dynamicSourceCard, card);
+        }
+
+        // Register this file for live-reload watching (skip dynamic content)
+        if (!contentData.isDynamic && contentData.sourceFile) {
+            this.fileWatcher.watch(contentData.sourceFile);
         }
 
         return card;

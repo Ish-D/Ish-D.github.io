@@ -2,3 +2,4 @@
 /rectangle-editor/dist
 /rectangle-editor/node_modules
 /rectangle-editor/node_modules
+/__pycache__

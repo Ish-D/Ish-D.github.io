@@ -48,6 +48,10 @@ export class Card {
         this.tags = options.tags || [];
         this.showTags = options.showTags || false;
 
+        // Source file tracking (for live-reload)
+        this.sourceFile = options.sourceFile || null;
+        this.isDynamic = options.isDynamic || false;
+
         // State
         this.isDragging = false;
         this.isRotating = false;
@@ -1314,17 +1318,108 @@ export class Card {
         this.element.remove();
     }
 
-    setContent(html) {
-        this.content = html;
+    /**
+     * Update card content with new parsed data (for live-reload)
+     * @param {Object|string} parsed - Either parsed object {content, margins, metadata} or HTML string
+     */
+    setContent(parsed) {
         const contentEl = this.element.querySelector('.card-content');
-        if (contentEl) {
-            contentEl.innerHTML = html;
+        if (!contentEl) return;
 
-            // Render LaTeX in updated content
-            requestAnimationFrame(() => {
-                this.renderLaTeX();
-            });
+        // Handle both string (legacy) and object (new) formats
+        const isFullUpdate = typeof parsed === 'object' && parsed !== null;
+        const newContent = isFullUpdate ? parsed.content : parsed;
+        const newMargins = isFullUpdate ? parsed.margins : null;
+
+        // Preserve scroll position (as percentage for content length changes)
+        const scrollTop = contentEl.scrollTop;
+        const scrollHeight = contentEl.scrollHeight - contentEl.clientHeight;
+        const scrollPercent = scrollHeight > 0 ? scrollTop / scrollHeight : 0;
+
+        // Update main content
+        this.content = newContent;
+        contentEl.innerHTML = newContent;
+
+        // Update margins if provided
+        if (newMargins) {
+            this.margins = newMargins;
+            this.updateMargins(newMargins);
         }
+
+        // Restore scroll, re-render, and update
+        requestAnimationFrame(() => {
+            // Restore scroll position proportionally
+            const newScrollHeight = contentEl.scrollHeight - contentEl.clientHeight;
+            if (newScrollHeight > 0) {
+                contentEl.scrollTop = scrollPercent * newScrollHeight;
+            }
+
+            // Re-render LaTeX
+            this.renderLaTeX();
+
+            // Update relative margins
+            this.updateRelativeMargins();
+
+            // Update progress bar if enabled
+            this.updateProgressBar();
+        });
+    }
+
+    /**
+     * Update margin elements with new content
+     * @param {Object} margins - Margins object with left, right, top, bottom arrays
+     */
+    updateMargins(margins) {
+        ['left', 'right', 'top', 'bottom'].forEach(side => {
+            const marginEl = this.element.querySelector(`.card-margin-${side}`);
+            if (!marginEl) return;
+
+            const items = margins[side] || [];
+
+            // Clear existing content (but preserve page number for bottom margin)
+            const pageNumEl = marginEl.querySelector('.page-number');
+            marginEl.innerHTML = '';
+
+            // Separate items by type
+            const absoluteItems = items.filter(item => item.type !== 'relative');
+            const relativeItems = items.filter(item => item.type === 'relative');
+
+            // Rebuild absolute container
+            if (absoluteItems.length > 0) {
+                const absoluteContainer = document.createElement('div');
+                absoluteContainer.className = 'margin-absolute-container';
+                absoluteItems.forEach(item => {
+                    absoluteContainer.innerHTML += this.renderMarginItem(item, 'absolute', side);
+                });
+                marginEl.appendChild(absoluteContainer);
+            }
+
+            // Rebuild relative container
+            if (relativeItems.length > 0) {
+                const relativeContainer = document.createElement('div');
+                relativeContainer.className = 'margin-relative-container';
+                relativeItems.forEach(item => {
+                    relativeContainer.innerHTML += this.renderMarginItem(item, 'relative', side);
+                });
+                marginEl.appendChild(relativeContainer);
+            }
+
+            // Re-add page number if it existed (bottom margin)
+            if (pageNumEl) {
+                marginEl.appendChild(pageNumEl);
+            }
+        });
+
+        // Re-bind margin resize handlers
+        this.element.querySelectorAll('.margin-item-resize-handle').forEach(handle => {
+            handle.addEventListener('mousedown', this.onMarginItemResizeStart.bind(this));
+            handle.addEventListener('touchstart', this.onMarginItemResizeTouchStart.bind(this), { passive: false });
+        });
+
+        // Re-bind vertical margin wheel handlers
+        this.element.querySelectorAll('.margin-orientation-vertical .margin-item-content').forEach(content => {
+            content.addEventListener('wheel', this.onVerticalMarginWheel.bind(this), { passive: false });
+        });
     }
 
     /**
