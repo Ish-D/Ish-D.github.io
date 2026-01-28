@@ -604,9 +604,18 @@ export class MarkdownParser {
         const label = params.named.label || 'Button';
         const style = params.named.style || '';
 
-        const styleAttr = style === 'full-width'
-            ? 'style="width: 100%; padding: 8px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"'
-            : 'style="padding: 8px 16px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
+        let styleAttr;
+        if (style === 'full-width') {
+            styleAttr = 'style="width: 100%; padding: 8px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
+        } else if (style === 'link') {
+            // Elegant text link style
+            styleAttr = 'style="background: none; border: none; color: var(--color-text-secondary); font-family: inherit; font-size: 0.9em; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 2px;"';
+        } else if (style === 'text') {
+            // Simple text style without underline
+            styleAttr = 'style="background: none; border: none; color: var(--color-text-secondary); font-family: inherit; font-size: 0.9em; cursor: pointer; padding: 4px 0; opacity: 0.8;"';
+        } else {
+            styleAttr = 'style="padding: 8px 16px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
+        }
 
         return `<button class="settings-btn-action" data-action="${action}" ${styleAttr}>${label}</button>`;
     }

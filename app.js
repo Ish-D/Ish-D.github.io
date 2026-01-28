@@ -167,14 +167,34 @@ class PaperCanvas {
         this.fsManager = null;
         this.editorCards = new Map();
 
+        // State persistence
+        this.saveDebounceTimer = null;
+        this.SAVE_DEBOUNCE_MS = 1000; // 1 second debounce
+        this.isRestoring = false; // Flag to prevent saves during restoration
+
         this.init();
     }
 
     async init() {
+        // Check if this is a hard refresh (flag set before reload)
+        if (sessionStorage.getItem('paper-canvas-hard-refresh')) {
+            sessionStorage.removeItem('paper-canvas-hard-refresh');
+            localStorage.removeItem('paper-canvas-state');
+        }
+
         this.bindCanvasEvents();
         this.initSettings();
         this.initConnectionsLayer();
         this.initEditor();
+
+        // Listen for hard refresh (Ctrl+Shift+R / Cmd+Shift+R) to clear saved state
+        window.addEventListener('keydown', (e) => {
+            const isHardRefresh = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r');
+            if (isHardRefresh) {
+                // Set flag that will persist through the refresh
+                sessionStorage.setItem('paper-canvas-hard-refresh', 'true');
+            }
+        });
 
         // Connect to live-reload WebSocket server
         this.fileWatcher.connect();
@@ -184,10 +204,13 @@ class PaperCanvas {
 
         this.initContentProviders(); // Initialize the content provider system
 
-        // Check URL for direct card routing
+        // Check URL for direct card routing (takes priority over saved state)
         const cardName = this.getCardNameFromURL();
 
         if (cardName) {
+            // URL specifies a card - clear any saved state and load that card
+            localStorage.removeItem('paper-canvas-state');
+
             // Reset canvas view
             this.panX = 0;
             this.panY = 0;
@@ -203,8 +226,16 @@ class PaperCanvas {
                 await this.loadMenuCard();
             }
         } else {
-            // No card specified, load the menu
-            await this.loadMenuCard();
+            // No URL card specified - try to restore saved state
+            const savedState = this.loadSavedState();
+
+            if (savedState && savedState.cards && savedState.cards.length > 0) {
+                // Restore saved canvas state
+                await this.restoreCanvasState(savedState);
+            } else {
+                // No saved state, load the menu
+                await this.loadMenuCard();
+            }
         }
     }
 
@@ -657,6 +688,11 @@ class PaperCanvas {
                 }
             }
         });
+
+        // Listen for card state changes (from Card.js events)
+        this.canvas.addEventListener('card-state-changed', () => {
+            this.scheduleSave();
+        });
     }
 
     clearPreviewCard() {
@@ -910,6 +946,8 @@ class PaperCanvas {
         if (this.canvasContent) {
             this.canvasContent.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoom}) rotate(${this.rotation}deg)`;
         }
+        // Schedule state save for canvas transform changes
+        this.scheduleSave();
     }
 
     addCard(options) {
@@ -932,6 +970,9 @@ class PaperCanvas {
 
         // Bind any interactive elements in this card
         this.bindInteractiveElements(card.element);
+
+        // Schedule state save
+        this.scheduleSave();
 
         return card;
     }
@@ -1694,7 +1735,8 @@ class PaperCanvas {
 
         // Register actions that can be called by buttons
         this.actions = {
-            resetSettings: () => this.resetSettings()
+            resetSettings: () => this.resetSettings(),
+            clearPage: () => this.clearPage()
         };
 
         // Apply saved settings immediately
@@ -2096,6 +2138,9 @@ class PaperCanvas {
 
         // Update position immediately
         this.updateConnectionLine(parentId, childId);
+
+        // Schedule state save
+        this.scheduleSave();
     }
 
     createConnectionLine(parentId, childId) {
@@ -2213,6 +2258,41 @@ class PaperCanvas {
         this.syncAllSettingsCards();
     }
 
+    /**
+     * Clear all cards and reset the canvas to initial state
+     */
+    clearPage() {
+        // Clear saved state from localStorage
+        localStorage.removeItem('paper-canvas-state');
+
+        // Remove all cards
+        this.cards.forEach((card, id) => {
+            this.removeConnectionsForCard(id);
+            card.element.remove();
+        });
+        this.cards.clear();
+
+        // Clear connections
+        this.connections.clear();
+        if (this.connectionsSvg) {
+            this.connectionsSvg.querySelectorAll('.connection-line').forEach(line => line.remove());
+        }
+
+        // Reset canvas transform
+        this.panX = 0;
+        this.panY = 0;
+        this.zoom = 1;
+        this.rotation = 0;
+        this.updateCanvasTransform();
+
+        // Reset counters
+        this.pageCounter = 0;
+        this.zIndexCounter = 1000;
+
+        // Load fresh menu
+        this.loadMenuCard();
+    }
+
     // Export all cards to JSON
     exportCards() {
         const cardsArray = [];
@@ -2236,6 +2316,381 @@ class PaperCanvas {
 
             // Remove DOM element
             card.element.remove();
+
+            // Schedule state save
+            this.scheduleSave();
+        }
+    }
+
+    /**
+     * Schedule a debounced save of canvas state
+     */
+    scheduleSave() {
+        // Don't save during restoration
+        if (this.isRestoring) return;
+
+        if (this.saveDebounceTimer) {
+            clearTimeout(this.saveDebounceTimer);
+        }
+        this.saveDebounceTimer = setTimeout(() => {
+            this.saveCanvasState();
+        }, this.SAVE_DEBOUNCE_MS);
+    }
+
+    /**
+     * Save the complete canvas state to localStorage
+     */
+    saveCanvasState() {
+        const state = {
+            version: 1,
+            savedAt: Date.now(),
+            canvas: {
+                panX: this.panX,
+                panY: this.panY,
+                zoom: this.zoom,
+                rotation: this.rotation
+            },
+            counters: {
+                pageCounter: this.pageCounter,
+                zIndexCounter: this.zIndexCounter
+            },
+            cards: [],
+            connections: []
+        };
+
+        // Serialize cards (skip preview cards)
+        this.cards.forEach(card => {
+            if (card.element.classList.contains('card-preview')) return;
+            state.cards.push(card.toJSON());
+        });
+
+        // Serialize connections (Map<string, Set<string>> -> Array)
+        this.connections.forEach((children, parentId) => {
+            children.forEach(childId => {
+                state.connections.push({ parent: parentId, child: childId });
+            });
+        });
+
+        try {
+            localStorage.setItem('paper-canvas-state', JSON.stringify(state));
+        } catch (e) {
+            console.error('Failed to save canvas state:', e);
+        }
+    }
+
+    /**
+     * Load saved canvas state from localStorage
+     * @returns {Object|null} The saved state or null if not found/invalid
+     */
+    loadSavedState() {
+        try {
+            const raw = localStorage.getItem('paper-canvas-state');
+            if (!raw) return null;
+
+            const state = JSON.parse(raw);
+
+            // Validate version
+            if (state.version !== 1) {
+                console.warn('Unsupported canvas state version, clearing...');
+                localStorage.removeItem('paper-canvas-state');
+                return null;
+            }
+
+            return state;
+        } catch (e) {
+            console.error('Failed to load saved state:', e);
+            localStorage.removeItem('paper-canvas-state');
+            return null;
+        }
+    }
+
+    /**
+     * Restore the complete canvas state from saved data
+     * @param {Object} state - The saved state object
+     */
+    async restoreCanvasState(state) {
+        // Prevent saves during restoration
+        this.isRestoring = true;
+
+        try {
+            // 1. Restore canvas transform
+            this.panX = state.canvas.panX;
+            this.panY = state.canvas.panY;
+            this.zoom = state.canvas.zoom;
+            this.rotation = state.canvas.rotation;
+            this.updateCanvasTransform();
+
+            // 2. Restore counters
+            this.pageCounter = state.counters.pageCounter;
+            this.zIndexCounter = state.counters.zIndexCounter;
+
+            // 3. Restore cards
+            const cardIdMap = new Map(); // Map old IDs to new card objects
+            for (const cardState of state.cards) {
+                const card = await this.restoreCard(cardState);
+                if (card) {
+                    cardIdMap.set(cardState.id, card);
+                }
+            }
+
+            // 4. Restore connections
+            for (const conn of state.connections) {
+                const parentCard = cardIdMap.get(conn.parent);
+                const childCard = cardIdMap.get(conn.child);
+                if (parentCard && childCard) {
+                    // Add connection without triggering save
+                    if (!this.connections.has(parentCard.id)) {
+                        this.connections.set(parentCard.id, new Set());
+                    }
+                    this.connections.get(parentCard.id).add(childCard.id);
+                    this.createConnectionLine(parentCard.id, childCard.id);
+                    this.updateConnectionLine(parentCard.id, childCard.id);
+                }
+            }
+
+            // 5. Restore scroll positions (after DOM is ready)
+            requestAnimationFrame(() => {
+                state.cards.forEach(savedCard => {
+                    const card = cardIdMap.get(savedCard.id);
+                    if (card) {
+                        const contentEl = card.element.querySelector('.card-content');
+                        if (contentEl) {
+                            contentEl.scrollTop = savedCard.scrollTop || 0;
+                            contentEl.scrollLeft = savedCard.scrollLeft || 0;
+                        }
+                    }
+                });
+            });
+        } finally {
+            // Re-enable saving after restoration
+            this.isRestoring = false;
+        }
+    }
+
+    /**
+     * Restore a single card from saved state
+     * @param {Object} cardState - The saved card state
+     * @returns {Card|null} The restored card or null
+     */
+    async restoreCard(cardState) {
+        // Skip preview cards (shouldn't be in saved state, but safeguard)
+        if (cardState.id && cardState.id.includes('preview')) return null;
+
+        // Handle encrypted cards that were locked
+        if (cardState.isLocked && cardState.encryptedData) {
+            return this.restoreLockedCard(cardState);
+        }
+
+        // Handle dynamic content (tag pages) - need to re-register provider
+        if (cardState.isDynamic && cardState.sourceFile) {
+            const tagMatch = cardState.sourceFile.match(/^dynamic:tag-(.+)$/);
+            if (tagMatch) {
+                const tagName = tagMatch[1];
+                this.registerTagPage(tagName, null);
+                const cardName = `tag-${tagName}`;
+
+                const card = await this.loadCardFromFile(cardName, {
+                    x: cardState.x,
+                    y: cardState.y,
+                    width: cardState.width,
+                    height: cardState.height,
+                    rotation: cardState.rotation + this.rotation, // Account for canvas rotation
+                    skipSave: true
+                });
+
+                if (card) {
+                    card.id = cardState.id;
+                    card.element.id = cardState.id;
+                    card.pageNumber = cardState.pageNumber;
+                    card.zIndex = cardState.zIndex;
+                    card.element.style.zIndex = cardState.zIndex;
+                    this.cards.delete(card.id);
+                    this.cards.set(cardState.id, card);
+                }
+                return card;
+            }
+
+            // Handle tags overview page
+            if (cardState.sourceFile === 'dynamic:tags-overview') {
+                const card = await this.loadCardFromFile('tags', {
+                    x: cardState.x,
+                    y: cardState.y,
+                    width: cardState.width,
+                    height: cardState.height,
+                    rotation: cardState.rotation + this.rotation,
+                    skipSave: true
+                });
+
+                if (card) {
+                    card.id = cardState.id;
+                    card.element.id = cardState.id;
+                    card.pageNumber = cardState.pageNumber;
+                    card.zIndex = cardState.zIndex;
+                    card.element.style.zIndex = cardState.zIndex;
+                    this.cards.delete(card.id);
+                    this.cards.set(cardState.id, card);
+                }
+                return card;
+            }
+        }
+
+        // Handle file-based cards
+        if (cardState.sourceFile && !cardState.isDynamic) {
+            const card = await this.loadCardFromFile(cardState.sourceFile, {
+                x: cardState.x,
+                y: cardState.y,
+                width: cardState.width,
+                height: cardState.height,
+                rotation: cardState.rotation + this.rotation, // Account for canvas rotation
+                marginTB: cardState.marginTB,
+                marginLR: cardState.marginLR,
+                skipSave: true
+            });
+
+            if (card) {
+                // Update card with preserved state
+                const oldId = card.id;
+                card.id = cardState.id;
+                card.element.id = cardState.id;
+                card.pageNumber = cardState.pageNumber;
+                card.pinned = cardState.pinned;
+                card.zIndex = cardState.zIndex;
+                card.scale = cardState.scale;
+                card.marginLeftSize = cardState.marginLeftSize;
+                card.marginRightSize = cardState.marginRightSize;
+                card.marginTopSize = cardState.marginTopSize;
+                card.marginBottomSize = cardState.marginBottomSize;
+
+                // Apply margin sizes to DOM
+                this.applyMarginSizes(card);
+
+                if (cardState.pinned) {
+                    card.element.classList.add('pinned');
+                }
+                card.element.style.zIndex = cardState.zIndex;
+
+                // Update cards map with correct ID
+                this.cards.delete(oldId);
+                this.cards.set(cardState.id, card);
+            }
+            return card;
+        }
+
+        // Handle embed cards
+        if (cardState.embedUrl) {
+            const card = this.addCard({
+                x: cardState.x,
+                y: cardState.y,
+                width: cardState.width,
+                height: cardState.height,
+                rotation: cardState.rotation,
+                pageNumber: cardState.pageNumber,
+                embedUrl: cardState.embedUrl
+            });
+
+            const oldId = card.id;
+            card.id = cardState.id;
+            card.element.id = cardState.id;
+            card.zIndex = cardState.zIndex;
+            card.element.style.zIndex = cardState.zIndex;
+
+            this.cards.delete(oldId);
+            this.cards.set(cardState.id, card);
+            return card;
+        }
+
+        // Fallback: recreate from saved content
+        const card = this.addCard({
+            x: cardState.x,
+            y: cardState.y,
+            width: cardState.width,
+            height: cardState.height,
+            rotation: cardState.rotation,
+            scale: cardState.scale,
+            pageNumber: cardState.pageNumber,
+            content: cardState.content,
+            margins: cardState.margins,
+            marginTB: cardState.marginTB,
+            marginLR: cardState.marginLR,
+            image: cardState.image,
+            caption: cardState.caption,
+            progressBar: cardState.progressBar,
+            wordCount: cardState.wordCount,
+            readTime: cardState.readTime,
+            tags: cardState.tags,
+            showTags: cardState.showTags
+        });
+
+        const oldId = card.id;
+        card.id = cardState.id;
+        card.element.id = cardState.id;
+        card.pinned = cardState.pinned;
+        card.zIndex = cardState.zIndex;
+        card.element.style.zIndex = cardState.zIndex;
+
+        if (cardState.pinned) {
+            card.element.classList.add('pinned');
+        }
+
+        this.cards.delete(oldId);
+        this.cards.set(cardState.id, card);
+        return card;
+    }
+
+    /**
+     * Restore a locked (encrypted) card
+     * @param {Object} cardState - The saved card state
+     * @returns {Card} The locked card
+     */
+    restoreLockedCard(cardState) {
+        const card = this.createLockedCard(
+            cardState.sourceFile,
+            {
+                isEncrypted: true,
+                encryptedData: cardState.encryptedData,
+                sourceFile: cardState.sourceFile,
+                metadata: {}
+            },
+            {
+                x: cardState.x,
+                y: cardState.y,
+                width: cardState.width,
+                height: cardState.height,
+                rotation: cardState.rotation
+            }
+        );
+
+        if (card) {
+            const oldId = card.id;
+            card.id = cardState.id;
+            card.element.id = cardState.id;
+            card.zIndex = cardState.zIndex;
+            card.element.style.zIndex = cardState.zIndex;
+
+            this.cards.delete(oldId);
+            this.cards.set(cardState.id, card);
+        }
+        return card;
+    }
+
+    /**
+     * Apply saved margin sizes to a card's DOM
+     * @param {Card} card - The card to update
+     */
+    applyMarginSizes(card) {
+        const container = card.element.querySelector('.card-container');
+        if (!container) return;
+
+        if (card.marginLeftSize || card.marginRightSize) {
+            const left = card.marginLeftSize || 100;
+            const right = card.marginRightSize || 100;
+            container.style.gridTemplateColumns = `${left}px 1fr ${right}px`;
+        }
+
+        if (card.marginTopSize || card.marginBottomSize) {
+            const top = card.marginTopSize || 40;
+            const bottom = card.marginBottomSize || 40;
+            container.style.gridTemplateRows = `${top}px 1fr ${bottom}px`;
         }
     }
 

@@ -25,4 +25,4 @@ height: 540
 
 ---
 
-[[button(action: resetSettings, label: Reset to Defaults, style: full-width)]]
+[[button(action: clearPage, label: Clear Page, style: link)]] · [[button(action: resetSettings, label: Reset to Defaults, style: link)]]

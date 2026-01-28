@@ -1664,7 +1664,7 @@ sup.jump-link {
     padding: 4px 8px;
     border: 1px solid var(--color-border);
     border-radius: 4px;
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-serif);
     font-size: 12px;
     background: var(--color-card-background);
     color: var(--color-text-primary);
@@ -1732,7 +1732,7 @@ sup.jump-link {
     padding: 16px;
     border: none;
     resize: none;
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-serif);
     font-size: 13px;
     line-height: 1.6;
     background: var(--color-card-background);
@@ -1870,7 +1870,7 @@ sup.jump-link {
     padding: 16px;
     border: none;
     resize: none;
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-serif);
     font-size: 13px;
     line-height: 1.6;
     background: var(--color-card-background);
@@ -2143,7 +2143,7 @@ sup.jump-link {
     border: 1px solid var(--color-border);
     border-radius: 6px;
     font-size: 14px;
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-serif);
     text-align: center;
     background: var(--color-card-background);
     color: var(--color-text-primary);

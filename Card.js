@@ -977,6 +977,10 @@ export class Card {
     }
 
     onMouseUp(e) {
+        // Track if we had a state-changing operation
+        const hadStateChange = this.isDragging || this.isScaling || this.isRotating ||
+                               this.isResizingMarginItem || this.isResizingMarginArea;
+
         // If we were scaling or rotating, trigger unfold through the state machine
         if (this.isScaling && this.scalingCorner) {
             const corner = this.scalingCorner;
@@ -1016,11 +1020,18 @@ export class Card {
             const activeHandle = this.element.querySelector('.margin-resize-handle.active');
             if (activeHandle) activeHandle.classList.remove('active');
         }
+
+        // Dispatch state change event for persistence
+        if (hadStateChange) {
+            this.element.dispatchEvent(new CustomEvent('card-state-changed', { bubbles: true }));
+        }
     }
 
     onContentScroll(e) {
         this.updateRelativeMargins();
         this.updateReadingStats();
+        // Dispatch state change for scroll position persistence
+        this.element.dispatchEvent(new CustomEvent('card-state-changed', { bubbles: true }));
     }
 
     updateProgressBar() {
@@ -1306,6 +1317,9 @@ export class Card {
 
         const pinBtn = this.element.querySelector('.pin-btn');
         pinBtn.textContent = this.pinned ? '📍' : '📌';
+
+        // Dispatch state change for persistence
+        this.element.dispatchEvent(new CustomEvent('card-state-changed', { bubbles: true }));
     }
 
     delete() {
@@ -1590,6 +1604,8 @@ export class Card {
     }
 
     toJSON() {
+        const contentEl = this.element.querySelector('.card-content');
+
         return {
             id: this.id,
             x: this.x,
@@ -1612,7 +1628,21 @@ export class Card {
             readTime: this.readTime,
             zIndex: this.zIndex,
             tags: this.tags,
-            showTags: this.showTags
+            showTags: this.showTags,
+            // State persistence fields
+            sourceFile: this.sourceFile,
+            isDynamic: this.isDynamic,
+            // User-resized margin areas
+            marginLeftSize: this.marginLeftSize,
+            marginRightSize: this.marginRightSize,
+            marginTopSize: this.marginTopSize,
+            marginBottomSize: this.marginBottomSize,
+            // Scroll position
+            scrollTop: contentEl ? contentEl.scrollTop : 0,
+            scrollLeft: contentEl ? contentEl.scrollLeft : 0,
+            // Encrypted card state
+            isLocked: this.isLocked || false,
+            encryptedData: this.encryptedData || null
         };
     }
 }
