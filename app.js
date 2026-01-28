@@ -1736,7 +1736,8 @@ class PaperCanvas {
         // Register actions that can be called by buttons
         this.actions = {
             resetSettings: () => this.resetSettings(),
-            clearPage: () => this.clearPage()
+            clearPage: () => this.clearPage(),
+            submitContactForm: (button) => this.submitContactForm(button)
         };
 
         // Apply saved settings immediately
@@ -1859,7 +1860,12 @@ class PaperCanvas {
             const action = button.dataset.action;
 
             button.addEventListener('click', () => {
-                this.executeAction(action);
+                // Pass button to action for form context
+                if (this.actions[action]) {
+                    this.actions[action](button);
+                } else {
+                    this.executeAction(action);
+                }
 
                 // Re-sync all interactive elements in this card after action
                 this.syncInteractiveElements(cardElement);
@@ -2291,6 +2297,57 @@ class PaperCanvas {
 
         // Load fresh menu
         this.loadMenuCard();
+    }
+
+    /**
+     * Submit contact form via Formspree
+     * @param {HTMLElement} button - The button that triggered the submit
+     */
+    async submitContactForm(button) {
+        const card = button.closest('.card');
+        const cardContent = card.querySelector('.card-content');
+
+        const nameInput = cardContent.querySelector('input[name="name"]');
+        const subjectInput = cardContent.querySelector('input[name="_subject"]');
+        const messageInput = cardContent.querySelector('textarea[name="message"]');
+
+        if (!nameInput.value.trim() || !messageInput.value.trim()) {
+            // Show error state briefly
+            [nameInput, messageInput].forEach(input => {
+                if (!input.value.trim()) {
+                    input.style.borderColor = '#c41e3a';
+                    setTimeout(() => input.style.borderColor = '', 2000);
+                }
+            });
+            return;
+        }
+
+        const data = {
+            name: nameInput.value,
+            _subject: subjectInput.value || 'Contact Form',
+            message: messageInput.value
+        };
+
+        button.disabled = true;
+        button.textContent = 'Sending...';
+
+        try {
+            const response = await fetch('https://formspree.io/f/mgokjyon', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                // Replace card content with "Sent"
+                cardContent.innerHTML = '<div class="form-success"><p>Sent</p></div>';
+            } else {
+                throw new Error('Failed');
+            }
+        } catch (e) {
+            button.textContent = 'Error - Retry';
+            button.disabled = false;
+        }
     }
 
     // Export all cards to JSON

@@ -160,6 +160,14 @@ export class MarkdownParser {
         return /\[\[button\(([^)]+)\)\]\]/g;
     }
 
+    getInputPattern() {
+        return /\[\[input\(([^)]+)\)\]\]/g;
+    }
+
+    getTextareaPattern() {
+        return /\[\[textarea\(([^)]+)\)\]\]/g;
+    }
+
     getTagsPattern() {
         return /\[\[tags\]\]/g;
     }
@@ -602,22 +610,40 @@ export class MarkdownParser {
         const params = this.parseParams(paramsStr);
         const action = params.named.action || '';
         const label = params.named.label || 'Button';
-        const style = params.named.style || '';
+        const style = params.named.style || 'bordered';
 
-        let styleAttr;
-        if (style === 'full-width') {
-            styleAttr = 'style="width: 100%; padding: 8px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
-        } else if (style === 'link') {
-            // Elegant text link style
-            styleAttr = 'style="background: none; border: none; color: var(--color-text-secondary); font-family: inherit; font-size: 0.9em; cursor: pointer; padding: 4px 0; text-decoration: underline; text-underline-offset: 2px;"';
-        } else if (style === 'text') {
-            // Simple text style without underline
-            styleAttr = 'style="background: none; border: none; color: var(--color-text-secondary); font-family: inherit; font-size: 0.9em; cursor: pointer; padding: 4px 0; opacity: 0.8;"';
+        let classes = 'btn settings-btn-action';
+
+        if (style === 'dotted') {
+            classes += ' btn-dotted';
         } else {
-            styleAttr = 'style="padding: 8px 16px; cursor: pointer; background: var(--color-border); border: none; color: var(--color-text-primary); font-family: inherit;"';
+            // Default to bordered
+            classes += ' btn-bordered';
         }
 
-        return `<button class="settings-btn-action" data-action="${action}" ${styleAttr}>${label}</button>`;
+        return `<button class="${classes}" data-action="${action}">${label}</button>`;
+    }
+
+    /**
+     * Render an input field element
+     */
+    renderInput(paramsStr) {
+        const params = this.parseParams(paramsStr);
+        const name = params.named.name || 'field';
+        const placeholder = params.named.placeholder || '';
+        const type = params.named.type || 'text';
+        return `<input type="${type}" name="${name}" class="form-input" placeholder="${placeholder}">`;
+    }
+
+    /**
+     * Render a textarea element
+     */
+    renderTextarea(paramsStr) {
+        const params = this.parseParams(paramsStr);
+        const name = params.named.name || 'message';
+        const placeholder = params.named.placeholder || '';
+        const rows = params.named.rows || '6';
+        return `<textarea name="${name}" class="form-textarea" placeholder="${placeholder}" rows="${rows}"></textarea>`;
     }
 
     /**
@@ -729,6 +755,14 @@ export class MarkdownParser {
 
         html = html.replace(this.getButtonPattern(), (match, params) => {
             return this.renderButton(params);
+        });
+
+        html = html.replace(this.getInputPattern(), (match, params) => {
+            return this.renderInput(params);
+        });
+
+        html = html.replace(this.getTextareaPattern(), (match, params) => {
+            return this.renderTextarea(params);
         });
 
         // Process citations (before other links to avoid conflicts)
