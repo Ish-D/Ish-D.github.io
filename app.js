@@ -1017,14 +1017,32 @@ class PaperCanvas {
             let markdown = await response.text();
 
             // Check if content is encrypted
-            const frontmatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
+            const frontmatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
             if (frontmatterMatch) {
                 const frontmatter = frontmatterMatch[1];
                 if (frontmatter.includes('encrypted: true')) {
-                    // Decrypt the content
-                    markdown = await this.decryptCardContent(markdown);
-                    if (markdown === null) {
-                        return null; // Decryption cancelled or failed
+                    // Extract encryption data but don't prompt yet
+                    const saltMatch = frontmatter.match(/salt:\s*(.+)/);
+                    const ivMatch = frontmatter.match(/iv:\s*(.+)/);
+                    const ciphertext = frontmatterMatch[2].trim();
+
+                    if (saltMatch && ivMatch) {
+                        // Parse metadata from frontmatter for card sizing
+                        const metadata = this.parseFrontmatterMetadata(frontmatter);
+
+                        return {
+                            content: null,
+                            isDynamic: false,
+                            sourceFile: cardName,
+                            isEncrypted: true,
+                            encryptedData: {
+                                salt: saltMatch[1].trim(),
+                                iv: ivMatch[1].trim(),
+                                ciphertext: ciphertext,
+                                originalFrontmatter: frontmatter
+                            },
+                            metadata: metadata
+                        };
                     }
                 }
             }
@@ -1041,55 +1059,33 @@ class PaperCanvas {
     }
 
     /**
-     * Decrypt encrypted card content
-     * Returns decrypted markdown or null if cancelled/failed
+     * Parse frontmatter string into metadata object
      */
-    async decryptCardContent(encryptedMarkdown) {
-        // Parse the encrypted format
-        const match = encryptedMarkdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
-        if (!match) return null;
-
-        const frontmatter = match[1];
-        const ciphertext = match[2].trim();
-
-        // Extract salt and iv from frontmatter
-        const saltMatch = frontmatter.match(/salt:\s*(.+)/);
-        const ivMatch = frontmatter.match(/iv:\s*(.+)/);
-
-        if (!saltMatch || !ivMatch) {
-            console.error('Encrypted card missing salt or iv');
-            return null;
-        }
-
-        const encryptedData = {
-            salt: saltMatch[1].trim(),
-            iv: ivMatch[1].trim(),
-            ciphertext: ciphertext
-        };
-
-        // Try cached password first
-        let password = this.crypto.getCachedPassword();
-
-        if (password) {
-            try {
-                const decryptedBody = await this.crypto.decrypt(encryptedData, password);
-                return this.reconstructDecryptedMarkdown(frontmatter, decryptedBody);
-            } catch (e) {
-                // Cached password didn't work, clear it and prompt
-                this.crypto.clearPassword();
+    parseFrontmatterMetadata(frontmatter) {
+        const metadata = {};
+        const lines = frontmatter.split('\n');
+        for (const line of lines) {
+            const match = line.match(/^(\w+):\s*(.*)$/);
+            if (match) {
+                metadata[match[1]] = match[2].trim();
             }
         }
+        return metadata;
+    }
 
-        // Prompt for password
-        password = await this.promptForPassword();
-        if (!password) return null; // User cancelled
+    /**
+     * Try to auto-decrypt with cached password
+     * Returns decrypted body or null if no cached password or it failed
+     */
+    async tryAutoDecrypt(encryptedData) {
+        const password = this.crypto.getCachedPassword();
+        if (!password) return null;
 
         try {
-            const decryptedBody = await this.crypto.decrypt(encryptedData, password);
-            this.crypto.cachePassword(password);
-            return this.reconstructDecryptedMarkdown(frontmatter, decryptedBody);
+            return await this.crypto.decrypt(encryptedData, password);
         } catch (e) {
-            alert('Wrong password. Please try again.');
+            // Cached password didn't work, clear it
+            this.crypto.clearPassword();
             return null;
         }
     }
@@ -1108,63 +1104,164 @@ class PaperCanvas {
                        !trimmed.startsWith('salt:') &&
                        !trimmed.startsWith('iv:');
             })
-            .join('\n');
+            .join('\n')
+            .trim();
 
-        return `---\n${cleanedFrontmatter}\n---\n\n${decryptedBody}`;
+        // Ensure body doesn't have excessive leading newlines
+        const cleanedBody = decryptedBody.replace(/^\n+/, '\n');
+
+        return `---\n${cleanedFrontmatter}\n---\n${cleanedBody}`;
     }
 
     /**
-     * Show password prompt modal
-     * Returns the entered password or null if cancelled
+     * Create a locked card for encrypted content
+     * Shows password input instead of content
      */
-    async promptForPassword() {
-        return new Promise((resolve) => {
-            // Create modal overlay
-            const modal = document.createElement('div');
-            modal.className = 'password-modal';
-            modal.innerHTML = `
-                <div class="password-dialog">
-                    <div class="password-header">
-                        <span class="password-icon">&#128274;</span>
-                        <h3>Private Content</h3>
-                    </div>
-                    <p>This page is encrypted. Enter password to view:</p>
-                    <input type="password" class="password-input" placeholder="Password" autofocus>
-                    <div class="password-error" style="display: none;">Wrong password. Please try again.</div>
-                    <div class="password-buttons">
-                        <button class="password-btn cancel">Cancel</button>
-                        <button class="password-btn submit">Unlock</button>
-                    </div>
-                </div>
-            `;
+    createLockedCard(cardName, contentData, positionOptions) {
+        const metadata = contentData.metadata || {};
 
-            document.body.appendChild(modal);
+        // Get dimensions from metadata
+        let width = positionOptions.width || parseInt(metadata.width) || 280;
+        let height = positionOptions.height || parseInt(metadata.height) || 360;
 
-            const input = modal.querySelector('.password-input');
-            const submitBtn = modal.querySelector('.submit');
-            const cancelBtn = modal.querySelector('.cancel');
+        // Calculate position
+        let x, y;
+        if (positionOptions.fillViewport) {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const padding = 60;
+            width = viewportWidth - (padding * 2);
+            height = viewportHeight - (padding * 2);
+            x = padding;
+            y = padding;
+        } else if (positionOptions.centered) {
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            x = viewportWidth / 2 - width / 2;
+            y = viewportHeight / 2 - height / 2;
+        } else {
+            x = positionOptions.x !== undefined ? positionOptions.x : this.defaultOffset.x;
+            y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
+        }
 
-            const submit = () => {
-                const password = input.value;
-                modal.remove();
-                resolve(password || null);
-            };
+        const pageNumber = positionOptions.isPreview ? this.getPreviewPageNumber() : this.getNextPageNumber();
+        const cardRotation = (positionOptions.rotation || 0) - this.rotation;
 
-            const cancel = () => {
-                modal.remove();
-                resolve(null);
-            };
+        // Create locked content HTML
+        const lockedContent = `
+            <div class="locked-card-content">
+                <div class="locked-icon">&#128274;</div>
+                <h3>Private</h3>
+                <input type="password" class="locked-password-input" placeholder="Password">
+                <div class="locked-error"></div>
+                <button class="locked-unlock-btn">Unlock</button>
+            </div>
+        `;
 
-            submitBtn.addEventListener('click', submit);
-            cancelBtn.addEventListener('click', cancel);
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') submit();
-                if (e.key === 'Escape') cancel();
-            });
-
-            // Focus input after a small delay (for animation)
-            setTimeout(() => input.focus(), 50);
+        const card = this.addCard({
+            x: x,
+            y: y,
+            width: width,
+            height: height,
+            rotation: cardRotation,
+            pageNumber: pageNumber,
+            content: lockedContent,
+            margins: { left: [], right: [], top: [], bottom: [] },
+            sourceFile: contentData.sourceFile,
+            marginTB: positionOptions.marginTB,
+            marginLR: positionOptions.marginLR,
+            // Disable features for locked cards
+            progressBar: false,
+            wordCount: false,
+            readTime: false,
+            showTags: false,
+            tags: [],
+            isDynamic: false
         });
+
+        // Store encrypted data on card for later unlock
+        card.encryptedData = contentData.encryptedData;
+        card.originalMetadata = metadata;
+        card.isLocked = true;
+
+        // Bind unlock event handlers
+        this.bindLockedCardEvents(card);
+
+        // Add connection from parent if exists
+        if (positionOptions.parentCard) {
+            this.addConnection(positionOptions.parentCard, card);
+        }
+
+        return card;
+    }
+
+    /**
+     * Bind event handlers for locked card password input
+     */
+    bindLockedCardEvents(card) {
+        const cardElement = card.element;
+        const input = cardElement.querySelector('.locked-password-input');
+        const button = cardElement.querySelector('.locked-unlock-btn');
+        const errorDiv = cardElement.querySelector('.locked-error');
+
+        if (!input || !button || !errorDiv) return;
+
+        const tryUnlock = async () => {
+            const password = input.value;
+            if (!password) {
+                errorDiv.textContent = 'Enter a password';
+                errorDiv.classList.add('visible');
+                return;
+            }
+
+            // Disable input during attempt
+            input.disabled = true;
+            button.disabled = true;
+            button.textContent = 'Unlocking...';
+
+            try {
+                const decryptedBody = await this.crypto.decrypt(card.encryptedData, password);
+
+                // Success! Cache password for other encrypted cards
+                this.crypto.cachePassword(password);
+
+                // Reconstruct full markdown
+                const fullMarkdown = this.reconstructDecryptedMarkdown(
+                    card.encryptedData.originalFrontmatter,
+                    decryptedBody
+                );
+
+                // Parse and update card content
+                const parsed = this.parser.parse(fullMarkdown);
+                if (parsed) {
+                    card.setContent(parsed);
+                    card.isLocked = false;
+
+                    // Re-bind interactive elements
+                    this.bindInteractiveElements(card.element);
+                }
+
+            } catch (e) {
+                // Wrong password
+                errorDiv.textContent = 'Wrong password';
+                errorDiv.classList.add('visible');
+                input.value = '';
+                input.disabled = false;
+                button.disabled = false;
+                button.textContent = 'Unlock';
+                input.focus();
+            }
+        };
+
+        button.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') tryUnlock();
+            // Hide error when typing
+            errorDiv.classList.remove('visible');
+        });
+
+        // Focus input when card is created
+        setTimeout(() => input.focus(), 100);
     }
 
     // Build comprehensive tag index from ALL card files at startup
@@ -1386,6 +1483,25 @@ class PaperCanvas {
         if (!contentData) {
             console.error('No content data returned for:', cardName);
             return null;
+        }
+
+        // Handle encrypted cards
+        if (contentData.isEncrypted) {
+            // Try auto-decrypt with cached password
+            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
+
+            if (decryptedBody) {
+                // Success! Reconstruct the full markdown
+                const fullMarkdown = this.reconstructDecryptedMarkdown(
+                    contentData.encryptedData.originalFrontmatter,
+                    decryptedBody
+                );
+                contentData.content = fullMarkdown;
+                contentData.isEncrypted = false;
+            } else {
+                // No cached password or it failed - show locked card
+                return this.createLockedCard(cardName, contentData, positionOptions);
+            }
         }
 
         // Parse the content

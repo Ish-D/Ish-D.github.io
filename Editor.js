@@ -1185,9 +1185,13 @@ Your content here...
                        !trimmed.startsWith('salt:') &&
                        !trimmed.startsWith('iv:');
             })
-            .join('\n');
+            .join('\n')
+            .trim();
 
-        return `---\n${cleanedFrontmatter.trim()}\n---\n\n${decryptedBody}`;
+        // Ensure body doesn't have excessive leading newlines
+        const cleanedBody = decryptedBody.replace(/^\n+/, '\n');
+
+        return `---\n${cleanedFrontmatter}\n---\n${cleanedBody}`;
     }
 
     /**
