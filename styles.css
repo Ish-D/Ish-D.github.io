@@ -1620,3 +1620,545 @@ sup.jump-link {
         margin-top: 6px;
     }
 }
+
+/* ============================================
+   Editor Card Styles
+   ============================================ */
+
+.editor-card {
+    min-width: 400px;
+    min-height: 300px;
+    background: var(--color-card-background);
+}
+
+.editor-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    background: var(--color-card-background);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+/* Editor Toolbar */
+.editor-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    background: var(--color-background);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.editor-toolbar-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.editor-filename {
+    flex: 1;
+    max-width: 200px;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.editor-filename:focus {
+    border-color: var(--color-text-secondary);
+}
+
+.editor-filename.error {
+    border-color: #c41e3a;
+    animation: shake 0.3s ease;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+}
+
+.editor-btn {
+    padding: 4px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: var(--font-family-serif);
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.editor-btn:hover {
+    background: var(--color-background);
+}
+
+.editor-btn:active {
+    transform: scale(0.95);
+}
+
+.editor-btn.close-btn {
+    padding: 4px 10px;
+    font-size: 16px;
+    line-height: 1;
+}
+
+/* Source-only editor (no split view) */
+.editor-source-only {
+    min-width: 350px;
+    min-height: 300px;
+}
+
+.editor-source-pane {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.editor-source-pane .editor-textarea {
+    flex: 1;
+    width: 100%;
+    padding: 16px;
+    border: none;
+    resize: none;
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    overflow-y: auto;
+    outline: none;
+}
+
+/* Insert Toolbar */
+.editor-insert-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 6px 12px;
+    background: var(--color-card-background);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+}
+
+.insert-group {
+    display: flex;
+    gap: 2px;
+    padding-right: 8px;
+    border-right: 1px solid var(--color-border);
+}
+
+.insert-group:last-child {
+    border-right: none;
+    padding-right: 0;
+}
+
+.insert-btn {
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    font-size: 11px;
+    font-family: var(--font-family-mono);
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.insert-btn:hover {
+    background: var(--color-background);
+}
+
+.insert-btn:active {
+    transform: scale(0.95);
+}
+
+.dropdown-toggle {
+    position: relative;
+}
+
+/* Dropdown Container */
+.editor-dropdowns {
+    position: relative;
+}
+
+.insert-dropdown {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 200px;
+    max-height: 300px;
+    overflow-y: auto;
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+}
+
+.insert-dropdown.open {
+    display: block;
+}
+
+.dropdown-section {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.dropdown-section:last-child {
+    border-bottom: none;
+}
+
+.dropdown-title {
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: bold;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    color: var(--color-text-primary);
+    font-size: 12px;
+    font-family: var(--font-family-serif);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.dropdown-item:hover {
+    background: var(--color-background);
+}
+
+/* Legacy split view styles (kept for backwards compatibility) */
+/* Split View */
+.editor-split {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.editor-source {
+    display: flex;
+    min-width: 150px;
+    overflow: hidden;
+}
+
+.editor-textarea {
+    flex: 1;
+    width: 100%;
+    padding: 16px;
+    border: none;
+    resize: none;
+    font-family: var(--font-family-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    overflow-y: auto;
+    outline: none;
+}
+
+.editor-textarea::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 0.7;
+}
+
+.editor-divider {
+    width: 4px;
+    background: var(--color-border);
+    cursor: ew-resize;
+    flex-shrink: 0;
+    transition: background 0.2s ease;
+}
+
+.editor-divider:hover {
+    background: var(--color-text-secondary);
+}
+
+.editor-preview {
+    display: flex;
+    flex-direction: column;
+    min-width: 150px;
+    overflow: hidden;
+    background: var(--color-card-background);
+    border-left: 1px solid var(--color-border);
+}
+
+.editor-preview .preview-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--card-padding-vertical) var(--card-padding-horizontal);
+}
+
+/* Status Bar */
+.editor-status {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 12px;
+    background: var(--color-background);
+    border-top: 1px solid var(--color-border);
+    font-size: 11px;
+    font-family: var(--font-family-mono);
+    color: var(--color-text-secondary);
+    flex-shrink: 0;
+}
+
+/* File Picker Dropdown */
+.editor-file-picker {
+    position: absolute;
+    top: 44px;
+    left: 8px;
+    right: 8px;
+    max-height: 250px;
+    overflow-y: auto;
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+}
+
+.editor-file-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.15s ease;
+}
+
+.editor-file-item:hover {
+    background: var(--color-background);
+}
+
+.editor-file-item:last-child {
+    border-bottom: none;
+}
+
+/* Edit button (fixed UI) */
+.edit-btn {
+    left: 66px !important;
+}
+
+.edit-btn:hover {
+    transform: scale(1.1);
+}
+
+/* Editor Preview with Margins */
+.preview-card-container {
+    display: grid;
+    height: 100%;
+    width: 100%;
+    background: var(--color-card-background);
+    overflow: hidden;
+}
+
+.preview-card-container .card-content {
+    overflow-y: auto;
+    padding: var(--card-padding-vertical) var(--card-padding-horizontal);
+}
+
+.preview-card-container .card-margin {
+    position: relative;
+    overflow: visible;
+}
+
+.preview-card-container .card-margin-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
+}
+
+.preview-card-container .card-margin-left {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.preview-card-container .card-margin-right {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+.preview-card-container .card-margin-bottom {
+    grid-column: 1 / -1;
+    grid-row: 3;
+}
+
+/* ============================================
+   Password Modal (for encrypted cards)
+   ============================================ */
+
+.password-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    backdrop-filter: blur(4px);
+}
+
+.password-dialog {
+    background: var(--color-card-background);
+    padding: 24px 32px;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.password-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.password-icon {
+    font-size: 24px;
+}
+
+.password-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: var(--font-weight-h2);
+    color: var(--color-text-primary);
+}
+
+.password-dialog p {
+    margin-bottom: 16px;
+    color: var(--color-text-secondary);
+    font-size: 14px;
+}
+
+.password-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--font-family-mono);
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    margin-bottom: 12px;
+    box-sizing: border-box;
+}
+
+.password-input:focus {
+    outline: none;
+    border-color: var(--color-text-secondary);
+}
+
+.password-error {
+    color: #c41e3a;
+    font-size: 12px;
+    margin-bottom: 12px;
+    padding: 8px;
+    background: rgba(196, 30, 58, 0.1);
+    border-radius: 4px;
+}
+
+.password-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.password-btn {
+    padding: 8px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: var(--font-family-serif);
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.password-btn.cancel {
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+}
+
+.password-btn.cancel:hover {
+    background: var(--color-background);
+}
+
+.password-btn.submit {
+    background: var(--color-text-primary);
+    color: var(--color-card-background);
+    border-color: var(--color-text-primary);
+}
+
+.password-btn.submit:hover {
+    opacity: 0.9;
+}
+
+.password-btn:active {
+    transform: scale(0.95);
+}
+
+/* ============================================
+   Editor Private Toggle
+   ============================================ */
+
+.editor-private-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: var(--color-card-background);
+    font-size: 12px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    margin-right: 8px;
+}
+
+.editor-private-toggle:hover {
+    background: var(--color-background);
+}
+
+.editor-private-toggle input[type="checkbox"] {
+    display: none;
+}
+
+.editor-private-toggle .private-label {
+    color: var(--color-text-secondary);
+    transition: color 0.2s ease;
+}
+
+.editor-private-toggle input[type="checkbox"]:checked + .private-label {
+    color: #c41e3a;
+    font-weight: bold;
+}
+
+.editor-private-toggle:has(input:checked) {
+    border-color: #c41e3a;
+    background: rgba(196, 30, 58, 0.1);
+}

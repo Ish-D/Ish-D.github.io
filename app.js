@@ -1,5 +1,8 @@
 import { Card } from './Card.js';
 import { MarkdownParser } from './MarkdownParser.js';
+import { CardCrypto } from './Crypto.js';
+
+// Editor is loaded dynamically only on localhost
 
 /**
  * FileWatcherClient - Connects to WebSocket server for live markdown updates
@@ -119,6 +122,12 @@ class PaperCanvas {
         this.cards = new Map();
         this.parser = new MarkdownParser();
 
+        // Security: Check if running locally
+        this.isLocal = this.checkIsLocal();
+
+        // Crypto for private/encrypted cards
+        this.crypto = new CardCrypto();
+
         // Global page counter - increments for each new card
         this.pageCounter = 0;
 
@@ -154,6 +163,10 @@ class PaperCanvas {
         // Live-reload file watcher
         this.fileWatcher = new FileWatcherClient(this);
 
+        // Editor support - initialized dynamically on localhost only
+        this.fsManager = null;
+        this.editorCards = new Map();
+
         this.init();
     }
 
@@ -161,6 +174,7 @@ class PaperCanvas {
         this.bindCanvasEvents();
         this.initSettings();
         this.initConnectionsLayer();
+        this.initEditor();
 
         // Connect to live-reload WebSocket server
         this.fileWatcher.connect();
@@ -192,6 +206,18 @@ class PaperCanvas {
             // No card specified, load the menu
             await this.loadMenuCard();
         }
+    }
+
+    /**
+     * Check if running on localhost/local environment
+     * Used to enable editor and other dev-only features
+     */
+    checkIsLocal() {
+        const hostname = location.hostname;
+        return hostname === 'localhost' ||
+               hostname === '127.0.0.1' ||
+               hostname === '' ||  // file:// protocol
+               hostname.endsWith('.local');
     }
 
     getCardNameFromURL() {
@@ -911,6 +937,34 @@ class PaperCanvas {
     }
 
     /**
+     * Create a new card programmatically (for editor use)
+     * @param {Object} options - Card options including x, y, width, height, content, margins
+     * @returns {Card} The created card
+     */
+    createCard(options = {}) {
+        const pageNumber = this.getNextPageNumber();
+
+        const cardOptions = {
+            x: options.x || this.defaultOffset.x,
+            y: options.y || this.defaultOffset.y,
+            width: options.width || 320,
+            height: options.height || 400,
+            rotation: options.rotation || 0,
+            pageNumber: pageNumber,
+            content: options.content || '',
+            margins: options.margins || { left: [], right: [], top: [], bottom: [] },
+            sourceFile: options.sourceFile || null,
+            isDynamic: options.isDynamic || false,
+            progressBar: options.progressBar || false,
+            wordCount: options.wordCount || false,
+            readTime: options.readTime || false,
+            tags: options.tags || []
+        };
+
+        return this.addCard(cardOptions);
+    }
+
+    /**
      * Get all cards displaying content from a specific source file
      */
     getCardsDisplayingFile(fileName) {
@@ -960,7 +1014,21 @@ class PaperCanvas {
                 return null;
             }
 
-            const markdown = await response.text();
+            let markdown = await response.text();
+
+            // Check if content is encrypted
+            const frontmatterMatch = markdown.match(/^---\s*\n([\s\S]*?)\n---/);
+            if (frontmatterMatch) {
+                const frontmatter = frontmatterMatch[1];
+                if (frontmatter.includes('encrypted: true')) {
+                    // Decrypt the content
+                    markdown = await this.decryptCardContent(markdown);
+                    if (markdown === null) {
+                        return null; // Decryption cancelled or failed
+                    }
+                }
+            }
+
             return {
                 content: markdown,
                 isDynamic: false,
@@ -970,6 +1038,133 @@ class PaperCanvas {
             console.error(`Error loading card ${cardName}:`, error);
             return null;
         }
+    }
+
+    /**
+     * Decrypt encrypted card content
+     * Returns decrypted markdown or null if cancelled/failed
+     */
+    async decryptCardContent(encryptedMarkdown) {
+        // Parse the encrypted format
+        const match = encryptedMarkdown.match(/^---\s*\n([\s\S]*?)\n---\s*\n([\s\S]*)$/);
+        if (!match) return null;
+
+        const frontmatter = match[1];
+        const ciphertext = match[2].trim();
+
+        // Extract salt and iv from frontmatter
+        const saltMatch = frontmatter.match(/salt:\s*(.+)/);
+        const ivMatch = frontmatter.match(/iv:\s*(.+)/);
+
+        if (!saltMatch || !ivMatch) {
+            console.error('Encrypted card missing salt or iv');
+            return null;
+        }
+
+        const encryptedData = {
+            salt: saltMatch[1].trim(),
+            iv: ivMatch[1].trim(),
+            ciphertext: ciphertext
+        };
+
+        // Try cached password first
+        let password = this.crypto.getCachedPassword();
+
+        if (password) {
+            try {
+                const decryptedBody = await this.crypto.decrypt(encryptedData, password);
+                return this.reconstructDecryptedMarkdown(frontmatter, decryptedBody);
+            } catch (e) {
+                // Cached password didn't work, clear it and prompt
+                this.crypto.clearPassword();
+            }
+        }
+
+        // Prompt for password
+        password = await this.promptForPassword();
+        if (!password) return null; // User cancelled
+
+        try {
+            const decryptedBody = await this.crypto.decrypt(encryptedData, password);
+            this.crypto.cachePassword(password);
+            return this.reconstructDecryptedMarkdown(frontmatter, decryptedBody);
+        } catch (e) {
+            alert('Wrong password. Please try again.');
+            return null;
+        }
+    }
+
+    /**
+     * Reconstruct markdown with decrypted content
+     * Preserves original metadata (width, height, tags) but removes encryption fields
+     */
+    reconstructDecryptedMarkdown(encryptedFrontmatter, decryptedBody) {
+        // Remove encryption-specific fields from frontmatter
+        const cleanedFrontmatter = encryptedFrontmatter
+            .split('\n')
+            .filter(line => {
+                const trimmed = line.trim();
+                return !trimmed.startsWith('encrypted:') &&
+                       !trimmed.startsWith('salt:') &&
+                       !trimmed.startsWith('iv:');
+            })
+            .join('\n');
+
+        return `---\n${cleanedFrontmatter}\n---\n\n${decryptedBody}`;
+    }
+
+    /**
+     * Show password prompt modal
+     * Returns the entered password or null if cancelled
+     */
+    async promptForPassword() {
+        return new Promise((resolve) => {
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.className = 'password-modal';
+            modal.innerHTML = `
+                <div class="password-dialog">
+                    <div class="password-header">
+                        <span class="password-icon">&#128274;</span>
+                        <h3>Private Content</h3>
+                    </div>
+                    <p>This page is encrypted. Enter password to view:</p>
+                    <input type="password" class="password-input" placeholder="Password" autofocus>
+                    <div class="password-error" style="display: none;">Wrong password. Please try again.</div>
+                    <div class="password-buttons">
+                        <button class="password-btn cancel">Cancel</button>
+                        <button class="password-btn submit">Unlock</button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+            const input = modal.querySelector('.password-input');
+            const submitBtn = modal.querySelector('.submit');
+            const cancelBtn = modal.querySelector('.cancel');
+
+            const submit = () => {
+                const password = input.value;
+                modal.remove();
+                resolve(password || null);
+            };
+
+            const cancel = () => {
+                modal.remove();
+                resolve(null);
+            };
+
+            submitBtn.addEventListener('click', submit);
+            cancelBtn.addEventListener('click', cancel);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') submit();
+                if (e.key === 'Escape') cancel();
+            });
+
+            // Focus input after a small delay (for animation)
+            setTimeout(() => input.focus(), 50);
+        });
     }
 
     // Build comprehensive tag index from ALL card files at startup
@@ -997,6 +1192,11 @@ class PaperCanvas {
                 }
 
                 const content = await response.text();
+
+                // Skip encrypted/private cards - they shouldn't appear in public indexes
+                if (content.includes('encrypted: true')) {
+                    continue;
+                }
 
                 // Parse frontmatter to extract tags
                 const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
@@ -1613,6 +1813,111 @@ class PaperCanvas {
         if (card) {
             card.element.setAttribute('data-settings-card', 'true');
         }
+    }
+
+    /**
+     * Initialize editor functionality (localhost only)
+     */
+    async initEditor() {
+        const editBtn = document.getElementById('edit-btn');
+
+        // Hide editor on production - only available locally
+        if (!this.isLocal) {
+            if (editBtn) {
+                editBtn.style.display = 'none';
+            }
+            return;
+        }
+
+        // Dynamically import editor module (only on localhost)
+        try {
+            const { EditorCard, FileSystemManager } = await import('./Editor.js');
+            this.EditorCard = EditorCard;
+            this.fsManager = new FileSystemManager();
+
+            // Bind edit button
+            if (editBtn) {
+                editBtn.addEventListener('click', () => this.openEditorCard());
+            }
+
+            // Try to restore directory handle from storage
+            this.fsManager.restoreHandle();
+
+            // Listen for editor close events
+            document.addEventListener('editor-close', (e) => {
+                const editorId = e.detail.editorId;
+                this.editorCards.delete(editorId);
+            });
+
+            // Warn about unsaved changes before leaving page
+            window.addEventListener('beforeunload', (e) => {
+                const hasUnsaved = Array.from(this.editorCards.values())
+                    .some(editor => editor.isDirty);
+                if (hasUnsaved) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                }
+            });
+
+            console.log('Editor enabled (localhost mode)');
+        } catch (error) {
+            console.log('Editor module not available:', error.message);
+            if (editBtn) {
+                editBtn.style.display = 'none';
+            }
+        }
+    }
+
+    /**
+     * Open editor card (localhost only)
+     * @param {string} filename - Optional filename to open
+     */
+    async openEditorCard(filename = null) {
+        // Editor only available locally
+        if (!this.isLocal || !this.EditorCard) {
+            console.warn('Editor is only available on localhost');
+            return null;
+        }
+
+        // Check if File System Access API is supported
+        if (!this.fsManager || !this.fsManager.isSupported()) {
+            alert('Editor requires File System Access API. Please use Chrome or Edge.');
+            return null;
+        }
+
+        // Calculate position with jitter for multiple editors
+        const btnRect = document.getElementById('edit-btn')?.getBoundingClientRect()
+            || document.getElementById('settings-btn').getBoundingClientRect();
+        const baseX = (btnRect.left + 120 - this.panX) / this.zoom;
+        const baseY = (btnRect.top - 500 - this.panY) / this.zoom;
+
+        // Add jitter so multiple editors don't stack exactly
+        const jitterX = (Math.random() - 0.5) * 100;
+        const jitterY = (Math.random() - 0.5) * 100;
+
+        const x = baseX + jitterX + (this.editorCards.size * 30);
+        const y = Math.max(40, baseY + jitterY + (this.editorCards.size * 30));
+
+        const editor = new this.EditorCard({
+            x,
+            y,
+            width: 900,
+            height: 600,
+            parser: this.parser,
+            fsManager: this.fsManager,
+            canvas: this,
+            zIndex: ++this.zIndexCounter
+        });
+
+        this.editorCards.set(editor.id, editor);
+        this.canvasContent.appendChild(editor.element);
+
+        // Load file if specified
+        if (filename) {
+            await editor.loadFile(filename);
+        }
+
+        return editor;
     }
 
     updateCardShadows() {
