@@ -196,6 +196,19 @@ class PaperCanvas {
             }
         });
 
+        // Save state immediately before page unload (refresh, close, navigate away)
+        // This ensures state is persisted even if the debounce timer hasn't fired
+        window.addEventListener('beforeunload', () => {
+            // Cancel any pending debounced save
+            if (this.saveDebounceTimer) {
+                clearTimeout(this.saveDebounceTimer);
+            }
+            // Save immediately (unless we're restoring)
+            if (!this.isRestoring) {
+                this.saveCanvasState();
+            }
+        });
+
         // Connect to live-reload WebSocket server
         this.fileWatcher.connect();
 
@@ -2627,13 +2640,19 @@ class PaperCanvas {
                 zIndexCounter: this.zIndexCounter
             },
             cards: [],
-            connections: []
+            connections: [],
+            editorCards: []
         };
 
         // Serialize cards (skip preview cards)
         this.cards.forEach(card => {
             if (card.element.classList.contains('card-preview')) return;
             state.cards.push(card.toJSON());
+        });
+
+        // Serialize editor cards
+        this.editorCards.forEach(editor => {
+            state.editorCards.push(editor.toJSON());
         });
 
         // Serialize connections (Map<string, Set<string>> -> Array)
@@ -2720,21 +2739,84 @@ class PaperCanvas {
                 }
             }
 
-            // 5. Restore scroll positions (after DOM is ready)
-            requestAnimationFrame(() => {
-                state.cards.forEach(savedCard => {
-                    const card = cardIdMap.get(savedCard.id);
-                    if (card) {
-                        const contentEl = card.element.querySelector('.card-content');
-                        if (contentEl) {
-                            contentEl.scrollTop = savedCard.scrollTop || 0;
-                            contentEl.scrollLeft = savedCard.scrollLeft || 0;
+            // 5. Restore editor cards (if any and if EditorCard is available)
+            if (state.editorCards && state.editorCards.length > 0 && this.EditorCard) {
+                for (const editorState of state.editorCards) {
+                    const editor = new this.EditorCard({
+                        id: editorState.id,
+                        x: editorState.x,
+                        y: editorState.y,
+                        width: editorState.width,
+                        height: editorState.height,
+                        rotation: editorState.rotation,
+                        zIndex: editorState.zIndex,
+                        pinned: editorState.pinned,
+                        filename: editorState.filename,
+                        content: editorState.content,
+                        parser: this.parser,
+                        fsManager: this.fsManager,
+                        canvas: this
+                    });
+
+                    // Restore additional state
+                    editor.isDirty = editorState.isDirty;
+                    editor.lastSavedContent = editorState.lastSavedContent;
+                    editor.isPrivate = editorState.isPrivate;
+
+                    // Update the private checkbox UI if needed
+                    const privateCheckbox = editor.element.querySelector('.private-checkbox');
+                    if (privateCheckbox) {
+                        privateCheckbox.checked = editor.isPrivate;
+                    }
+
+                    // Update the textarea with content
+                    const textarea = editor.element.querySelector('.editor-textarea');
+                    if (textarea) {
+                        textarea.value = editorState.content;
+                    }
+
+                    // Update the filename input
+                    const filenameInput = editor.element.querySelector('.editor-filename');
+                    if (filenameInput) {
+                        filenameInput.value = editorState.filename;
+                    }
+
+                    // Reconnect to target card if it exists
+                    if (editorState.targetCardId) {
+                        const targetCard = cardIdMap.get(editorState.targetCardId);
+                        if (targetCard) {
+                            editor.targetCard = targetCard;
                         }
                     }
+
+                    // Update status display
+                    editor.updateStatus();
+
+                    // Add to editor cards map and DOM
+                    this.editorCards.set(editor.id, editor);
+                    this.canvasContent.appendChild(editor.element);
+                }
+            }
+
+            // 6. Restore scroll positions (after DOM is ready)
+            // Use a promise to ensure isRestoring stays true until RAF completes
+            await new Promise(resolve => {
+                requestAnimationFrame(() => {
+                    state.cards.forEach(savedCard => {
+                        const card = cardIdMap.get(savedCard.id);
+                        if (card) {
+                            const contentEl = card.element.querySelector('.card-content');
+                            if (contentEl) {
+                                contentEl.scrollTop = savedCard.scrollTop || 0;
+                                contentEl.scrollLeft = savedCard.scrollLeft || 0;
+                            }
+                        }
+                    });
+                    resolve();
                 });
             });
         } finally {
-            // Re-enable saving after restoration
+            // Re-enable saving after restoration is fully complete
             this.isRestoring = false;
         }
     }
@@ -3370,6 +3452,16 @@ class PaperCanvas {
         });
         this.cards.clear();
         this.clearPreviewCard();
+
+        // Also clear editor cards
+        this.editorCards.forEach(editor => {
+            editor.stopAutosave();
+            if (editor.updateDebounceTimer) {
+                clearTimeout(editor.updateDebounceTimer);
+            }
+            editor.element.remove();
+        });
+        this.editorCards.clear();
     }
 
     /**
@@ -3552,6 +3644,11 @@ class PaperCanvas {
             if (urlInfo) {
                 this.clearAllCards();
                 this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
+            } else {
+                // Navigating to plain URL (no card specified)
+                // Clear cards and load menu
+                this.clearAllCards();
+                this.loadMenuCard();
             }
         }
     }

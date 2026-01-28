@@ -250,6 +250,7 @@ export class EditorCard {
         this.height = options.height || 500;
         this.rotation = options.rotation || 0;
         this.zIndex = options.zIndex || 1;
+        this.pinned = options.pinned || false;
 
         // Editor state
         this.filename = options.filename || '';
@@ -290,6 +291,10 @@ export class EditorCard {
         card.className = 'card editor-card editor-source-only';
         card.id = this.id;
         card.dataset.cardId = this.id;
+
+        if (this.pinned) {
+            card.classList.add('pinned');
+        }
 
         this.updateTransform(card);
 
@@ -453,6 +458,7 @@ export class EditorCard {
         const topHandle = document.createElement('div');
         topHandle.className = 'card-top-handle';
         topHandle.innerHTML = `
+            <button class="card-action-btn pin-btn" title="Pin">${this.pinned ? '📍' : '📌'}</button>
             <button class="card-action-btn delete-btn" title="Close">&times;</button>
         `;
         card.appendChild(topHandle);
@@ -542,6 +548,15 @@ export class EditorCard {
             });
         }
 
+        // Pin button
+        const pinBtn = this.element.querySelector('.card-top-handle .pin-btn');
+        if (pinBtn) {
+            pinBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.togglePin();
+            });
+        }
+
         // Drag handles
         this.bindDragHandles();
 
@@ -561,6 +576,7 @@ export class EditorCard {
 
         this.element.querySelectorAll('.card-drag-handle').forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
+                if (this.pinned) return;
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -601,6 +617,7 @@ export class EditorCard {
 
         this.element.querySelectorAll('.card-handle').forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
+                if (this.pinned) return;
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -667,6 +684,7 @@ export class EditorCard {
 
         this.element.querySelectorAll('.card-rotate-handle').forEach(handle => {
             handle.addEventListener('mousedown', (e) => {
+                if (this.pinned) return;
                 e.preventDefault();
                 e.stopPropagation();
 
@@ -1328,12 +1346,28 @@ Your content here...
     }
 
     bringToFront() {
-        if (this.canvas) {
-            this.zIndex = ++this.canvas.zIndexCounter;
-        } else {
-            this.zIndex = 10000;
-        }
+        // Get all cards and find max z-index, but exclude preview cards and cap at 9999
+        // This matches the behavior of regular Card.js bringToFront()
+        const allCards = document.querySelectorAll('.card:not(.card-preview)');
+        let maxZ = 0;
+        allCards.forEach(card => {
+            const z = parseInt(card.style.zIndex || 0);
+            if (z > maxZ) maxZ = z;
+        });
+
+        // Cap at 9999 to keep preview cards (10000+) always on top
+        this.zIndex = Math.min(maxZ + 1, 9999);
         this.element.style.zIndex = this.zIndex;
+    }
+
+    togglePin() {
+        this.pinned = !this.pinned;
+        this.element.classList.toggle('pinned', this.pinned);
+
+        const pinBtn = this.element.querySelector('.pin-btn');
+        if (pinBtn) {
+            pinBtn.textContent = this.pinned ? '📍' : '📌';
+        }
     }
 
     startAutosave() {
@@ -1782,5 +1816,25 @@ Optional caption
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    toJSON() {
+        return {
+            id: this.id,
+            x: this.x,
+            y: this.y,
+            width: this.width,
+            height: this.height,
+            rotation: this.rotation,
+            zIndex: this.zIndex,
+            pinned: this.pinned,
+            filename: this.filename,
+            content: this.content,
+            isDirty: this.isDirty,
+            lastSavedContent: this.lastSavedContent,
+            isPrivate: this.isPrivate,
+            // Store target card ID for reconnection on restore
+            targetCardId: this.targetCard?.id || null
+        };
     }
 }
