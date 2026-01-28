@@ -1,11 +1,23 @@
 ---
 width: 500
-height: 580
+height: 640
 ---
 
-## Appearance
+## View Mode
 
 [[toggle(bind: theme, on: dark, off: light, label: Dark Mode)]]
+
+[[toggle(bind: readerMode, on: true, off: false, label: Reader Mode)]]
+
+## Typography
+
+[[slider(bind: fontSize, min: 10, max: 18, step: 1, label: Font Size, suffix: px)]]
+
+[[slider(bind: lineHeight, min: 1.2, max: 2.0, step: 0.1, label: Line Height)]]
+
+[[slider(bind: marginSize, min: 0, max: 25, step: 1, label: Card Margins, suffix: %)]]
+
+## Card Display
 
 [[toggle(bind: cardShadow, on: true, off: false, label: Card Shadows)]]
 
@@ -16,14 +28,6 @@ height: 580
 [[toggle(bind: connectionsAbove, on: true, off: false, label: ↳ Connections Above Cards)]]
 
 [[toggle(bind: showPreviews, on: true, off: false, label: Card Link Previews)]]
-
-[[toggle(bind: readerMode, on: true, off: false, label: Reader Mode)]]
-
-## Typography
-
-[[slider(bind: fontSize, min: 10, max: 18, step: 1, label: Font Size, suffix: px)]]
-
-[[slider(bind: lineHeight, min: 1.2, max: 2.0, step: 0.1, label: Line Height)]]
 
 ---
 

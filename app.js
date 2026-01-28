@@ -741,6 +741,16 @@ class PaperCanvas {
         this.canvas.addEventListener('card-state-changed', () => {
             this.scheduleSave();
         });
+
+        // Listen for margin size changes from card drag (to sync with global setting)
+        this.canvas.addEventListener('margin-size-changed', (e) => {
+            const { marginPercent } = e.detail;
+            // Update the global setting without triggering card updates (already updated)
+            this.settings.marginSize = marginPercent;
+            localStorage.setItem('settings-marginSize', marginPercent);
+            // Sync settings UI if any settings cards are open
+            this.syncAllSettingsCards();
+        });
     }
 
     clearPreviewCard() {
@@ -1776,7 +1786,8 @@ class PaperCanvas {
             showConnections: localStorage.getItem('settings-showConnections') === 'true',
             connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true',
             showPreviews: localStorage.getItem('settings-showPreviews') === 'true', // Default to false (off)
-            readerMode: localStorage.getItem('settings-readerMode') === 'true'
+            readerMode: localStorage.getItem('settings-readerMode') === 'true',
+            marginSize: parseInt(localStorage.getItem('settings-marginSize')) || 10 // Percentage (0-25)
         };
 
         // Reader mode runtime state (can be URL-driven or toggle-driven)
@@ -1849,6 +1860,11 @@ class PaperCanvas {
             } else {
                 this.exitReaderMode();
             }
+        }
+
+        // Update all card margins if margin size changed
+        if (key === 'marginSize') {
+            this.updateAllCardMargins(value);
         }
 
         // Sync all settings cards to reflect the change
@@ -2087,6 +2103,9 @@ class PaperCanvas {
         overlay.appendChild(container);
         document.body.appendChild(overlay);
 
+        // Hide Card Display section in reader mode
+        this.hideReaderModeOnlySettings(container);
+
         // Bind interactive elements
         this.bindInteractiveElements(container);
 
@@ -2119,6 +2138,34 @@ class PaperCanvas {
         const overlay = document.getElementById('settings-overlay');
         if (overlay) {
             overlay.remove();
+        }
+    }
+
+    /**
+     * Hide settings sections that don't apply in reader mode
+     * Removes the "Card Display" section and its contents
+     * @param {HTMLElement} container - The settings container element
+     */
+    hideReaderModeOnlySettings(container) {
+        if (!this.isReaderMode) return;
+
+        // Find the "Card Display" heading
+        const headings = container.querySelectorAll('h2');
+        for (const heading of headings) {
+            if (heading.textContent.trim() === 'Card Display') {
+                // Collect all elements to remove (heading + siblings until next h2 or hr)
+                const elementsToRemove = [heading];
+                let sibling = heading.nextElementSibling;
+
+                while (sibling && sibling.tagName !== 'H2' && sibling.tagName !== 'HR') {
+                    elementsToRemove.push(sibling);
+                    sibling = sibling.nextElementSibling;
+                }
+
+                // Remove all collected elements
+                elementsToRemove.forEach(el => el.remove());
+                break;
+            }
         }
     }
 
@@ -2240,6 +2287,18 @@ class PaperCanvas {
     updateHandleVisibility() {
         const show = this.settings.showHandles;
         document.documentElement.style.setProperty('--handle-display', show ? 'block' : 'none');
+    }
+
+    /**
+     * Update all card margins to match the global margin size setting
+     * @param {number} marginPercent - Margin size as percentage (0-25)
+     */
+    updateAllCardMargins(marginPercent) {
+        this.cards.forEach(card => {
+            if (card.updateMarginSize) {
+                card.updateMarginSize(marginPercent);
+            }
+        });
     }
 
     initConnectionsLayer() {
@@ -3349,6 +3408,9 @@ class PaperCanvas {
 
         const margin = this.getReaderModeMargin();
 
+        // Use larger card margins in reader mode (1.4x the normal setting)
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * 1.4);
+
         const card = this.addCard({
             x: margin,
             y: margin,
@@ -3359,8 +3421,8 @@ class PaperCanvas {
             content: parsed.content,
             margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
             sourceFile: contentData.sourceFile,
-            marginTB: 4,
-            marginLR: 4,
+            marginTB: readerModeCardMargin,
+            marginLR: readerModeCardMargin,
             progressBar: parsed.metadata.progressBar === 'true',
             wordCount: parsed.metadata.wordCount === 'true',
             readTime: parsed.metadata.readTime === 'true',
@@ -3389,6 +3451,9 @@ class PaperCanvas {
     createLockedCardReaderMode(cardName, contentData) {
         const margin = this.getReaderModeMargin();
 
+        // Use larger card margins in reader mode (1.4x the normal setting)
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * 1.4);
+
         // Create a simple locked card display
         const lockedContent = `
             <div class="locked-card-content">
@@ -3409,8 +3474,8 @@ class PaperCanvas {
             pageNumber: null,
             content: lockedContent,
             sourceFile: cardName,
-            marginTB: 4,
-            marginLR: 4,
+            marginTB: readerModeCardMargin,
+            marginLR: readerModeCardMargin,
             isReaderMode: true
         });
 

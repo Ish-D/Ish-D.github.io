@@ -2444,7 +2444,7 @@ body.reader-mode-active .edit-btn:hover {
 /* Responsive reader mode adjustments */
 @media (max-width: 768px) {
     .card.card-reader-mode .card-content {
-        padding: 24px 20px;
+        padding: 32px 28px;
     }
 
     /* Larger touch targets for links */
@@ -2457,7 +2457,7 @@ body.reader-mode-active .edit-btn:hover {
 
 @media (max-width: 480px) {
     .card.card-reader-mode .card-content {
-        padding: 16px;
+        padding: 28px 24px;
     }
 }
 

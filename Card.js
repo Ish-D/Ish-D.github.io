@@ -1022,6 +1022,13 @@ export class Card {
 
         // Clean up margin area resize
         if (this.isResizingMarginArea) {
+            // Dispatch event with the new margin size percentage for global setting sync
+            const marginPercent = this.getMarginSizePercent();
+            this.element.dispatchEvent(new CustomEvent('margin-size-changed', {
+                bubbles: true,
+                detail: { marginPercent: marginPercent, card: this }
+            }));
+
             this.isResizingMarginArea = false;
             this.resizingMarginAreaSide = null;
             const activeHandle = this.element.querySelector('.margin-resize-handle.active');
@@ -1608,6 +1615,50 @@ export class Card {
         iframe.addEventListener('error', () => {
             fallback.classList.add('visible');
         });
+    }
+
+    /**
+     * Update margin size based on a percentage value (from global settings)
+     * @param {number} marginPercent - Margin size as percentage (0-25)
+     */
+    updateMarginSize(marginPercent) {
+        const container = this.element.querySelector('.card-container');
+        if (!container) return;
+
+        // Calculate pixel values from percentage
+        const lrSize = (marginPercent / 100) * this.width;
+        const tbSize = (marginPercent / 100) * this.height;
+
+        // Update stored values
+        this.marginLeftSize = lrSize;
+        this.marginRightSize = lrSize;
+        this.marginTopSize = tbSize;
+        this.marginBottomSize = tbSize;
+
+        // Update grid template
+        container.style.gridTemplateColumns = `${lrSize}px 1fr ${lrSize}px`;
+        container.style.gridTemplateRows = `${tbSize}px 1fr ${tbSize}px`;
+    }
+
+    /**
+     * Get the current margin size as a percentage (average of all margins)
+     * @returns {number} Margin percentage (0-25 range)
+     */
+    getMarginSizePercent() {
+        const container = this.element.querySelector('.card-container');
+        if (!container) return 10; // Default
+
+        const computedStyle = getComputedStyle(container);
+        const cols = computedStyle.gridTemplateColumns.split(' ');
+
+        if (cols.length >= 3) {
+            const leftSize = parseFloat(cols[0]) || 0;
+            // Calculate percentage based on card width
+            const percent = (leftSize / this.width) * 100;
+            return Math.round(Math.min(25, Math.max(0, percent)));
+        }
+
+        return 10; // Default
     }
 
     toJSON() {
