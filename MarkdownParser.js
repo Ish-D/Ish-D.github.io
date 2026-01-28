@@ -58,6 +58,31 @@
  *   [[slider(bind: fontSize, min: 10, max: 18, step: 1, label: Font Size, suffix: px)]]
  *   [[button(action: resetSettings, label: Reset to Defaults)]]
  *
+ * VISUALIZATIONS
+ * --------------
+ * [[viz(type: name, params...)]]
+ *
+ * Visualization Types:
+ *   polynomial    - 2D polynomial curve with interactive sliders
+ *   polynomial3d  - 3D polynomial surface with interactive sliders
+ *   surface       - 3D surface plot z = f(x,y)
+ *   curve3d       - 3D parametric curve
+ *   nodegraph3d   - 3D force-directed node graph
+ *   model         - 3D model viewer (GLTF/GLB)
+ *
+ * Sizing Parameters (all types):
+ *   size          - tiny|small|medium|large|full (preset sizes)
+ *   width         - explicit width in pixels or percentage
+ *   height        - explicit height in pixels or percentage
+ *   display       - inline|float-left|float-right (display mode)
+ *   align         - left|center|right (block alignment)
+ *
+ * Examples:
+ *   [[viz(type: polynomial, a2: 1, a1: 0, a0: -1)]]
+ *   [[viz(type: surface, fn: "sin(x)*cos(y)", size: medium)]]
+ *   [[viz(type: curve3d, x: "cos(t)", y: "sin(t)", z: "t/5", display: inline, size: small)]]
+ *   [[viz(type: polynomial3d, a: 0.5, b: 0.5, width: 300, height: 350)]]
+ *
  * INLINE ELEMENTS
  * ---------------
  * [[style(css)]]{text}           - Styled text
@@ -166,6 +191,12 @@ export class MarkdownParser {
 
     getTextareaPattern() {
         return /\[\[textarea\(([^)]+)\)\]\]/g;
+    }
+
+    getVizPattern() {
+        // Visualization: [[viz(type: name, param1: value, ...)]]
+        // Use .+? (non-greedy) to handle nested parentheses in function expressions like sqrt(x*x + y*y)
+        return /\[\[viz\((.+?)\)\]\]/g;
     }
 
     getTagsPattern() {
@@ -658,6 +689,55 @@ export class MarkdownParser {
     }
 
     /**
+     * Render a visualization element
+     * Creates a container with data attributes that will be populated by Visualizations.js
+     *
+     * Sizing options:
+     *   size: tiny|small|medium|large|full (presets)
+     *   width: pixels or percentage (explicit width)
+     *   height: pixels or percentage (explicit height)
+     *   display: inline|float-left|float-right (display mode)
+     *   align: left|center|right (block alignment)
+     */
+    renderViz(paramsStr) {
+        const params = this.parseParams(paramsStr);
+        const type = params.named.type || params.positional[0] || 'unknown';
+        const id = params.named.id || `viz-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const display = params.named.display || 'block';
+
+        // Collect all params as data attributes
+        const dataAttrs = [];
+        dataAttrs.push(`data-viz-type="${type}"`);
+        dataAttrs.push(`data-viz-id="${id}"`);
+
+        // Inline styles for explicit sizing
+        const styles = [];
+
+        // Pass through all named params
+        Object.entries(params.named).forEach(([key, value]) => {
+            if (key !== 'type' && key !== 'id') {
+                // Handle width/height as inline styles for explicit sizing
+                if (key === 'width') {
+                    const hasUnit = /[a-z%]/i.test(value);
+                    styles.push(`width: ${value}${hasUnit ? '' : 'px'}`);
+                } else if (key === 'height') {
+                    const hasUnit = /[a-z%]/i.test(value);
+                    styles.push(`height: ${value}${hasUnit ? '' : 'px'}`);
+                }
+                dataAttrs.push(`data-viz-${key}="${value}"`);
+            }
+        });
+
+        const styleAttr = styles.length > 0 ? ` style="${styles.join('; ')}"` : '';
+
+        // Use <span> for inline display to avoid invalid HTML (div inside p)
+        // Use <div> for block-level display modes
+        const tag = display === 'inline' ? 'span' : 'div';
+
+        return `<${tag} class="viz-container" ${dataAttrs.join(' ')}${styleAttr}></${tag}>`;
+    }
+
+    /**
      * Render an image block element
      */
     renderImageBlock(paramsStr, content) {
@@ -774,6 +854,10 @@ export class MarkdownParser {
 
         html = html.replace(this.getTextareaPattern(), (match, params) => {
             return this.renderTextarea(params);
+        });
+
+        html = html.replace(this.getVizPattern(), (match, params) => {
+            return this.renderViz(params);
         });
 
         // Process citations (before other links to avoid conflicts)

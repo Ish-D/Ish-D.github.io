@@ -2635,3 +2635,325 @@ body.reader-mode-active .edit-btn:hover {
     border: none;
     border-top: 1px solid var(--color-border);
 }
+
+/* ============================================
+   VISUALIZATIONS
+   ============================================ */
+
+/* ---- Base Container ---- */
+.viz-container {
+    font-family: var(--font-family-serif);
+    position: relative;
+    overflow: hidden;
+    background: var(--color-card-background);
+    /* Default block display with auto sizing */
+    display: block;
+    margin: 12px 0;
+}
+
+/* Default sizing - full width when no size specified */
+.viz-container:not([data-viz-size]):not([style*="width"]) {
+    width: 100%;
+}
+
+/* ---- Size Presets ---- */
+.viz-container[data-viz-size="tiny"] {
+    width: 80px;
+    height: 60px;
+}
+
+.viz-container[data-viz-size="small"] {
+    width: 150px;
+    height: 120px;
+}
+
+.viz-container[data-viz-size="medium"] {
+    width: 250px;
+    height: 200px;
+}
+
+.viz-container[data-viz-size="large"] {
+    width: 350px;
+    height: 280px;
+}
+
+.viz-container[data-viz-size="full"] {
+    width: 100%;
+    height: auto;
+    min-height: 200px;
+}
+
+/* ---- Display Modes ---- */
+.viz-container[data-viz-display="inline"] {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 4px 8px;
+}
+
+.viz-container[data-viz-display="float-left"] {
+    float: left;
+    margin: 0 16px 12px 0;
+}
+
+.viz-container[data-viz-display="float-right"] {
+    float: right;
+    margin: 0 0 12px 16px;
+}
+
+/* ---- Alignment ---- */
+.viz-container[data-viz-align="left"] {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+.viz-container[data-viz-align="center"] {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.viz-container[data-viz-align="right"] {
+    margin-left: auto;
+    margin-right: 0;
+}
+
+/* ---- In Margins ---- */
+.card-margin .viz-container {
+    width: 100%;
+    height: auto;
+    min-height: 50px;
+    max-height: 150px;
+    margin: 6px 0;
+}
+
+.card-margin .viz-container .viz-canvas {
+    height: 100%;
+    min-height: 50px;
+}
+
+/* Smaller controls in margins */
+.card-margin .viz-controls {
+    gap: 2px;
+}
+
+.card-margin .viz-slider-row {
+    font-size: 10px;
+    gap: 4px;
+}
+
+.card-margin .viz-slider-label {
+    width: 16px;
+    font-size: 10px;
+}
+
+.card-margin .viz-slider-value {
+    width: 24px;
+    font-size: 9px;
+}
+
+.card-margin .viz-function-display {
+    font-size: 11px;
+    padding: 4px 0;
+}
+
+/* ---- 2D Polynomial Visualization ---- */
+.viz-polynomial {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 100%;
+}
+
+.viz-function-display {
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-base);
+    color: var(--color-text-primary);
+    padding: 4px 0;
+}
+
+.viz-function-label {
+    color: var(--color-text-secondary);
+}
+
+.viz-function-expr {
+    font-style: italic;
+}
+
+.viz-canvas {
+    width: 100%;
+    flex: 1;
+    min-height: 120px;
+    background: var(--color-card-background);
+}
+
+.viz-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.viz-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.viz-slider-label {
+    width: 24px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-serif);
+    font-style: italic;
+}
+
+.viz-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    height: 4px;
+    background: var(--color-border);
+    border-radius: 2px;
+    outline: none;
+}
+
+.viz-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px;
+    height: 12px;
+    background: var(--color-text-primary);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.15s ease;
+}
+
+.viz-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.viz-slider::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: var(--color-text-primary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.viz-slider-value {
+    width: 32px;
+    text-align: right;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono, monospace);
+    font-size: 11px;
+}
+
+.viz-error {
+    padding: 12px;
+    color: var(--color-text-secondary);
+    font-style: italic;
+    text-align: center;
+}
+
+/* ---- 3D Visualization Base ---- */
+.viz-container[data-viz-type="surface"],
+.viz-container[data-viz-type="curve3d"],
+.viz-container[data-viz-type="model"],
+.viz-container[data-viz-type="nodegraph3d"] {
+    min-height: 200px;
+    height: 300px;
+}
+
+/* Apply explicit height when size is set */
+.viz-container[data-viz-size="tiny"][data-viz-type="surface"],
+.viz-container[data-viz-size="tiny"][data-viz-type="curve3d"],
+.viz-container[data-viz-size="tiny"][data-viz-type="model"],
+.viz-container[data-viz-size="tiny"][data-viz-type="nodegraph3d"] {
+    min-height: 60px;
+    height: 60px;
+}
+
+.viz-container[data-viz-size="small"][data-viz-type="surface"],
+.viz-container[data-viz-size="small"][data-viz-type="curve3d"],
+.viz-container[data-viz-size="small"][data-viz-type="model"],
+.viz-container[data-viz-size="small"][data-viz-type="nodegraph3d"] {
+    min-height: 120px;
+    height: 120px;
+}
+
+.viz-3d-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: grab;
+}
+
+.viz-3d-canvas:active {
+    cursor: grabbing;
+}
+
+.viz-container.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.viz-container.loading::after {
+    content: 'Loading...';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-serif);
+    font-size: 12px;
+}
+
+/* ---- 3D Polynomial with Controls ---- */
+.viz-container[data-viz-type="polynomial3d"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+}
+
+/* Default height when no size specified */
+.viz-container[data-viz-type="polynomial3d"]:not([data-viz-size]):not([style*="height"]) {
+    height: 380px;
+}
+
+.viz-container[data-viz-type="polynomial3d"] .viz-3d-canvas {
+    flex: 1;
+    min-height: 150px;
+}
+
+.viz-3d-controls {
+    padding: 10px;
+    background: var(--color-card-background);
+    flex-shrink: 0;
+}
+
+.viz-3d-controls .viz-function-display {
+    margin-bottom: 6px;
+    font-size: 13px;
+}
+
+.viz-3d-controls .viz-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+/* Compact 3D controls when small */
+.viz-container[data-viz-size="small"] .viz-3d-controls,
+.viz-container[data-viz-size="tiny"] .viz-3d-controls {
+    padding: 6px;
+}
+
+.viz-container[data-viz-size="small"] .viz-3d-controls .viz-slider-row,
+.viz-container[data-viz-size="tiny"] .viz-3d-controls .viz-slider-row {
+    font-size: 10px;
+    gap: 4px;
+}
+
+/* 2D polynomial default sizing */
+.viz-container[data-viz-type="polynomial"]:not([data-viz-size]):not([style*="height"]) {
+    height: 320px;
+}

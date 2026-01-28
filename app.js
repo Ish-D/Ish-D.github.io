@@ -1,6 +1,8 @@
 import { Card } from './Card.js';
 import { MarkdownParser } from './MarkdownParser.js';
 import { CardCrypto } from './Crypto.js';
+import { controlsManager, SettingsConfig } from './Controls.js';
+import { vizManager } from './Visualizations.js';
 
 // Editor is loaded dynamically only on localhost
 
@@ -2039,19 +2041,8 @@ ${renderColumn(rightColumn)}
     }
 
     initSettings() {
-        // Load saved settings
-        this.settings = {
-            theme: localStorage.getItem('settings-theme') || 'light',
-            fontSize: parseInt(localStorage.getItem('settings-fontSize')) || 12,
-            lineHeight: parseFloat(localStorage.getItem('settings-lineHeight')) || 1.5,
-            cardShadow: localStorage.getItem('settings-cardShadow') !== 'false',
-            showHandles: localStorage.getItem('settings-showHandles') === 'true',
-            showConnections: localStorage.getItem('settings-showConnections') === 'true',
-            connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true',
-            showPreviews: localStorage.getItem('settings-showPreviews') === 'true', // Default to false (off)
-            readerMode: localStorage.getItem('settings-readerMode') === 'true',
-            marginSize: parseInt(localStorage.getItem('settings-marginSize')) || 10 // Percentage (0-25)
-        };
+        // Load saved settings from Controls.js configuration
+        this.settings = controlsManager.loadSettings();
 
         // Reader mode runtime state (can be URL-driven or toggle-driven)
         this.isReaderMode = false;
@@ -2060,13 +2051,6 @@ ${renderColumn(rightColumn)}
 
         // Track connections between cards (parentId -> [childIds])
         this.connections = new Map();
-
-        // Register actions that can be called by buttons
-        this.actions = {
-            resetSettings: () => this.resetSettings(),
-            clearPage: () => this.clearPage(),
-            submitContactForm: (button) => this.submitContactForm(button)
-        };
 
         // Apply saved settings immediately
         this.applySettings();
@@ -2084,142 +2068,79 @@ ${renderColumn(rightColumn)}
     // Set a setting value and save to localStorage
     setSetting(key, value) {
         this.settings[key] = value;
-        localStorage.setItem(`settings-${key}`, value);
-        this.applySettings();
 
-        // Update card shadows if that setting changed
-        if (key === 'cardShadow') {
-            this.updateCardShadows();
-        }
+        // Get config from SettingsConfig for storage key and side effects
+        const config = SettingsConfig[key];
+        if (config) {
+            localStorage.setItem(config.storage, value);
 
-        // Update handle visibility if that setting changed
-        if (key === 'showHandles') {
-            this.updateHandleVisibility();
-        }
+            // Create context for side effect handlers
+            const context = controlsManager.createContext(this);
 
-        // Update connections visibility if that setting changed
-        if (key === 'showConnections') {
-            this.updateConnectionsVisibility();
-        }
-
-        // Update connections layer position if that setting changed
-        if (key === 'connectionsAbove') {
-            this.updateConnectionsLayer();
-        }
-
-        // Clear active preview if previews were disabled
-        if (key === 'showPreviews' && !value) {
-            this.clearPreviewCard();
-        }
-
-        // Handle reader mode toggle from settings
-        if (key === 'readerMode') {
-            if (value) {
-                // Get current card to enter reader mode with
-                const currentCard = this.cards.size > 0
-                    ? Array.from(this.cards.values())[0]?.sourceFile
-                    : 'menu';
-                this.enterReaderMode(currentCard || 'menu');
-            } else {
-                this.exitReaderMode();
+            // Run apply function for CSS variable updates
+            if (config.apply) {
+                config.apply(value, context);
             }
-        }
 
-        // Update all card margins if margin size changed
-        if (key === 'marginSize') {
-            this.updateAllCardMargins(value);
+            // Run onSet for setting-specific side effects
+            if (config.onSet) {
+                config.onSet(value, context);
+            }
+        } else {
+            // Fallback for unknown settings
+            localStorage.setItem(`settings-${key}`, value);
         }
 
         // Sync all settings cards to reflect the change
         this.syncAllSettingsCards();
     }
 
-    // Execute a registered action
-    executeAction(actionName) {
-        if (this.actions[actionName]) {
-            this.actions[actionName]();
-        }
-    }
-
     /**
      * Bind interactive elements (toggles, sliders, buttons) in any card
      */
     bindInteractiveElements(cardElement) {
-        // Bind toggles
-        cardElement.querySelectorAll('.settings-toggle[data-bind]').forEach(toggle => {
-            const bind = toggle.dataset.bind;
-            const onValue = toggle.dataset.on || 'true';
-            const offValue = toggle.dataset.off || 'false';
+        // Delegate to controlsManager for all control binding
+        controlsManager.bindInteractiveElements(cardElement, this);
 
-            // Set initial state - handle both string and boolean comparisons
-            const currentValue = this.getSetting(bind);
-            const isOn = String(currentValue) === String(onValue) ||
-                         (onValue === 'true' && currentValue === true) ||
-                         (onValue === 'dark' && currentValue === 'dark');
-            toggle.classList.toggle('active', isOn);
-
-            // Handle clicks
-            toggle.addEventListener('click', () => {
-                const isCurrentlyOn = toggle.classList.contains('active');
-                // Convert to appropriate type
-                let newValue = isCurrentlyOn ? offValue : onValue;
-                if (newValue === 'true') newValue = true;
-                if (newValue === 'false') newValue = false;
-
-                this.setSetting(bind, newValue);
-                toggle.classList.toggle('active', !isCurrentlyOn);
-            });
+        // Initialize any visualizations in this card
+        vizManager.initVisualizations(cardElement, {
+            getSetting: (key) => this.getSetting(key),
+            setSetting: (key, value) => this.setSetting(key, value)
         });
 
-        // Bind sliders
-        cardElement.querySelectorAll('.settings-slider[data-bind]').forEach(slider => {
-            const bind = slider.dataset.bind;
-            const suffix = slider.dataset.suffix || '';
-
-            // Set initial value
-            const currentValue = this.getSetting(bind);
-            if (currentValue !== undefined) {
-                slider.value = currentValue;
-            }
-
-            // Update display value
-            const valueDisplay = cardElement.querySelector(`[data-value-for="${bind}"]`);
-            if (valueDisplay) {
-                valueDisplay.textContent = `${slider.value}${suffix}`;
-            }
-
-            // Handle input
-            slider.addEventListener('input', () => {
-                const value = slider.step && slider.step.includes('.')
-                    ? parseFloat(slider.value)
-                    : parseInt(slider.value);
-                this.setSetting(bind, value);
-
-                if (valueDisplay) {
-                    valueDisplay.textContent = `${value}${suffix}`;
-                }
-            });
-        });
-
-        // Bind buttons
-        cardElement.querySelectorAll('.settings-btn-action[data-action]').forEach(button => {
-            const action = button.dataset.action;
-
-            button.addEventListener('click', () => {
-                // Pass button to action for form context
-                if (this.actions[action]) {
-                    this.actions[action](button);
-                } else {
-                    this.executeAction(action);
-                }
-
-                // Re-sync all interactive elements in this card after action
-                this.syncInteractiveElements(cardElement);
-            });
-        });
+        // Initialize 3D visualizations (lazy load)
+        this.init3DVisualizations(cardElement);
 
         // Process any dynamic embeds in this card
         this.processEmbeds(cardElement);
+    }
+
+    /**
+     * Initialize 3D visualizations in a card element
+     * Lazy loads Three.js and the 3D system only when needed
+     */
+    async init3DVisualizations(cardElement) {
+        // Check if any 3D viz containers exist
+        const viz3DContainers = cardElement.querySelectorAll(
+            '.viz-container[data-viz-type="surface"],' +
+            '.viz-container[data-viz-type="curve3d"],' +
+            '.viz-container[data-viz-type="model"],' +
+            '.viz-container[data-viz-type="nodegraph3d"],' +
+            '.viz-container[data-viz-type="polynomial3d"]'
+        );
+
+        if (viz3DContainers.length === 0) return;
+
+        // Lazy load 3D system only when needed
+        try {
+            const { viz3DManager } = await import('./Visualizations3D.js');
+            await viz3DManager.initVisualizations(cardElement, {
+                getSetting: (key) => this.getSetting(key),
+                setSetting: (key, value) => this.setSetting(key, value)
+            });
+        } catch (error) {
+            console.error('Failed to initialize 3D visualizations:', error);
+        }
     }
 
     /**
@@ -2253,32 +2174,8 @@ ${renderColumn(rightColumn)}
      * Sync interactive element states with current settings (after reset, etc.)
      */
     syncInteractiveElements(cardElement) {
-        // Sync toggles
-        cardElement.querySelectorAll('.settings-toggle[data-bind]').forEach(toggle => {
-            const bind = toggle.dataset.bind;
-            const onValue = toggle.dataset.on || 'true';
-            const currentValue = this.getSetting(bind);
-            const isOn = String(currentValue) === String(onValue) ||
-                         (onValue === 'true' && currentValue === true) ||
-                         (onValue === 'dark' && currentValue === 'dark');
-            toggle.classList.toggle('active', isOn);
-        });
-
-        // Sync sliders
-        cardElement.querySelectorAll('.settings-slider[data-bind]').forEach(slider => {
-            const bind = slider.dataset.bind;
-            const suffix = slider.dataset.suffix || '';
-            const currentValue = this.getSetting(bind);
-
-            if (currentValue !== undefined) {
-                slider.value = currentValue;
-            }
-
-            const valueDisplay = cardElement.querySelector(`[data-value-for="${bind}"]`);
-            if (valueDisplay) {
-                valueDisplay.textContent = `${slider.value}${suffix}`;
-            }
-        });
+        // Delegate to controlsManager for all control syncing
+        controlsManager.syncInteractiveElements(cardElement, this);
     }
 
     /**
@@ -2292,39 +2189,13 @@ ${renderColumn(rightColumn)}
     }
 
     applySettings() {
-        // Theme
-        if (this.settings.theme === 'dark') {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
+        // Delegate to controlsManager for applying all settings
+        const context = controlsManager.createContext(this);
+        controlsManager.applySettings(this.settings, context);
 
-        // Font size (base and margins scale together)
-        const baseFontSize = this.settings.fontSize;
-        document.documentElement.style.setProperty('--font-size-base', `${baseFontSize}px`);
-
-        // Scale margin font sizes proportionally (margins are slightly smaller)
-        const marginFontSize = Math.max(9, baseFontSize - 1);
-        const marginSmallFontSize = Math.max(8, baseFontSize - 2);
-        document.documentElement.style.setProperty('--font-size-margin', `${marginFontSize}px`);
-        document.documentElement.style.setProperty('--font-size-margin-small', `${marginSmallFontSize}px`);
-        document.documentElement.style.setProperty('--font-size-margin-title', `${marginFontSize}px`);
-
-        // Line height (base and margins)
-        document.documentElement.style.setProperty('--line-height-base', this.settings.lineHeight);
-        document.documentElement.style.setProperty('--line-height-margin', this.settings.lineHeight);
-
-        // Handle visibility
+        // Handle visibility and shadows (these are always needed on init)
         this.updateHandleVisibility();
-
-        // Card shadows (handled via direct style updates)
         this.updateCardShadows();
-    }
-
-    saveSetting(key, value) {
-        this.settings[key] = value;
-        localStorage.setItem(`settings-${key}`, value);
-        this.applySettings();
     }
 
     async openSettingsCard() {
@@ -2745,117 +2616,6 @@ ${renderColumn(rightColumn)}
                 if (line) line.remove();
             }
         });
-    }
-
-    resetSettings() {
-        this.settings = {
-            theme: 'light',
-            fontSize: 12,
-            lineHeight: 1.5,
-            cardShadow: true,
-            showHandles: false,
-            showConnections: false,
-            connectionsAbove: false,
-            showPreviews: false // Default to off
-        };
-
-        // Clear localStorage
-        Object.keys(this.settings).forEach(key => {
-            localStorage.removeItem(`settings-${key}`);
-        });
-
-        this.applySettings();
-        this.updateCardShadows();
-        this.updateHandleVisibility();
-
-        // Sync all settings cards to reflect the reset
-        this.syncAllSettingsCards();
-    }
-
-    /**
-     * Clear all cards and reset the canvas to initial state
-     */
-    clearPage() {
-        // Clear saved state from localStorage
-        localStorage.removeItem('paper-canvas-state');
-
-        // Remove all cards
-        this.cards.forEach((card, id) => {
-            this.removeConnectionsForCard(id);
-            card.element.remove();
-        });
-        this.cards.clear();
-
-        // Clear connections
-        this.connections.clear();
-        if (this.connectionsSvg) {
-            this.connectionsSvg.querySelectorAll('.connection-line').forEach(line => line.remove());
-        }
-
-        // Reset canvas transform
-        this.panX = 0;
-        this.panY = 0;
-        this.zoom = 1;
-        this.rotation = 0;
-        this.updateCanvasTransform();
-
-        // Reset counters
-        this.pageCounter = 0;
-        this.zIndexCounter = 1000;
-
-        // Load fresh menu
-        this.loadMenuCard();
-    }
-
-    /**
-     * Submit contact form via Formspree
-     * @param {HTMLElement} button - The button that triggered the submit
-     */
-    async submitContactForm(button) {
-        const card = button.closest('.card');
-        const cardContent = card.querySelector('.card-content');
-
-        const nameInput = cardContent.querySelector('input[name="name"]');
-        const subjectInput = cardContent.querySelector('input[name="_subject"]');
-        const messageInput = cardContent.querySelector('textarea[name="message"]');
-
-        if (!nameInput.value.trim() || !messageInput.value.trim()) {
-            // Show error state briefly
-            [nameInput, messageInput].forEach(input => {
-                if (!input.value.trim()) {
-                    input.style.borderColor = '#c41e3a';
-                    setTimeout(() => input.style.borderColor = '', 2000);
-                }
-            });
-            return;
-        }
-
-        const data = {
-            name: nameInput.value,
-            _subject: subjectInput.value || 'Contact Form',
-            message: messageInput.value
-        };
-
-        button.disabled = true;
-        button.textContent = 'Sending...';
-
-        try {
-            const response = await fetch('https://formspree.io/f/mgokjyon', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                body: JSON.stringify(data)
-            });
-
-            if (response.ok) {
-                // Replace card content with "Sent"
-                cardContent.innerHTML = '<div class="form-success"><p>Sent</p></div>';
-            } else {
-                throw new Error('Failed');
-            }
-        } catch (e) {
-            button.textContent = 'Error - Retry';
-            button.disabled = false;
-        }
     }
 
     // Export all cards to JSON

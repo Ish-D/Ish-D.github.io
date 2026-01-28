@@ -1337,6 +1337,13 @@ export class Card {
     }
 
     delete() {
+        // Dispose any 3D visualizations before removal
+        this.element.querySelectorAll('.viz-container').forEach(container => {
+            if (container._viz3dState?.dispose) {
+                container._viz3dState.dispose();
+            }
+        });
+
         // Dispatch event before removal
         this.element.dispatchEvent(new CustomEvent('card-delete', {
             bubbles: true,
