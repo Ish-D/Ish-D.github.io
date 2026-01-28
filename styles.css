@@ -1193,6 +1193,21 @@ sup.jump-link {
     color: var(--color-text-secondary);
 }
 
+/* Tags overview two-column layout */
+.tags-two-column {
+    display: flex;
+    gap: 24px;
+}
+
+.tags-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.tags-column h3 {
+    margin-top: 0;
+}
+
 /* Bibliography and Citation Styles */
 .bibliography {
     margin-top: 32px;

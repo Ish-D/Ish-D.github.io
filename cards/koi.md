@@ -1,4 +1,5 @@
 ---
+name: Koi Pond
 width: 300
 height: 220
 ---

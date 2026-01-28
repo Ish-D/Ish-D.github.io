@@ -1,4 +1,5 @@
 ---
+name: Menu
 width: 320
 height: 340
 ---

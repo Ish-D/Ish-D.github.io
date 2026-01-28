@@ -1,4 +1,5 @@
 ---
+name: Bookmarks
 width: 340
 height: 420
 ---

@@ -1,7 +1,8 @@
 ---
+name: Photography
 width: 320
 height: 380
-tags: photography,art
+tags: [photography, visual], [art, visual]
 ---
 
 [[margin(right, type: relative)]]

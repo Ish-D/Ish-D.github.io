@@ -39,6 +39,11 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         # Get the file path
         path = self.path.split('?')[0]  # Remove query string
 
+        # API endpoint: return list of card files dynamically
+        if path == '/api/cards':
+            self.send_card_list()
+            return
+
         # Check if the path corresponds to an actual file
         file_path = '.' + path
 
@@ -59,6 +64,19 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         # Otherwise, serve index.html (SPA routing)
         self.path = '/index.html'
         return super().do_GET()
+
+    def send_card_list(self):
+        """Return JSON list of all card files in cards/ directory."""
+        cards_dir = Path('cards')
+        card_files = sorted([f.stem for f in cards_dir.glob('*.md')]) if cards_dir.exists() else []
+
+        response = json.dumps({'cards': card_files})
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', len(response))
+        self.send_header('Cache-Control', 'no-cache')
+        self.end_headers()
+        self.wfile.write(response.encode())
 
 
 # Try to import live-reload dependencies

@@ -135,9 +135,8 @@ class PaperCanvas {
         this.zIndexCounter = 1000;
 
         // Comprehensive tag index - built from all files at startup
-        this.globalTagIndex = {}; // Individual tags (for specific tag pages)
-        this.mainTagIndex = {};   // Main tags only (for overview)
-        this.tagHierarchy = null; // Loaded from tags.json
+        this.globalTagIndex = {}; // Subtags (for specific tag pages)
+        this.mainTagIndex = {};   // Main tags (for overview)
         this.fileTagCache = new Map(); // Cache file metadata to avoid re-parsing
 
         // Canvas transform state
@@ -516,6 +515,11 @@ class PaperCanvas {
                     // Open URL in an embedded card
                     this.openEmbedCard(embedUrl, parentCard, options, e);
                 } else if (cardName) {
+                    // Handle tag-* links by registering the page first
+                    if (cardName.startsWith('tag-')) {
+                        const tagName = cardName.slice(4); // Remove 'tag-' prefix
+                        this.registerTagPage(tagName, parentCard);
+                    }
                     // Open a card file
                     this.openCard(cardName, parentCard, options, e);
                 }
@@ -710,6 +714,15 @@ class PaperCanvas {
         this.canvas.addEventListener('tag-click', async (e) => {
             const { tagName, card } = e.detail;
 
+            // Register the tag page dynamically
+            const tagCardName = this.registerTagPage(tagName, card);
+
+            // Reader mode: navigate in-place
+            if (this.isReaderMode) {
+                await this.navigateReaderMode(tagCardName);
+                return;
+            }
+
             // Remove any existing tag page for this tag to ensure fresh positioning
             const existingTagCard = Array.from(this.cards.values()).find(c =>
                 c.sourceFile === `dynamic:tag-${tagName}`
@@ -717,9 +730,6 @@ class PaperCanvas {
             if (existingTagCard) {
                 this.removeCard(existingTagCard.id);
             }
-
-            // Register the tag page dynamically
-            const tagCardName = this.registerTagPage(tagName, card);
 
             // Calculate random position at click time - make it more dramatic
             const randomOffsetX = (Math.random() - 0.5) * 400; // ±200px
@@ -1365,23 +1375,71 @@ class PaperCanvas {
 
     // Build comprehensive tag index from ALL card files at startup
     async buildGlobalTagIndex() {
-        // Load tag hierarchy first
-        await this.loadTagHierarchy();
+        // Load card list dynamically - NO MANUAL STEPS
+        // 1. Localhost: /api/cards endpoint (server scans directory)
+        // 2. GitHub Pages: GitHub API lists files in repo
+        // 3. Fallback: manifest.json if it exists
+        let cardFiles = [];
 
-        // List of all known card files - update this when adding new cards
-        const cardFiles = [
-            'about', 'bookmarks', 'controls', 'journal', 'koi', 'menu',
-            'photography', 'settings', 'tags', 'todo', 'writing'
-        ];
+        if (this.isLocal) {
+            // Localhost: use server API
+            try {
+                const response = await fetch('/api/cards');
+                if (response.ok) {
+                    const data = await response.json();
+                    cardFiles = data.cards || [];
+                }
+            } catch (e) {}
+        }
 
-        this.globalTagIndex = {}; // Individual tags
-        this.mainTagIndex = {};   // Main tags only
+        // GitHub Pages: use GitHub API to list files
+        if (cardFiles.length === 0) {
+            const hostname = window.location.hostname;
+            if (hostname.endsWith('.github.io')) {
+                const username = hostname.replace('.github.io', '');
+                const repoName = `${username}.github.io`;
+                try {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${username}/${repoName}/contents/cards`,
+                        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
+                    );
+                    if (response.ok) {
+                        const files = await response.json();
+                        cardFiles = files
+                            .filter(f => f.name.endsWith('.md'))
+                            .map(f => f.name.replace('.md', ''))
+                            .sort();
+                    }
+                } catch (e) {
+                    console.warn('GitHub API request failed:', e);
+                }
+            }
+        }
+
+        // Final fallback: manifest.json
+        if (cardFiles.length === 0) {
+            try {
+                const response = await fetch(`cards/manifest.json?t=${Date.now()}`);
+                if (response.ok) {
+                    const manifest = await response.json();
+                    cardFiles = manifest.cards || [];
+                }
+            } catch (e) {}
+        }
+
+        if (cardFiles.length === 0) {
+            console.warn('No cards found');
+            return;
+        }
+
+        this.globalTagIndex = {}; // Individual tags (subtags)
+        this.mainTagIndex = {};   // Main tags
         this.fileTagCache.clear();
 
         // Process each file
         for (const cardName of cardFiles) {
             try {
-                const response = await fetch(`cards/${cardName}.md`);
+                const response = await fetch(`cards/${cardName}.md?t=${Date.now()}`);
                 if (!response.ok) {
                     console.warn(`Could not fetch ${cardName}.md`);
                     continue;
@@ -1400,27 +1458,46 @@ class PaperCanvas {
                     const frontmatter = frontmatterMatch[1];
                     const tagsMatch = frontmatter.match(/tags:\s*(.+)/);
 
+                    // Parse display name from front matter (falls back to filename)
+                    const nameMatch = frontmatter.match(/name:\s*(.+)/);
+                    const displayName = nameMatch ? nameMatch[1].trim() : cardName;
+
                     if (tagsMatch) {
                         const tagsStr = tagsMatch[1].trim();
-                        const tags = tagsStr.split(',')
-                            .map(tag => tag.replace(/\s+/g, ' ').trim())
-                            .filter(tag => tag.length > 0);
 
-                        // Detect main tags from this card's tag list
-                        const mainTags = this.getMainTagsForCard(tags);
+                        // Parse new [subtag, mainTag] format
+                        const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+                        const subtags = [];
+                        const mainTags = [];
+                        const subtagToMain = {};
+
+                        let match;
+                        while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                            const subtag = match[1].trim();
+                            const mainTag = match[2].trim();
+
+                            if (!subtags.includes(subtag)) subtags.push(subtag);
+                            if (!mainTags.includes(mainTag)) mainTags.push(mainTag);
+
+                            if (!subtagToMain[subtag]) subtagToMain[subtag] = [];
+                            if (!subtagToMain[subtag].includes(mainTag)) {
+                                subtagToMain[subtag].push(mainTag);
+                            }
+                        }
 
                         const cardData = {
-                            tags: tags,
-                            mainTags: mainTags,
+                            tags: subtags,           // Only subtags (for display)
+                            mainTags: mainTags,      // Main tags (for indexing)
+                            subtagToMain: subtagToMain,
                             sourceFile: cardName,
-                            title: cardName
+                            title: displayName       // Display name from front matter
                         };
 
                         // Store in cache for later use
                         this.fileTagCache.set(cardName, cardData);
 
                         // Add to individual tag index (for specific tag pages)
-                        tags.forEach(tag => {
+                        subtags.forEach(tag => {
                             if (!this.globalTagIndex[tag]) {
                                 this.globalTagIndex[tag] = [];
                             }
@@ -1448,42 +1525,6 @@ class PaperCanvas {
         }
     }
 
-    // Load tag hierarchy from tags.json
-    async loadTagHierarchy() {
-        try {
-            const response = await fetch(`tags.json?t=${Date.now()}`);
-            this.tagHierarchy = response.ok ? await response.json() : { mainTags: {}, config: {} };
-        } catch (e) {
-            console.error('Failed to load tag hierarchy:', e);
-            this.tagHierarchy = { mainTags: {}, config: {} };
-        }
-    }
-
-    // Determine which main tags apply to a card based on its tag list
-    getMainTagsForCard(cardTags) {
-        if (!this.tagHierarchy || !this.tagHierarchy.mainTags) {
-            return [];
-        }
-
-        const mainTags = new Set();
-
-        cardTags.forEach(tag => {
-            // Check if this tag is already a main tag
-            if (this.tagHierarchy.mainTags[tag]) {
-                mainTags.add(tag);
-            } else {
-                // Check if this tag is a subtag of any main tag
-                for (const [mainTag, subTags] of Object.entries(this.tagHierarchy.mainTags)) {
-                    if (subTags.includes(tag)) {
-                        mainTags.add(mainTag);
-                    }
-                }
-            }
-        });
-
-        return Array.from(mainTags);
-    }
-
     // Get cards with a specific tag from the global index
     getGlobalCardsWithTag(tagName) {
         return this.globalTagIndex[tagName] || [];
@@ -1492,56 +1533,254 @@ class PaperCanvas {
     // Register content providers for dynamic cards
     initContentProviders() {
         this.contentProviders = {
-            // Tags overview page
+            // Tags overview page - kept for backwards compatibility
             'tags': async () => {
                 return await this.generateTagsContent();
+            },
+
+            // Writing page - kept for backwards compatibility
+            'writing': async () => {
+                return await this.generateWritingContent();
             },
 
             // Individual tag pages (pattern: tag-{tagName})
             // This will be handled by a more flexible system
         };
+
+        // Embed generators - return just the HTML content, no headings
+        this.embedGenerators = {
+            'writing': () => this.generateWritingEmbed(),
+            'tags': () => this.generateTagsEmbed()
+        };
     }
 
     // Generate content for tags overview
     async generateTagsContent() {
-        // Load tags configuration (but we already have hierarchy loaded)
-        const recentLimit = this.tagHierarchy?.config?.recentLimit || 5;
+        // Get main tags dynamically from what's indexed
+        const mainTags = Object.keys(this.mainTagIndex).sort();
 
-        // Use main tag index instead of global tag index for overview
-        const tagIndex = this.mainTagIndex;
-
-        // Generate content
-        let content = '# Tags Overview\n\n';
-
-        if (Object.keys(tagIndex).length === 0) {
-            content += 'No tagged pages found.';
-        } else {
-            // Sort main tags by usage (most used first)
-            const sortedTags = Object.entries(tagIndex).sort((a, b) => b[1].length - a[1].length);
-
-            for (const [mainTag, cards] of sortedTags) {
-                content += `## ${mainTag}\n\n`;
-
-                // Show recent pages for this main tag
-                const recentCards = cards.slice(0, recentLimit);
-                if (recentCards.length > 0) {
-                    recentCards.forEach(card => {
-                        const fileName = card.sourceFile || 'Untitled';
-                        content += `- [[${fileName}]]\n`;
-                    });
-                    if (cards.length > recentLimit) {
-                        content += `- *...and ${cards.length - recentLimit} more*\n`;
-                    }
-                    content += '\n';
-                }
-            }
+        if (mainTags.length === 0) {
+            return {
+                content: '# Tags\n\nNo tagged pages found.',
+                isDynamic: true,
+                sourceFile: 'dynamic:tags-overview'
+            };
         }
+
+        // Build subtag data for each main tag
+        const mainTagData = mainTags.map(mainTag => {
+            const cards = this.mainTagIndex[mainTag] || [];
+            // Collect all subtags under this main tag with counts
+            const subtagCounts = {};
+            cards.forEach(card => {
+                card.tags.forEach(subtag => {
+                    if (card.subtagToMain?.[subtag]?.includes(mainTag)) {
+                        subtagCounts[subtag] = (subtagCounts[subtag] || 0) + 1;
+                    }
+                });
+            });
+            return { mainTag, subtagCounts };
+        });
+
+        // Split into two columns
+        const midpoint = Math.ceil(mainTagData.length / 2);
+        const leftColumn = mainTagData.slice(0, midpoint);
+        const rightColumn = mainTagData.slice(midpoint);
+
+        // Helper to render a column
+        const renderColumn = (items) => {
+            return items.map(({ mainTag, subtagCounts }) => {
+                const subtags = Object.entries(subtagCounts)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([subtag, count]) => `- [[tag-${subtag}|${subtag}]] (${count})`)
+                    .join('\n');
+                return `### ${mainTag}\n${subtags || '*no subtags*'}`;
+            }).join('\n\n');
+        };
+
+        // Generate two-column HTML
+        const content = `# Tags
+
+<div class="tags-two-column">
+<div class="tags-column">
+
+${renderColumn(leftColumn)}
+
+</div>
+<div class="tags-column">
+
+${renderColumn(rightColumn)}
+
+</div>
+</div>`;
 
         return {
             content: content,
             isDynamic: true,
             sourceFile: 'dynamic:tags-overview'
         };
+    }
+
+    // Generate content for writing page - cards grouped by main tag
+    async generateWritingContent() {
+        const mainTags = Object.keys(this.mainTagIndex).sort();
+
+        if (mainTags.length === 0) {
+            return {
+                content: '# Writing\n\nNo tagged pages found.',
+                isDynamic: true,
+                sourceFile: 'dynamic:writing'
+            };
+        }
+
+        // Build card list for each main tag
+        const mainTagData = mainTags.map(mainTag => {
+            const cards = this.mainTagIndex[mainTag] || [];
+            return { mainTag, cards };
+        }).filter(({ cards }) => cards.length > 0);
+
+        // Split into two columns
+        const midpoint = Math.ceil(mainTagData.length / 2);
+        const leftColumn = mainTagData.slice(0, midpoint);
+        const rightColumn = mainTagData.slice(midpoint);
+
+        // Helper to render a column
+        const renderColumn = (items) => {
+            return items.map(({ mainTag, cards }) => {
+                const cardLinks = cards
+                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .map(card => {
+                        const subtags = card.tags || [];
+                        const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
+                        return `- [[${card.sourceFile}|${card.title}]]${subtagsStr}`;
+                    })
+                    .join('\n');
+                return `### ${mainTag}\n${cardLinks || '*no cards*'}`;
+            }).join('\n\n');
+        };
+
+        const content = `# Writing
+
+<p style="text-align: center;">A collection of my writings and ramblings.</p>
+
+<div class="tags-two-column">
+<div class="tags-column">
+
+${renderColumn(leftColumn)}
+
+</div>
+<div class="tags-column">
+
+${renderColumn(rightColumn)}
+
+</div>
+</div>`;
+
+        return {
+            content: content,
+            isDynamic: true,
+            sourceFile: 'dynamic:writing'
+        };
+    }
+
+    /**
+     * Generate just the writing index HTML for embedding in markdown files
+     * Returns HTML string without heading - user defines their own heading in markdown
+     */
+    generateWritingEmbed() {
+        const mainTags = Object.keys(this.mainTagIndex).sort();
+
+        if (mainTags.length === 0) {
+            return '<p>No tagged pages found.</p>';
+        }
+
+        // Build card list for each main tag
+        const mainTagData = mainTags.map(mainTag => {
+            const cards = this.mainTagIndex[mainTag] || [];
+            return { mainTag, cards };
+        }).filter(({ cards }) => cards.length > 0);
+
+        // Split into two columns
+        const midpoint = Math.ceil(mainTagData.length / 2);
+        const leftColumn = mainTagData.slice(0, midpoint);
+        const rightColumn = mainTagData.slice(midpoint);
+
+        // Helper to render a column - returns parsed HTML
+        const renderColumn = (items) => {
+            return items.map(({ mainTag, cards }) => {
+                const cardLinks = cards
+                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .map(card => {
+                        const subtags = card.tags || [];
+                        const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
+                        return `<li><strong class="card-link" data-card="${card.sourceFile}">${card.title}</strong>${subtagsStr}</li>`;
+                    })
+                    .join('\n');
+                return `<h3>${mainTag}</h3>\n<ul>${cardLinks || '<li><em>no cards</em></li>'}</ul>`;
+            }).join('\n\n');
+        };
+
+        return `<div class="tags-two-column">
+<div class="tags-column">
+${renderColumn(leftColumn)}
+</div>
+<div class="tags-column">
+${renderColumn(rightColumn)}
+</div>
+</div>`;
+    }
+
+    /**
+     * Generate just the tags index HTML for embedding in markdown files
+     * Returns HTML string without heading - user defines their own heading in markdown
+     */
+    generateTagsEmbed() {
+        // Get main tags dynamically from what's indexed
+        const mainTags = Object.keys(this.mainTagIndex).sort();
+
+        if (mainTags.length === 0) {
+            return '<p>No tagged pages found.</p>';
+        }
+
+        // Build subtag data for each main tag
+        const mainTagData = mainTags.map(mainTag => {
+            const cards = this.mainTagIndex[mainTag] || [];
+            // Collect all subtags under this main tag with counts
+            const subtagCounts = {};
+            cards.forEach(card => {
+                card.tags.forEach(subtag => {
+                    if (card.subtagToMain?.[subtag]?.includes(mainTag)) {
+                        subtagCounts[subtag] = (subtagCounts[subtag] || 0) + 1;
+                    }
+                });
+            });
+            return { mainTag, subtagCounts };
+        });
+
+        // Split into two columns
+        const midpoint = Math.ceil(mainTagData.length / 2);
+        const leftColumn = mainTagData.slice(0, midpoint);
+        const rightColumn = mainTagData.slice(midpoint);
+
+        // Helper to render a column - returns parsed HTML
+        const renderColumn = (items) => {
+            return items.map(({ mainTag, subtagCounts }) => {
+                const subtags = Object.entries(subtagCounts)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([subtag, count]) => `<li><strong class="card-link" data-card="tag-${subtag}">${subtag}</strong> (${count})</li>`)
+                    .join('\n');
+                return `<h3>${mainTag}</h3>\n<ul>${subtags || '<li><em>no subtags</em></li>'}</ul>`;
+            }).join('\n\n');
+        };
+
+        return `<div class="tags-two-column">
+<div class="tags-column">
+${renderColumn(leftColumn)}
+</div>
+<div class="tags-column">
+${renderColumn(rightColumn)}
+</div>
+</div>`;
     }
 
     // Register a dynamic tag page on demand
@@ -1560,8 +1799,9 @@ class PaperCanvas {
                 content += 'No pages found with this tag.';
             } else {
                 taggedCards.forEach(card => {
-                    const fileName = card.sourceFile || 'Untitled';
-                    content += `- [[${fileName}]]\n`;
+                    const subtags = card.tags || [];
+                    const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
+                    content += `- [[${card.sourceFile}|${card.title}]]${subtagsStr}\n`;
                 });
             }
 
@@ -1662,7 +1902,17 @@ class PaperCanvas {
             wordCount: parsed.metadata.wordCount === 'true' || parsed.metadata.wordCount === true,
             readTime: parsed.metadata.readTime === 'true' || parsed.metadata.readTime === true,
             showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
-            tags: parsed.metadata.tags ? parsed.metadata.tags.split(',').map(tag => tag.replace(/\s+/g, ' ').trim()).filter(tag => tag.length > 0) : [],
+            tags: (() => {
+                const tagsStr = parsed.metadata.tags || '';
+                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+                const subtags = [];
+                let match;
+                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                    const subtag = match[1].trim();
+                    if (!subtags.includes(subtag)) subtags.push(subtag);
+                }
+                return subtags;
+            })(),
             // Mark dynamic cards
             isDynamic: contentData.isDynamic || false
         };
@@ -1966,6 +2216,36 @@ class PaperCanvas {
                 // Re-sync all interactive elements in this card after action
                 this.syncInteractiveElements(cardElement);
             });
+        });
+
+        // Process any dynamic embeds in this card
+        this.processEmbeds(cardElement);
+    }
+
+    /**
+     * Process dynamic embed placeholders in card content
+     * Replaces {{name}} placeholders with generated content
+     */
+    processEmbeds(cardElement) {
+        const embedPlaceholders = cardElement.querySelectorAll('.dynamic-embed[data-embed]');
+
+        embedPlaceholders.forEach(placeholder => {
+            const embedName = placeholder.dataset.embed;
+
+            if (this.embedGenerators && this.embedGenerators[embedName]) {
+                const generatedHtml = this.embedGenerators[embedName]();
+
+                // Create a wrapper div and set the HTML
+                const wrapper = document.createElement('div');
+                wrapper.className = 'embed-content';
+                wrapper.innerHTML = generatedHtml;
+
+                // Replace the placeholder with the generated content
+                placeholder.replaceWith(wrapper);
+            } else {
+                // Unknown embed - show error message
+                placeholder.innerHTML = `<p><em>Unknown embed: ${embedName}</em></p>`;
+            }
         });
     }
 
@@ -3520,8 +3800,18 @@ class PaperCanvas {
             progressBar: parsed.metadata.progressBar === 'true',
             wordCount: parsed.metadata.wordCount === 'true',
             readTime: parsed.metadata.readTime === 'true',
-            showTags: false, // Hide tags in reader mode
-            tags: [],
+            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
+            tags: (() => {
+                const tagsStr = parsed.metadata.tags || '';
+                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+                const subtags = [];
+                let match;
+                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                    const subtag = match[1].trim();
+                    if (!subtags.includes(subtag)) subtags.push(subtag);
+                }
+                return subtags;
+            })(),
             isDynamic: contentData.isDynamic || false,
             isReaderMode: true
         });

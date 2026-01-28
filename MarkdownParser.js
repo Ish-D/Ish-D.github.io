@@ -172,6 +172,11 @@ export class MarkdownParser {
         return /\[\[tags\]\]/g;
     }
 
+    getEmbedPattern() {
+        // Embeddable content blocks: {{name}}
+        return /\{\{(\w+)\}\}/g;
+    }
+
     getCitePattern() {
         // Citation: [[cite(url)]] or [[cite(url, title)]] or [[cite(url)]]{text}
         return /\[\[cite\(([^,)]+)(?:,\s*([^)]*))?\)\]\](?:\{([^}]*)\})?/g;
@@ -281,6 +286,12 @@ export class MarkdownParser {
         processedMarkdown = processedMarkdown.replace(
             this.getTagsPattern(),
             '<div class="card-tags-placeholder" data-tags-placeholder="true"></div>'
+        );
+
+        // Process {{embed}} directives with placeholders for dynamic content
+        processedMarkdown = processedMarkdown.replace(
+            this.getEmbedPattern(),
+            '<div class="dynamic-embed" data-embed="$1"></div>'
         );
 
         // Parse remaining markdown to HTML

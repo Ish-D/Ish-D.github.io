@@ -4,7 +4,7 @@ height: 680
 progressBar: true
 wordCount: true
 readTime: true
-tags: fiction,horror
+tags: [fiction, ideas], [horror, ideas]
 encrypted: true
 salt: 2HlJmmxo1g6BmJm5X4QOyw==
 iv: wFgnY3Yg3W3F3RnT

@@ -1,4 +1,5 @@
 ---
+name: Settings
 width: 500
 height: 640
 ---
