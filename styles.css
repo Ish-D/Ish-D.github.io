@@ -561,6 +561,7 @@ body {
     height: 20px;
     border: none;
     background: var(--color-card-background);
+    color: var(--color-text-primary);
     border-radius: 50%;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     cursor: pointer;
@@ -2300,4 +2301,322 @@ sup.jump-link {
 .btn-dotted:hover:not(:disabled) {
     border-bottom-color: var(--color-text-primary);
     border-bottom-style: solid;
+}
+
+/* ============================================
+   Reader Mode Styles
+   ============================================ */
+
+/* Body state when reader mode is active */
+body.reader-mode-active {
+    overflow: hidden;
+}
+
+/* Canvas in reader mode */
+#canvas.reader-mode {
+    cursor: default;
+}
+
+#canvas.reader-mode #canvas-content {
+    /* No transform in reader mode - reset to origin */
+    transform: none !important;
+}
+
+/* Reader mode card - full viewport display */
+.card.card-reader-mode {
+    /* Use fixed positioning for true full-screen */
+    position: fixed !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+
+    /* Remove rotation and any complex transforms */
+    transform: none !important;
+
+    /* Remove card chrome effects */
+    filter: none !important;
+
+    /* Smooth edges without shadow */
+    box-shadow: none;
+
+    /* Ensure it's above any remnants */
+    z-index: 100;
+}
+
+/* Hide corner fold effects in reader mode */
+.card.card-reader-mode .card-corner-fold,
+.card.card-reader-mode .card-corner-fold-tl,
+.card.card-reader-mode .card-corner-fold-tr,
+.card.card-reader-mode .card-corner-fold-bl,
+.card.card-reader-mode .card-corner-fold-br {
+    display: none !important;
+}
+
+/* Hide drag handles in reader mode */
+.card.card-reader-mode .card-drag-handle,
+.card.card-reader-mode .card-drag-handle-tl,
+.card.card-reader-mode .card-drag-handle-tr,
+.card.card-reader-mode .card-drag-handle-bl,
+.card.card-reader-mode .card-drag-handle-br,
+.card.card-reader-mode .card-handle,
+.card.card-reader-mode .card-rotate-handle {
+    display: none !important;
+}
+
+/* Simplified top handle in reader mode */
+.card.card-reader-mode .card-top-handle {
+    /* Move to top right corner */
+    left: auto;
+    right: 16px;
+    top: 16px;
+    transform: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.card.card-reader-mode:hover .card-top-handle {
+    opacity: 1;
+}
+
+/* Style delete button in reader mode */
+.card.card-reader-mode .delete-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    color: var(--color-text-primary);
+    background: var(--color-card-background);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.card.card-reader-mode .delete-btn:hover {
+    background: var(--color-background);
+}
+
+/* Settings button in reader mode - match card with strong shadow */
+body.reader-mode-active .settings-btn,
+body.reader-mode-active .edit-btn {
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 10001;
+}
+
+body.reader-mode-active .settings-btn:hover,
+body.reader-mode-active .edit-btn:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Hide pin button in reader mode */
+.card.card-reader-mode .pin-btn {
+    display: none;
+}
+
+/* Page number hidden in reader mode */
+.card.card-reader-mode .card-page-number-absolute {
+    display: none;
+}
+
+/* Margin resize handles hidden */
+.card.card-reader-mode .margin-resize-handle {
+    display: none;
+}
+
+/* Content area optimized for reading */
+.card.card-reader-mode .card-content {
+    padding: 48px;
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+}
+
+/* Reader mode link styling - make them more prominent */
+.card.card-reader-mode .card-link {
+    color: var(--color-link);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1px;
+    transition: border-color 0.2s ease;
+}
+
+.card.card-reader-mode .card-link:hover {
+    border-bottom-color: var(--color-link);
+}
+
+/* Responsive reader mode adjustments */
+@media (max-width: 768px) {
+    .card.card-reader-mode .card-content {
+        padding: 24px 20px;
+    }
+
+    /* Larger touch targets for links */
+    .card.card-reader-mode .card-link {
+        display: inline-block;
+        padding: 4px 0;
+        margin: -4px 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .card.card-reader-mode .card-content {
+        padding: 16px;
+    }
+}
+
+/* Locked card styling for reader mode */
+.card.card-reader-mode.card-locked .locked-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    padding: 32px;
+}
+
+.card.card-reader-mode.card-locked .lock-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.card.card-reader-mode.card-locked .password-input {
+    padding: 12px 16px;
+    font-size: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    margin: 16px 0;
+    width: 100%;
+    max-width: 300px;
+    font-family: var(--font-family-serif);
+}
+
+.card.card-reader-mode.card-locked .password-input.error {
+    border-color: #c00;
+    animation: shake 0.3s ease;
+}
+
+.card.card-reader-mode.card-locked .unlock-btn {
+    padding: 12px 24px;
+    font-size: 16px;
+    background: var(--color-text-primary);
+    color: var(--color-card-background);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: var(--font-family-serif);
+    transition: opacity 0.2s ease;
+}
+
+.card.card-reader-mode.card-locked .unlock-btn:hover {
+    opacity: 0.8;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    75% { transform: translateX(8px); }
+}
+
+/* ============================================
+   Settings Overlay (Reader Mode)
+   ============================================ */
+
+.settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.settings-overlay-card {
+    background: var(--color-card-background);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.2s ease;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.settings-overlay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--color-border);
+    font-family: var(--font-family-serif);
+    font-size: 18px;
+    font-weight: var(--font-weight-h2);
+}
+
+.settings-overlay-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.settings-overlay-close:hover {
+    background: var(--color-border);
+    color: var(--color-text-primary);
+}
+
+.settings-overlay-content {
+    padding: 20px;
+    overflow-y: auto;
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+}
+
+.settings-overlay-content h2 {
+    font-size: 14px;
+    font-weight: var(--font-weight-h2);
+    margin: 0 0 12px 0;
+    color: var(--color-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.settings-overlay-content h2:not(:first-child) {
+    margin-top: 24px;
+}
+
+.settings-overlay-content hr {
+    margin: 20px 0;
+    border: none;
+    border-top: 1px solid var(--color-border);
 }

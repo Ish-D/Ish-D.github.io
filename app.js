@@ -204,26 +204,41 @@ class PaperCanvas {
 
         this.initContentProviders(); // Initialize the content provider system
 
-        // Check URL for direct card routing (takes priority over saved state)
-        const cardName = this.getCardNameFromURL();
+        // Bind browser history navigation
+        window.addEventListener('popstate', (e) => this.handlePopState(e));
 
-        if (cardName) {
+        // Bind swipe gestures for reader mode
+        this.bindReaderModeSwipes();
+
+        // Bind viewport resize for reader mode
+        window.addEventListener('resize', () => this.handleResize());
+
+        // Check URL for direct card routing (takes priority over saved state)
+        const urlInfo = this.getCardNameFromURL();
+
+        if (urlInfo) {
             // URL specifies a card - clear any saved state and load that card
             localStorage.removeItem('paper-canvas-state');
 
-            // Reset canvas view
-            this.panX = 0;
-            this.panY = 0;
-            this.zoom = 1;
-            this.rotation = 0;
-            this.updateCanvasTransform();
+            if (urlInfo.readerMode) {
+                // Enter reader mode directly from URL
+                await this.enterReaderMode(urlInfo.cardName, false);
+            } else {
+                // Normal mode with specific card
+                // Reset canvas view
+                this.panX = 0;
+                this.panY = 0;
+                this.zoom = 1;
+                this.rotation = 0;
+                this.updateCanvasTransform();
 
-            // Load card filling most of the viewport
-            const card = await this.loadCardFromFile(cardName, { fillViewport: true });
-            if (!card) {
-                // Card not found, fall back to menu
-                console.warn(`Card "${cardName}" not found, loading menu`);
-                await this.loadMenuCard();
+                // Load card filling most of the viewport
+                const card = await this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
+                if (!card) {
+                    // Card not found, fall back to menu
+                    console.warn(`Card "${urlInfo.cardName}" not found, loading menu`);
+                    await this.loadMenuCard();
+                }
             }
         } else {
             // No URL card specified - try to restore saved state
@@ -256,21 +271,33 @@ class PaperCanvas {
         const path = window.location.pathname;
         const pathCard = decodeURIComponent(path.replace(/^\/+|\/+$/g, ''));
         if (pathCard) {
-            return pathCard;
+            // Check for reader mode prefix in pathname
+            if (pathCard.startsWith('r/')) {
+                return { cardName: pathCard.slice(2), readerMode: true };
+            }
+            return { cardName: pathCard, readerMode: false };
         }
 
         // Check hash (works with any static server: /#journal or #journal)
         const hash = window.location.hash;
         const hashCard = decodeURIComponent(hash.replace(/^#\/?/, ''));
         if (hashCard) {
-            return hashCard;
+            // Check for reader mode prefix in hash (e.g., #/r/journal or #r/journal)
+            if (hashCard.startsWith('r/')) {
+                return { cardName: hashCard.slice(2), readerMode: true };
+            }
+            return { cardName: hashCard, readerMode: false };
         }
 
         // Check query parameter (?page=journal)
         const params = new URLSearchParams(window.location.search);
         const queryCard = params.get('page');
         if (queryCard) {
-            return decodeURIComponent(queryCard);
+            const decoded = decodeURIComponent(queryCard);
+            if (decoded.startsWith('r/')) {
+                return { cardName: decoded.slice(2), readerMode: true };
+            }
+            return { cardName: decoded, readerMode: false };
         }
 
         return null;
@@ -303,6 +330,9 @@ class PaperCanvas {
             // Check if clicking on a card or its children
             const isCard = e.target.closest('.card');
 
+            // Ignore canvas interactions when locked (reader mode)
+            if (this.canvasLocked) return;
+
             // Left click on canvas background (not on a card) - pan
             if (!isCard && e.button === 0) {
                 e.preventDefault();
@@ -318,6 +348,8 @@ class PaperCanvas {
         // Touch events for canvas
         this.canvas.addEventListener('touchstart', (e) => {
             const isCard = e.target.closest('.card');
+            // Ignore canvas interactions when locked (reader mode)
+            if (this.canvasLocked) return;
             if (!isCard) {
                 if (e.touches.length === 1) {
                     // Single finger - pan
@@ -332,6 +364,7 @@ class PaperCanvas {
         }, { passive: false });
 
         this.canvas.addEventListener('touchmove', (e) => {
+            if (this.canvasLocked) return;
             if (this.isPanning && this.isTouchPanning) {
                 e.preventDefault();
                 this.panTouch(e);
@@ -378,6 +411,7 @@ class PaperCanvas {
 
         // Zoom with scroll wheel (only when not over a card)
         this.canvas.addEventListener('wheel', (e) => {
+            if (this.canvasLocked) return;
             const isCard = e.target.closest('.card');
             if (!isCard) {
                 e.preventDefault();
@@ -389,6 +423,13 @@ class PaperCanvas {
         this.canvas.addEventListener('card-delete', (e) => {
             const cardId = e.detail.cardId;
             const card = this.cards.get(cardId);
+
+            // Reader mode: navigate to menu instead of deleting
+            if (this.isReaderMode) {
+                e.preventDefault();
+                this.navigateReaderMode('menu');
+                return;
+            }
 
             // Cleanup file watcher if no other cards display this file
             if (card && card.sourceFile && !card.isDynamic) {
@@ -423,6 +464,13 @@ class PaperCanvas {
                 const cardName = cardLink.dataset.card;
                 const embedUrl = cardLink.dataset.url;
 
+                // Reader mode: in-place navigation for card links
+                if (this.isReaderMode && cardName && !embedUrl) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    await this.navigateReaderMode(cardName);
+                    return;
+                }
 
                 // If there's a preview card, make it permanent
                 if (this.previewCard && this.previewCardLink === cardLink) {
@@ -1727,8 +1775,14 @@ class PaperCanvas {
             showHandles: localStorage.getItem('settings-showHandles') === 'true',
             showConnections: localStorage.getItem('settings-showConnections') === 'true',
             connectionsAbove: localStorage.getItem('settings-connectionsAbove') === 'true',
-            showPreviews: localStorage.getItem('settings-showPreviews') === 'true' // Default to false (off)
+            showPreviews: localStorage.getItem('settings-showPreviews') === 'true', // Default to false (off)
+            readerMode: localStorage.getItem('settings-readerMode') === 'true'
         };
+
+        // Reader mode runtime state (can be URL-driven or toggle-driven)
+        this.isReaderMode = false;
+        this.canvasLocked = false;
+        this.readerModeCurrentCard = null;
 
         // Track connections between cards (parentId -> [childIds])
         this.connections = new Map();
@@ -1782,6 +1836,19 @@ class PaperCanvas {
         // Clear active preview if previews were disabled
         if (key === 'showPreviews' && !value) {
             this.clearPreviewCard();
+        }
+
+        // Handle reader mode toggle from settings
+        if (key === 'readerMode') {
+            if (value) {
+                // Get current card to enter reader mode with
+                const currentCard = this.cards.size > 0
+                    ? Array.from(this.cards.values())[0]?.sourceFile
+                    : 'menu';
+                this.enterReaderMode(currentCard || 'menu');
+            } else {
+                this.exitReaderMode();
+            }
         }
 
         // Sync all settings cards to reflect the change
@@ -1923,11 +1990,20 @@ class PaperCanvas {
             document.documentElement.removeAttribute('data-theme');
         }
 
-        // Font size
-        document.documentElement.style.setProperty('--font-size-base', `${this.settings.fontSize}px`);
+        // Font size (base and margins scale together)
+        const baseFontSize = this.settings.fontSize;
+        document.documentElement.style.setProperty('--font-size-base', `${baseFontSize}px`);
 
-        // Line height
+        // Scale margin font sizes proportionally (margins are slightly smaller)
+        const marginFontSize = Math.max(9, baseFontSize - 1);
+        const marginSmallFontSize = Math.max(8, baseFontSize - 2);
+        document.documentElement.style.setProperty('--font-size-margin', `${marginFontSize}px`);
+        document.documentElement.style.setProperty('--font-size-margin-small', `${marginSmallFontSize}px`);
+        document.documentElement.style.setProperty('--font-size-margin-title', `${marginFontSize}px`);
+
+        // Line height (base and margins)
         document.documentElement.style.setProperty('--line-height-base', this.settings.lineHeight);
+        document.documentElement.style.setProperty('--line-height-margin', this.settings.lineHeight);
 
         // Handle visibility
         this.updateHandleVisibility();
@@ -1943,6 +2019,12 @@ class PaperCanvas {
     }
 
     async openSettingsCard() {
+        // In reader mode, open settings as a centered overlay
+        if (this.isReaderMode) {
+            await this.openSettingsOverlay();
+            return;
+        }
+
         // Calculate position further from the corner with some jitter for multiple cards
         const btnRect = document.getElementById('settings-btn').getBoundingClientRect();
         const baseX = (btnRect.left + 100 - this.panX) / this.zoom;
@@ -1963,6 +2045,80 @@ class PaperCanvas {
 
         if (card) {
             card.element.setAttribute('data-settings-card', 'true');
+        }
+    }
+
+    /**
+     * Open settings as a centered overlay in reader mode
+     */
+    async openSettingsOverlay() {
+        // Check if overlay already exists
+        if (document.getElementById('settings-overlay')) {
+            return;
+        }
+
+        // Create overlay backdrop
+        const overlay = document.createElement('div');
+        overlay.id = 'settings-overlay';
+        overlay.className = 'settings-overlay';
+
+        // Create settings card container
+        const container = document.createElement('div');
+        container.className = 'settings-overlay-card';
+
+        // Load settings content
+        const contentData = await this.getCardContent('settings');
+        if (!contentData) return;
+
+        const parsed = this.parser.parse(contentData.content);
+        if (!parsed) return;
+
+        // Build card content
+        container.innerHTML = `
+            <div class="settings-overlay-header">
+                <span>Settings</span>
+                <button class="settings-overlay-close">&times;</button>
+            </div>
+            <div class="settings-overlay-content">
+                ${parsed.content}
+            </div>
+        `;
+
+        overlay.appendChild(container);
+        document.body.appendChild(overlay);
+
+        // Bind interactive elements
+        this.bindInteractiveElements(container);
+
+        // Close on backdrop click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                this.closeSettingsOverlay();
+            }
+        });
+
+        // Close button
+        container.querySelector('.settings-overlay-close').addEventListener('click', () => {
+            this.closeSettingsOverlay();
+        });
+
+        // Close on Escape key
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                this.closeSettingsOverlay();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+    }
+
+    /**
+     * Close the settings overlay
+     */
+    closeSettingsOverlay() {
+        const overlay = document.getElementById('settings-overlay');
+        if (overlay) {
+            overlay.remove();
         }
     }
 
@@ -3066,6 +3222,318 @@ class PaperCanvas {
         };
 
         requestAnimationFrame(animate);
+    }
+
+    // ============================================
+    // Reader Mode Methods
+    // ============================================
+
+    /**
+     * Lock canvas - disable pan, zoom, rotate
+     */
+    lockCanvas() {
+        this.canvasLocked = true;
+        this.canvas.style.cursor = 'default';
+
+        // Reset transform for reader mode
+        this.panX = 0;
+        this.panY = 0;
+        this.zoom = 1;
+        this.rotation = 0;
+        this.updateCanvasTransform();
+    }
+
+    /**
+     * Unlock canvas - restore normal interaction
+     */
+    unlockCanvas() {
+        this.canvasLocked = false;
+        this.canvas.style.cursor = 'grab';
+    }
+
+    /**
+     * Enter reader mode with a specific card
+     * @param {string} cardName - The card to display
+     * @param {boolean} pushHistory - Whether to push to browser history
+     */
+    async enterReaderMode(cardName, pushHistory = true) {
+        this.isReaderMode = true;
+        this.lockCanvas();
+        this.clearAllCards();
+        this.canvas.classList.add('reader-mode');
+        document.body.classList.add('reader-mode-active');
+
+        const card = await this.loadCardInReaderMode(cardName);
+        if (card) {
+            this.readerModeCurrentCard = card;
+            const url = `#/r/${cardName}`;
+            if (pushHistory) {
+                window.history.pushState({ readerMode: true, cardName }, '', url);
+            } else {
+                window.history.replaceState({ readerMode: true, cardName }, '', url);
+            }
+        }
+    }
+
+    /**
+     * Exit reader mode, restoring normal canvas behavior
+     */
+    exitReaderMode() {
+        this.isReaderMode = false;
+        this.unlockCanvas();
+        this.canvas.classList.remove('reader-mode');
+        document.body.classList.remove('reader-mode-active');
+
+        const currentCard = this.readerModeCurrentCard?.sourceFile;
+        this.clearAllCards();
+        this.readerModeCurrentCard = null;
+
+        // Update settings to reflect we're not in reader mode
+        this.settings.readerMode = false;
+        localStorage.setItem('settings-readerMode', 'false');
+        this.syncAllSettingsCards();
+
+        if (currentCard) {
+            window.history.replaceState(null, '', `#/${currentCard}`);
+            this.loadCardFromFile(currentCard, { fillViewport: true });
+        } else {
+            this.loadMenuCard();
+        }
+    }
+
+    /**
+     * Clear all cards from canvas
+     */
+    clearAllCards() {
+        this.cards.forEach((card, id) => {
+            this.removeConnectionsForCard(id);
+            card.element.remove();
+        });
+        this.cards.clear();
+        this.clearPreviewCard();
+    }
+
+    /**
+     * Get appropriate margin for reader mode based on viewport
+     */
+    getReaderModeMargin() {
+        // No margin - cards take up full screen
+        return 0;
+    }
+
+    /**
+     * Load a card specifically for reader mode display
+     */
+    async loadCardInReaderMode(cardName) {
+        const contentData = await this.getCardContent(cardName);
+        if (!contentData) return null;
+
+        // Handle encrypted content
+        if (contentData.isEncrypted) {
+            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
+            if (decryptedBody) {
+                const fullMarkdown = this.reconstructDecryptedMarkdown(
+                    contentData.encryptedData.originalFrontmatter,
+                    decryptedBody
+                );
+                contentData.content = fullMarkdown;
+                contentData.isEncrypted = false;
+            } else {
+                // Show locked card in reader mode style
+                return this.createLockedCardReaderMode(cardName, contentData);
+            }
+        }
+
+        const parsed = this.parser.parse(contentData.content);
+        if (!parsed) return null;
+
+        const margin = this.getReaderModeMargin();
+
+        const card = this.addCard({
+            x: margin,
+            y: margin,
+            width: window.innerWidth - (margin * 2),
+            height: window.innerHeight - (margin * 2),
+            rotation: 0,
+            pageNumber: null, // No page number in reader mode
+            content: parsed.content,
+            margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
+            sourceFile: contentData.sourceFile,
+            marginTB: 4,
+            marginLR: 4,
+            progressBar: parsed.metadata.progressBar === 'true',
+            wordCount: parsed.metadata.wordCount === 'true',
+            readTime: parsed.metadata.readTime === 'true',
+            showTags: false, // Hide tags in reader mode
+            tags: [],
+            isDynamic: contentData.isDynamic || false,
+            isReaderMode: true
+        });
+
+        card.element.classList.add('card-reader-mode');
+
+        // Bind interactive elements
+        this.bindInteractiveElements(card.element);
+
+        // Register for live-reload
+        if (!contentData.isDynamic && contentData.sourceFile) {
+            this.fileWatcher.watch(contentData.sourceFile);
+        }
+
+        return card;
+    }
+
+    /**
+     * Create a locked card in reader mode for encrypted content
+     */
+    createLockedCardReaderMode(cardName, contentData) {
+        const margin = this.getReaderModeMargin();
+
+        // Create a simple locked card display
+        const lockedContent = `
+            <div class="locked-card-content">
+                <div class="lock-icon">🔒</div>
+                <h2>Encrypted Card</h2>
+                <p>This card is encrypted. Enter password to unlock.</p>
+                <input type="password" class="password-input" placeholder="Password" autocomplete="current-password">
+                <button class="unlock-btn">Unlock</button>
+            </div>
+        `;
+
+        const card = this.addCard({
+            x: margin,
+            y: margin,
+            width: window.innerWidth - (margin * 2),
+            height: window.innerHeight - (margin * 2),
+            rotation: 0,
+            pageNumber: null,
+            content: lockedContent,
+            sourceFile: cardName,
+            marginTB: 4,
+            marginLR: 4,
+            isReaderMode: true
+        });
+
+        card.element.classList.add('card-reader-mode', 'card-locked');
+
+        // Bind unlock button
+        const unlockBtn = card.element.querySelector('.unlock-btn');
+        const passwordInput = card.element.querySelector('.password-input');
+
+        if (unlockBtn && passwordInput) {
+            const tryUnlock = async () => {
+                const password = passwordInput.value;
+                if (password) {
+                    try {
+                        const decrypted = await this.crypto.decrypt(
+                            contentData.encryptedData.encryptedContent,
+                            password,
+                            contentData.encryptedData.salt,
+                            contentData.encryptedData.iv
+                        );
+                        if (decrypted) {
+                            // Cache password for future
+                            this.crypto.cachePassword(cardName, password);
+                            // Reload the card
+                            this.navigateReaderMode(cardName);
+                        }
+                    } catch (e) {
+                        passwordInput.classList.add('error');
+                        setTimeout(() => passwordInput.classList.remove('error'), 500);
+                    }
+                }
+            };
+
+            unlockBtn.addEventListener('click', tryUnlock);
+            passwordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') tryUnlock();
+            });
+        }
+
+        return card;
+    }
+
+    /**
+     * Navigate to a new card in reader mode (in-place replacement)
+     */
+    async navigateReaderMode(cardName) {
+        this.clearAllCards();
+        const card = await this.loadCardInReaderMode(cardName);
+        if (card) {
+            this.readerModeCurrentCard = card;
+            window.history.pushState({ readerMode: true, cardName }, '', `#/r/${cardName}`);
+        }
+    }
+
+    /**
+     * Handle browser back/forward navigation
+     */
+    handlePopState(event) {
+        const state = event.state;
+
+        if (state?.readerMode) {
+            // Navigate to the specified card in reader mode
+            this.enterReaderMode(state.cardName, false);
+        } else if (this.isReaderMode) {
+            // Exiting reader mode via back button
+            this.exitReaderMode();
+        } else {
+            // Normal mode navigation
+            const urlInfo = this.getCardNameFromURL();
+            if (urlInfo) {
+                this.clearAllCards();
+                this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
+            }
+        }
+    }
+
+    /**
+     * Handle viewport resize - especially important for reader mode
+     */
+    handleResize() {
+        if (this.isReaderMode && this.readerModeCurrentCard) {
+            const margin = this.getReaderModeMargin();
+            const card = this.readerModeCurrentCard;
+
+            // Update card dimensions to match new viewport
+            card.width = window.innerWidth - (margin * 2);
+            card.height = window.innerHeight - (margin * 2);
+            card.x = margin;
+            card.y = margin;
+            card.updateTransform();
+        }
+    }
+
+    /**
+     * Bind swipe gestures for reader mode navigation
+     */
+    bindReaderModeSwipes() {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        const SWIPE_THRESHOLD = 100;
+        const EDGE_ZONE = 50; // pixels from left edge
+
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (!this.isReaderMode) return;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        this.canvas.addEventListener('touchend', (e) => {
+            if (!this.isReaderMode) return;
+
+            const touchEndX = e.changedTouches[0].clientX;
+            const touchEndY = e.changedTouches[0].clientY;
+            const deltaX = touchEndX - touchStartX;
+            const deltaY = touchEndY - touchStartY;
+
+            // Swipe right from left edge = go back
+            if (touchStartX < EDGE_ZONE &&
+                deltaX > SWIPE_THRESHOLD &&
+                Math.abs(deltaX) > Math.abs(deltaY)) {
+                window.history.back();
+            }
+        }, { passive: true });
     }
 
 

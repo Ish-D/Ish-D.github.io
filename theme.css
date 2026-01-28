@@ -151,8 +151,8 @@
 
 [data-theme="dark"] {
     /* Background colors */
-    --color-background: #1a1a1a;           /* Main canvas/page background */
-    --color-card-background: #2a2a2a;       /* Card background */
+    --color-background: #0e0e0e;           /* Main canvas/page background */
+    --color-card-background: #1a1a1a;       /* Card background */
 
     /* Text colors */
     --color-text-primary: #e0e0e0;          /* Main text color */
@@ -161,20 +161,20 @@
     --color-link-hover: #b0b0b0;            /* Link hover color */
 
     /* UI colors */
-    --color-shadow: rgba(0, 0, 0, 0.3);     /* Shadow color */
-    --color-border: #444444;                /* Border color */
+    --color-shadow: rgba(0, 0, 0, 0.4);     /* Shadow color */
+    --color-border: #333333;                /* Border color */
     --color-selection: rgba(255, 255, 255, 0.15); /* Text selection highlight */
 
     /* Code background */
-    --code-background: #333333;
+    --code-background: #252525;
 
     /* Fold effect colors - darker variants */
-    --fold-gradient-start: #3a3a3a;
-    --fold-gradient-mid1: #424242;
-    --fold-gradient-mid2: #4a4a4a;
-    --fold-gradient-mid3: #525252;
-    --fold-gradient-mid4: #5a5a5a;
-    --fold-gradient-end: #626262;
+    --fold-gradient-start: #2a2a2a;
+    --fold-gradient-mid1: #323232;
+    --fold-gradient-mid2: #3a3a3a;
+    --fold-gradient-mid3: #424242;
+    --fold-gradient-mid4: #4a4a4a;
+    --fold-gradient-end: #525252;
 
     /* Jump highlight color for dark mode */
     --jump-highlight-color: rgba(255, 255, 100, 0.5);  /* Bright yellow highlight for dark mode */

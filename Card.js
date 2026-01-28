@@ -52,6 +52,9 @@ export class Card {
         this.sourceFile = options.sourceFile || null;
         this.isDynamic = options.isDynamic || false;
 
+        // Reader mode flag
+        this.isReaderMode = options.isReaderMode || false;
+
         // State
         this.isDragging = false;
         this.isRotating = false;
@@ -84,6 +87,10 @@ export class Card {
 
         if (this.pinned) {
             card.classList.add('pinned');
+        }
+
+        if (this.isReaderMode) {
+            card.classList.add('card-reader-mode');
         }
 
         this.updateTransform(card);
