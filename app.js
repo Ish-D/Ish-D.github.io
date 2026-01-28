@@ -3408,8 +3408,10 @@ class PaperCanvas {
 
         const margin = this.getReaderModeMargin();
 
-        // Use larger card margins in reader mode (1.4x the normal setting)
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * 1.4);
+        // Use larger card margins in reader mode on mobile, slightly larger on desktop
+        const isMobile = window.innerWidth < 768;
+        const marginMultiplier = isMobile ? 1.4 : 1.1;
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * marginMultiplier);
 
         const card = this.addCard({
             x: margin,
@@ -3451,8 +3453,10 @@ class PaperCanvas {
     createLockedCardReaderMode(cardName, contentData) {
         const margin = this.getReaderModeMargin();
 
-        // Use larger card margins in reader mode (1.4x the normal setting)
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * 1.4);
+        // Use larger card margins in reader mode on mobile, slightly larger on desktop
+        const isMobile = window.innerWidth < 768;
+        const marginMultiplier = isMobile ? 1.4 : 1.1;
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * marginMultiplier);
 
         // Create a simple locked card display
         const lockedContent = `
