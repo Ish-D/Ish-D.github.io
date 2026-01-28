@@ -2133,21 +2133,7 @@ sup.jump-link {
     justify-content: center;
     height: 100%;
     padding: 24px;
-    text-align: center;
     box-sizing: border-box;
-}
-
-.locked-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.7;
-}
-
-.locked-card-content h3 {
-    margin: 0 0 24px 0;
-    font-size: 18px;
-    font-weight: var(--font-weight-h2);
-    color: var(--color-text-primary);
 }
 
 .locked-password-input {
@@ -2171,7 +2157,6 @@ sup.jump-link {
 
 .locked-password-input:disabled {
     opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .locked-error {
@@ -2185,32 +2170,6 @@ sup.jump-link {
 
 .locked-error.visible {
     opacity: 1;
-}
-
-.locked-unlock-btn {
-    margin-top: 12px;
-    padding: 8px 24px;
-    border: 1px solid var(--color-text-primary);
-    border-radius: 6px;
-    background: var(--color-text-primary);
-    color: var(--color-card-background);
-    font-size: 14px;
-    font-family: var(--font-family-serif);
-    cursor: pointer;
-    transition: opacity 0.2s ease, transform 0.1s ease;
-}
-
-.locked-unlock-btn:hover {
-    opacity: 0.9;
-}
-
-.locked-unlock-btn:active {
-    transform: scale(0.95);
-}
-
-.locked-unlock-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 /* ============================================

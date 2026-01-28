@@ -1147,14 +1147,11 @@ class PaperCanvas {
         const pageNumber = positionOptions.isPreview ? this.getPreviewPageNumber() : this.getNextPageNumber();
         const cardRotation = (positionOptions.rotation || 0) - this.rotation;
 
-        // Create locked content HTML
+        // Create locked content HTML - minimal, just a password input
         const lockedContent = `
             <div class="locked-card-content">
-                <div class="locked-icon">&#128274;</div>
-                <h3>Private</h3>
                 <input type="password" class="locked-password-input" placeholder="Password">
                 <div class="locked-error"></div>
-                <button class="locked-unlock-btn">Unlock</button>
             </div>
         `;
 
@@ -1201,23 +1198,16 @@ class PaperCanvas {
     bindLockedCardEvents(card) {
         const cardElement = card.element;
         const input = cardElement.querySelector('.locked-password-input');
-        const button = cardElement.querySelector('.locked-unlock-btn');
         const errorDiv = cardElement.querySelector('.locked-error');
 
-        if (!input || !button || !errorDiv) return;
+        if (!input || !errorDiv) return;
 
         const tryUnlock = async () => {
             const password = input.value;
-            if (!password) {
-                errorDiv.textContent = 'Enter a password';
-                errorDiv.classList.add('visible');
-                return;
-            }
+            if (!password) return;
 
             // Disable input during attempt
             input.disabled = true;
-            button.disabled = true;
-            button.textContent = 'Unlocking...';
 
             try {
                 const decryptedBody = await this.crypto.decrypt(card.encryptedData, password);
@@ -1247,13 +1237,10 @@ class PaperCanvas {
                 errorDiv.classList.add('visible');
                 input.value = '';
                 input.disabled = false;
-                button.disabled = false;
-                button.textContent = 'Unlock';
                 input.focus();
             }
         };
 
-        button.addEventListener('click', tryUnlock);
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') tryUnlock();
             // Hide error when typing
