@@ -20,6 +20,8 @@ tags: [fiction, ideas], [horror, ideas]
 ->*Found among the effects of the Ashworth Estate, 1947*<-
 ->*Donated to the Blackwood Historical Society by persons unknown*<-
 
+[[toc]]
+
 ---
 
 ## Day One
@@ -105,6 +107,8 @@ I have never been to this house. I am certain of this. Almost certain. Though I 
 
 ## [[anchor(day-two)]]{Day Two}
 
+### The Night
+
 I slept poorly, though I cannot say why. The bed is comfortable—more comfortable than any I have known. The linens smell of lavender and something else, something older, something that reminds me of [[style(text-decoration: line-through)]]{her} hospitals. The room is warm despite the season. And yet I woke repeatedly throughout the night, convinced each time that someone had just left the room, that the door was just closing, that footsteps were just fading down the corridor.
 
 Looking back now, I realize the signs were there from [[jump(day-two)]]{the very beginning}.
@@ -115,6 +119,8 @@ Looking back now, I realize the signs were there from [[jump(day-two)]]{the very
 
 [[style(color: #7f1d1d)]]{He told himself it was sweat. It was not sweat. It was her. It is always her. It will always be her.}
 }
+
+### The Ground Floor
 
 I explored the ground floor today. The house is well-maintained, though I have seen no servants. The floors are swept, the surfaces dusted, the fires laid and ready for lighting. In the kitchen I found fresh bread cooling on the counter, though I had heard no one enter, no one baking, no one at all.
 
@@ -176,6 +182,8 @@ I also found [[style(text-decoration: line-through)]]{a journal} nothing else of
 **I HAVE NOT SLEPT IN TWO DAYS — THE FOOTSTEPS DO NOT STOP — SHE IS LOOKING FOR ME**
 }
 
+### The West Wing
+
 Something is wrong with the west wing. The corridor that leads to it is perfectly ordinary—wallpapered in a faded floral pattern, lit by windows that let in the grey afternoon light, furnished with occasional tables and forgettable paintings of forgettable landscapes. And yet I cannot bring myself to walk down it.
 
 I have tried three times now. Each time I reach a point approximately halfway down the corridor and find myself unable to continue. My legs do not fail me. My courage does not falter. I simply... stop. As if I have reached an invisible barrier. As if my body knows something my mind does not.
@@ -210,6 +218,8 @@ I have tried three times now. Each time I reach a point approximately halfway do
 }
 
 The west wing is [[style(text-decoration: line-through)]]{locked} [[style(text-decoration: line-through)]]{forbidden} [[style(text-decoration: line-through)]]{where it happened} perfectly accessible. I simply choose not to go there. A man has preferences. A man has instincts. This is normal. This is rational.
+
+### The Woman in White
 
 I have been hearing things at night. Footsteps in the corridor outside my room. A woman's voice, too soft to make out the words, coming from somewhere below. The creak of a door opening and closing, opening and closing, as if someone were checking each room in sequence, searching for something. For someone.
 

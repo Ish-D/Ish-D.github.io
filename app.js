@@ -762,6 +762,35 @@ class PaperCanvas {
             }
         });
 
+        // Handle TOC link clicks for scrolling to headings
+        this.canvas.addEventListener('click', (e) => {
+            const tocLink = e.target.closest('[data-toc-target]');
+
+            if (tocLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetId = tocLink.dataset.tocTarget;
+                const card = tocLink.closest('.card');
+
+                if (card && targetId) {
+                    const contentContainer = card.querySelector('.card-content');
+                    const targetElement = card.querySelector(`#${CSS.escape(targetId)}`);
+                    if (contentContainer && targetElement) {
+                        // Calculate offset within the scrollable container
+                        const containerRect = contentContainer.getBoundingClientRect();
+                        const targetRect = targetElement.getBoundingClientRect();
+                        const scrollOffset = targetRect.top - containerRect.top + contentContainer.scrollTop;
+
+                        // Scroll only the content container, not the whole page
+                        contentContainer.scrollTo({
+                            top: scrollOffset - 10, // Small offset from top
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }
+        });
+
         // Listen for card state changes (from Card.js events)
         this.canvas.addEventListener('card-state-changed', () => {
             this.scheduleSave();

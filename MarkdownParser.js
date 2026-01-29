@@ -163,6 +163,10 @@ export class MarkdownParser {
 
         // Track which citation index we're on when processing (for multiple occurrences of same URL)
         this.citationIndexTracker = new Map();
+
+        // TOC tracking
+        this.headers = [];  // Array of { level, text, id, index }
+        this.headerIdCounts = new Map();  // Track duplicate header IDs for uniqueness
     }
 
     // Factory methods for regex patterns - creates fresh instances to avoid global state issues
@@ -226,6 +230,10 @@ export class MarkdownParser {
 
     getTagsPattern() {
         return /\[\[tags\]\]/g;
+    }
+
+    getTocPattern() {
+        return /\[\[toc\]\]/g;
     }
 
     getEmbedPattern() {
@@ -471,6 +479,114 @@ export class MarkdownParser {
         }
     }
 
+    /**
+     * Discovery pass: Scan markdown for all headers to build TOC data.
+     * Must be called before processing headers and TOC placeholder.
+     */
+    discoverHeaders(markdown) {
+        // Reset header tracking
+        this.headers = [];
+        this.headerIdCounts.clear();
+
+        // Match headers in order of appearance
+        const headerPattern = /^(#{1,3})\s+(.+)$/gm;
+
+        let match;
+        let index = 0;
+        while ((match = headerPattern.exec(markdown)) !== null) {
+            const level = match[1].length;  // 1, 2, or 3
+            const text = match[2].trim();
+            const id = this.slugify(text);
+
+            this.headers.push({
+                level,
+                text,
+                id,
+                index: index++
+            });
+        }
+    }
+
+    /**
+     * Clean header text for TOC display by removing anchor syntax and other DSL elements.
+     */
+    cleanHeaderText(text) {
+        return text
+            .replace(/\[\[anchor\([^)]+\)\]\]\{([^}]*)\}/g, '$1')  // [[anchor(id)]]{text} -> text
+            .replace(/\[\[jump\([^)]+\)\]\](?:\{([^}]*)\})?/g, (m, t) => t || '')  // [[jump(id)]]{text} -> text
+            .replace(/\[\[style\([^)]+\)\]\]\{([^}]*)\}/g, '$1')  // [[style(css)]]{text} -> text
+            .replace(/\[\[[^\]]+\]\]/g, '')  // Remove any remaining [[...]]
+            .replace(/\*\*([^*]+)\*\*/g, '$1')  // Remove bold
+            .replace(/\*([^*]+)\*/g, '$1')  // Remove italic
+            .replace(/`([^`]+)`/g, '$1')  // Remove code
+            .trim();
+    }
+
+    /**
+     * Generate HTML for the table of contents.
+     * Excludes H1, numbers H2 as 1, 2, 3... and H3 as 1.1, 1.2...
+     */
+    generateTocHtml() {
+        // Filter to only H2 and H3
+        const tocHeaders = this.headers.filter(h => h.level >= 2);
+
+        if (tocHeaders.length === 0) {
+            return '';
+        }
+
+        let html = '<nav class="toc" aria-label="Table of Contents">';
+        html += '<ol class="toc-list">';
+
+        let h2Counter = 0;
+        let h3Counter = 0;
+        let inH3List = false;
+
+        for (const header of tocHeaders) {
+            if (header.level === 2) {
+                // Close any open H3 list
+                if (inH3List) {
+                    html += '</ol></li>';
+                    inH3List = false;
+                }
+
+                h2Counter++;
+                h3Counter = 0;  // Reset H3 counter for each new H2
+
+                html += `<li class="toc-h2">`;
+                html += `<span class="toc-number">${h2Counter}</span>`;
+                html += `<a data-toc-target="${header.id}" class="toc-link toc-link-h2">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
+                // Don't close li yet - H3s may follow
+
+            } else if (header.level === 3) {
+                // Start H3 sublist if not already in one
+                if (!inH3List) {
+                    html += '<ol class="toc-sublist">';
+                    inH3List = true;
+                }
+
+                h3Counter++;
+                const number = h2Counter > 0 ? `${h2Counter}.${h3Counter}` : `${h3Counter}`;
+
+                html += `<li class="toc-h3">`;
+                html += `<span class="toc-number">${number}</span>`;
+                html += `<a data-toc-target="${header.id}" class="toc-link toc-link-h3">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
+                html += '</li>';
+            }
+        }
+
+        // Close any remaining open elements
+        if (inH3List) {
+            html += '</ol></li>';
+        } else if (h2Counter > 0) {
+            html += '</li>';
+        }
+
+        html += '</ol>';
+        html += '</nav>';
+
+        return html;
+    }
+
     parse(markdown) {
         // Reset all reference tracking for each document
         this.citations.clear();
@@ -478,6 +594,8 @@ export class MarkdownParser {
         this.anchorJumps.clear();
         this.jumpIndexTracker.clear();
         this.citationIndexTracker.clear();
+        this.headers = [];
+        this.headerIdCounts.clear();
 
         const result = {
             content: '',
@@ -502,6 +620,9 @@ export class MarkdownParser {
 
         // Discovery pass: pre-assign unified numbers to all jumps and citations
         this.discoverReferences(processedMarkdown);
+
+        // Discovery pass: find all headers for TOC generation
+        this.discoverHeaders(processedMarkdown);
 
         // Extract margin blocks using brace counting for correct nested block handling
         const allBlocks = this.extractAllBlocks(processedMarkdown);
@@ -571,6 +692,12 @@ export class MarkdownParser {
         processedMarkdown = processedMarkdown.replace(
             this.getTagsPattern(),
             '<div class="card-tags-placeholder" data-tags-placeholder="true"></div>'
+        );
+
+        // Process [[toc]] directive with generated table of contents
+        processedMarkdown = processedMarkdown.replace(
+            this.getTocPattern(),
+            () => this.generateTocHtml()
         );
 
         // Process {{embed}} directives with placeholders for dynamic content
@@ -768,6 +895,43 @@ export class MarkdownParser {
             "'": '&#039;'
         };
         return text.replace(/[&<>"']/g, char => htmlEntities[char]);
+    }
+
+    /**
+     * Convert header text to URL-safe slug for anchor IDs.
+     * Handles duplicate headers by appending -1, -2, etc.
+     */
+    slugify(text) {
+        // Strip HTML tags and inline markdown first
+        let clean = text
+            .replace(/<[^>]*>/g, '')           // Remove HTML tags
+            .replace(/\*\*([^*]+)\*\*/g, '$1') // Remove bold
+            .replace(/\*([^*]+)\*/g, '$1')     // Remove italic
+            .replace(/`([^`]+)`/g, '$1')       // Remove code
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // Remove links
+
+        // Create base slug
+        let slug = clean
+            .toLowerCase()
+            .trim()
+            .replace(/[^\w\s-]/g, '')    // Remove special characters
+            .replace(/\s+/g, '-')        // Replace spaces with hyphens
+            .replace(/-+/g, '-')         // Collapse multiple hyphens
+            .replace(/^-|-$/g, '');      // Trim leading/trailing hyphens
+
+        // Handle empty slugs
+        if (!slug) {
+            slug = 'section';
+        }
+
+        // Handle duplicates
+        const count = this.headerIdCounts.get(slug) || 0;
+        this.headerIdCounts.set(slug, count + 1);
+
+        if (count > 0) {
+            return `${slug}-${count}`;
+        }
+        return slug;
     }
 
     /**
@@ -1328,10 +1492,28 @@ export class MarkdownParser {
             }
         });
 
-        // Headers
-        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        // Headers - add IDs for TOC navigation
+        // Track which header we're on for each level to match discovered headers
+        let h3Index = 0, h2Index = 0, h1Index = 0;
+        const h3Headers = this.headers.filter(h => h.level === 3);
+        const h2Headers = this.headers.filter(h => h.level === 2);
+        const h1Headers = this.headers.filter(h => h.level === 1);
+
+        html = html.replace(/^### (.*$)/gim, (match, p1) => {
+            const header = h3Headers[h3Index++];
+            const id = header ? header.id : this.slugify(p1);
+            return `<h3 id="${id}">${p1}</h3>`;
+        });
+        html = html.replace(/^## (.*$)/gim, (match, p1) => {
+            const header = h2Headers[h2Index++];
+            const id = header ? header.id : this.slugify(p1);
+            return `<h2 id="${id}">${p1}</h2>`;
+        });
+        html = html.replace(/^# (.*$)/gim, (match, p1) => {
+            const header = h1Headers[h1Index++];
+            const id = header ? header.id : this.slugify(p1);
+            return `<h1 id="${id}">${p1}</h1>`;
+        });
 
         // Horizontal rules
         html = html.replace(/^---+$/gim, '<hr>');
