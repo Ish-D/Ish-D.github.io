@@ -74,8 +74,9 @@ export class Card {
         requestAnimationFrame(() => {
             this.updateRelativeMargins();
             this.updateProgressBar();
-            // Also render LaTeX in margins after DOM is ready
+            // Also render LaTeX and highlight code in margins after DOM is ready
             this.renderLaTeX();
+            this.highlightCode();
         });
     }
 
@@ -190,9 +191,10 @@ export class Card {
                 });
             }
 
-            // Render LaTeX in content after DOM is ready
+            // Render LaTeX and highlight code in content after DOM is ready
             requestAnimationFrame(() => {
                 this.renderLaTeX();
+                this.highlightCode();
             });
 
             // Assemble container with margins
@@ -1389,8 +1391,9 @@ export class Card {
                 contentEl.scrollTop = scrollPercent * newScrollHeight;
             }
 
-            // Re-render LaTeX
+            // Re-render LaTeX and highlight code
             this.renderLaTeX();
+            this.highlightCode();
 
             // Update relative margins
             this.updateRelativeMargins();
@@ -1497,6 +1500,22 @@ export class Card {
 
         // Fallback to manual processing
         this.renderLaTeXManually();
+    }
+
+    /**
+     * Highlight code blocks using Prism.js
+     */
+    highlightCode() {
+        // Check if Prism is available
+        if (typeof window.Prism === 'undefined') {
+            return;
+        }
+
+        // Highlight all code blocks in the card
+        const codeBlocks = this.element.querySelectorAll('pre code[class*="language-"]');
+        codeBlocks.forEach(block => {
+            window.Prism.highlightElement(block);
+        });
     }
 
     /**

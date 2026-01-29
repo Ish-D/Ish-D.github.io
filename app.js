@@ -3170,9 +3170,25 @@ ${renderColumn(rightColumn)}
                 this.smoothScrollTo(container, targetPosition);
             }
 
-            // Add highlight effect to the target element
-            this.highlightJumpTarget(targetElement);
+            // Animate the number on the target to draw attention
+            this.pulseTargetNumber(targetElement);
         });
+    }
+
+    /**
+     * Highlight the jump target element
+     */
+    pulseTargetNumber(targetElement) {
+        // Add background highlight to the entire target element
+        targetElement.classList.remove('jump-target-highlight');
+        // Force reflow to restart animation
+        void targetElement.offsetWidth;
+        targetElement.classList.add('jump-target-highlight');
+
+        // Remove highlight class after animation completes
+        setTimeout(() => {
+            targetElement.classList.remove('jump-target-highlight');
+        }, 2000);
     }
 
     /**

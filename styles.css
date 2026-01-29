@@ -664,29 +664,85 @@ sup.jump-link {
     vertical-align: super;
 }
 
-/* Jump target highlight effect */
-.jump-target-highlight {
-    background-color: var(--jump-highlight-color);
+/* Reference number on jump sources (unified numbering) */
+.ref-number {
+    font-size: 0.7em;
+    color: var(--color-link);
+    vertical-align: super;
+    margin-left: 1px;
+}
+
+/* Anchor number badge (unified numbering, shows on jump targets) */
+.anchor-number {
+    font-size: 0.65em;
+    color: var(--color-text-secondary);
+    vertical-align: super;
+    margin-right: 2px;
+    opacity: 0.8;
+}
+
+/* Clickable back-links on anchor numbers */
+.anchor-back-link {
+    color: var(--color-link);
+    cursor: pointer;
+    padding: 0 1px;
     border-radius: 2px;
-    transition: background-color 0.2s ease-in;
-    animation: jump-pulse 0.4s ease-out;
+    transition: background-color var(--transition-fast);
 }
 
-.jump-target-highlight.fade-out {
-    background-color: transparent;
-    transition: background-color var(--jump-highlight-fade-duration) ease-out;
+.anchor-back-link:hover {
+    background-color: rgba(0, 0, 0, 0.1);
 }
 
-/* Eye-catching pulse animation */
-@keyframes jump-pulse {
+/* Jump anchor container */
+.jump-anchor {
+    display: inline;
+}
+
+/* Ensure numbers display properly */
+.ref-number,
+.anchor-back-link {
+    display: inline-block;
+}
+
+/* Jump target background highlight animation */
+.jump-target-highlight {
+    animation: target-highlight 2s ease-out;
+    border-radius: 3px;
+}
+
+@keyframes target-highlight {
     0% {
-        transform: scale(1);
+        background-color: rgba(255, 220, 0, 0.6);
+        box-shadow: 0 0 20px rgba(255, 220, 0, 0.8);
     }
-    50% {
-        transform: scale(1.2);
+    30% {
+        background-color: rgba(255, 220, 0, 0.5);
+        box-shadow: 0 0 15px rgba(255, 220, 0, 0.6);
     }
     100% {
-        transform: scale(1);
+        background-color: transparent;
+        box-shadow: none;
+    }
+}
+
+/* Dark mode highlight color */
+[data-theme="dark"] .jump-target-highlight {
+    animation: target-highlight-dark 2s ease-out;
+}
+
+@keyframes target-highlight-dark {
+    0% {
+        background-color: rgba(255, 230, 100, 0.4);
+        box-shadow: 0 0 20px rgba(255, 230, 100, 0.5);
+    }
+    30% {
+        background-color: rgba(255, 230, 100, 0.3);
+        box-shadow: 0 0 15px rgba(255, 230, 100, 0.4);
+    }
+    100% {
+        background-color: transparent;
+        box-shadow: none;
     }
 }
 
@@ -727,6 +783,62 @@ sup.jump-link {
 .card-content pre code {
     background: none;
     padding: 0;
+}
+
+/* Quote block styling */
+.quote-block {
+    margin: var(--paragraph-margin) 0;
+    padding: 16px 20px;
+    border-left: 3px solid var(--color-link);
+    background: var(--color-card-background);
+    font-style: italic;
+    position: relative;
+}
+
+.quote-block .quote-content {
+    margin: 0;
+}
+
+.quote-block .quote-content p {
+    margin: 0;
+}
+
+.quote-block .quote-author {
+    margin-top: 12px;
+    font-style: normal;
+    font-size: 0.9em;
+    color: var(--color-text-secondary);
+    text-align: right;
+}
+
+/* Code block styling (with Prism.js) */
+.code-block {
+    margin: var(--paragraph-margin) 0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.code-block pre {
+    margin: 0;
+    padding: var(--code-block-padding);
+    overflow-x: auto;
+    font-size: var(--font-size-code);
+    line-height: 1.5;
+}
+
+.code-block pre code {
+    font-family: var(--font-family-mono);
+    background: none;
+    padding: 0;
+}
+
+/* Dark mode adjustments for Prism */
+[data-theme="dark"] .code-block pre[class*="language-"] {
+    background: var(--code-background);
+}
+
+[data-theme="dark"] .code-block code[class*="language-"] {
+    color: var(--color-text);
 }
 
 /* Margin annotation styling */

@@ -35,7 +35,7 @@ export const SettingsConfig = {
     },
 
     fontSize: {
-        default: 12,
+        default: 17,
         type: 'number',
         storage: 'settings-fontSize',
         apply(value, context) {
@@ -50,7 +50,7 @@ export const SettingsConfig = {
     },
 
     lineHeight: {
-        default: 1.5,
+        default: 1.3,
         type: 'number',
         storage: 'settings-lineHeight',
         apply(value, context) {

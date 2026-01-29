@@ -17,6 +17,8 @@
  *   center
  *   style(css properties separated by semicolons)
  *   image(src, scale: percentage, fit: cover|contain|fill, align: left|center|right, caption: text)
+ *   quote(author, anchor: id) - Styled blockquote with optional author attribution
+ *   code(language, anchor: id) - Syntax-highlighted code block using Prism.js
  *
  * Margin Parameters:
  *   side      - left, right, top, bottom (first positional param)
@@ -55,7 +57,7 @@
  *
  * Examples:
  *   [[toggle(bind: theme, on: dark, off: light, label: Dark Mode)]]
- *   [[slider(bind: fontSize, min: 10, max: 18, step: 1, label: Font Size, suffix: px)]]
+ *   [[slider(bind: fontSize, min: 12, max: 22, step: 1, label: Font Size, suffix: px)]]
  *   [[button(action: resetSettings, label: Reset to Defaults)]]
  *
  * VISUALIZATIONS
@@ -147,8 +149,20 @@ export class MarkdownParser {
         this.frontMatterPattern = /^---\s*([\s\S]*?)---/;
 
         // Citation tracking for bibliography
-        this.citations = new Map(); // URL -> { number, title, count }
-        this.citationCounter = 0;
+        this.citations = new Map(); // URL -> { number, title, count, sourceIds: [] }
+
+        // Unified counter for all references (citations + jumps)
+        this.unifiedCounter = 0;
+
+        // Track which numbers are assigned to each anchor (for jumps)
+        // anchorId -> [{number, sourceId}, ...] (multiple jumps can point to same anchor)
+        this.anchorJumps = new Map();
+
+        // Track which jump index we're on when processing (to match discovery order)
+        this.jumpIndexTracker = new Map();
+
+        // Track which citation index we're on when processing (for multiple occurrences of same URL)
+        this.citationIndexTracker = new Map();
     }
 
     // Factory methods for regex patterns - creates fresh instances to avoid global state issues
@@ -243,10 +257,91 @@ export class MarkdownParser {
         return /\$\$([^]*?)\$\$/g;
     }
 
+    /**
+     * Get the next jump index for a given target ID.
+     * Used during rendering to match jumps to their pre-assigned numbers.
+     */
+    getNextJumpIndex(targetId) {
+        const current = this.jumpIndexTracker.get(targetId) || 0;
+        this.jumpIndexTracker.set(targetId, current + 1);
+        return current;
+    }
+
+    /**
+     * Get the next citation source ID for a given URL.
+     * Used during rendering to match citation occurrences to their pre-assigned source IDs.
+     */
+    getNextCitationSourceId(url) {
+        const citation = this.citations.get(url);
+        if (!citation || !citation.sourceIds) return null;
+
+        const current = this.citationIndexTracker.get(url) || 0;
+        this.citationIndexTracker.set(url, current + 1);
+        return citation.sourceIds[current] || null;
+    }
+
+    /**
+     * Discovery pass: Scan markdown for all jumps and citations to pre-assign unified numbers.
+     * Must be called before processing anchors, jumps, and citations.
+     * Each jump and citation gets a unique source ID for bidirectional navigation.
+     */
+    discoverReferences(markdown) {
+        const jumpPattern = /\[\[jump\(([^)]+)\)\]\](?:\{([^}]*)\})?/g;
+        const citePattern = /\[\[cite\(([^,)]+)(?:,\s*([^)]*))?\)\]\](?:\{([^}]*)\})?/g;
+
+        // Collect all matches with their positions
+        const matches = [];
+        let m;
+
+        while ((m = jumpPattern.exec(markdown)) !== null) {
+            matches.push({ type: 'jump', targetId: m[1].trim(), index: m.index });
+        }
+
+        while ((m = citePattern.exec(markdown)) !== null) {
+            matches.push({ type: 'cite', url: m[1].trim(), title: m[2]?.trim(), index: m.index });
+        }
+
+        // Sort by document position for linear numbering
+        matches.sort((a, b) => a.index - b.index);
+
+        // Assign numbers in order
+        for (const item of matches) {
+            if (item.type === 'jump') {
+                // Each jump gets a unique number and source ID for back-navigation
+                this.unifiedCounter++;
+                const sourceId = `jump-ref-${this.unifiedCounter}`;
+                const jumpInfo = this.anchorJumps.get(item.targetId) || [];
+                jumpInfo.push({ number: this.unifiedCounter, sourceId: sourceId });
+                this.anchorJumps.set(item.targetId, jumpInfo);
+            } else if (item.type === 'cite') {
+                // Citations reuse numbers for the same URL, but each occurrence gets a unique sourceId
+                if (!this.citations.has(item.url)) {
+                    this.unifiedCounter++;
+                    const sourceId = `cite-ref-${this.unifiedCounter}-1`;
+                    this.citations.set(item.url, {
+                        number: this.unifiedCounter,
+                        url: item.url,
+                        title: item.title || this.extractTitleFromUrl(item.url),
+                        count: 1,
+                        sourceIds: [sourceId]
+                    });
+                } else {
+                    const citation = this.citations.get(item.url);
+                    citation.count++;
+                    const sourceId = `cite-ref-${citation.number}-${citation.count}`;
+                    citation.sourceIds.push(sourceId);
+                }
+            }
+        }
+    }
+
     parse(markdown) {
-        // Reset citations for each document
+        // Reset all reference tracking for each document
         this.citations.clear();
-        this.citationCounter = 0;
+        this.unifiedCounter = 0;
+        this.anchorJumps.clear();
+        this.jumpIndexTracker.clear();
+        this.citationIndexTracker.clear();
 
         const result = {
             content: '',
@@ -268,6 +363,9 @@ export class MarkdownParser {
             result.metadata = this.parseFrontMatter(frontMatterMatch[1]);
             processedMarkdown = processedMarkdown.replace(this.frontMatterPattern, '');
         }
+
+        // Discovery pass: pre-assign unified numbers to all jumps and citations
+        this.discoverReferences(processedMarkdown);
 
         // Extract and process blocks using fresh regex instance
         const blockPattern = this.getBlockPattern();
@@ -318,10 +416,20 @@ export class MarkdownParser {
         // Process remaining blocks (center, style) in main content
         processedMarkdown = this.processBlocks(processedMarkdown);
 
-        // Process anchors in main content
+        // Process anchors in main content (with clickable number badges for bidirectional navigation)
         processedMarkdown = processedMarkdown.replace(
             this.getAnchorPattern(),
-            '<span data-anchor-id="$1">$2</span>'
+            (match, anchorId, text) => {
+                const jumpInfos = this.anchorJumps.get(anchorId);
+                if (jumpInfos && jumpInfos.length > 0) {
+                    // Create clickable numbers that link back to their sources
+                    const numLinks = jumpInfos.map(info =>
+                        `<span class="jump-link anchor-back-link" data-jump-target="${info.sourceId}">${info.number}</span>`
+                    ).join(', ');
+                    return `<span data-anchor-id="${anchorId}" class="jump-anchor"><sup class="anchor-number">${numLinks}</sup>${text}</span>`;
+                }
+                return `<span data-anchor-id="${anchorId}">${text}</span>`;
+            }
         );
 
         // Process [[tags]] directive with placeholder for card tags
@@ -369,10 +477,83 @@ export class MarkdownParser {
                 return `<div class="styled-block" style="${sanitizedStyles}">${content.trim()}</div>`;
             } else if (type === 'image') {
                 return this.renderImageBlock(params || '', content.trim());
+            } else if (type === 'quote') {
+                return this.renderQuoteBlock(params || '', content.trim());
+            } else if (type === 'code') {
+                return this.renderCodeBlock(params || '', content.trim());
             }
             // Return unchanged for unknown types
             return match;
         });
+    }
+
+    /**
+     * Render a quote block with optional author attribution
+     * Syntax: [[quote(author: "Name", anchor: id)]] { quote text }
+     */
+    renderQuoteBlock(paramsStr, content) {
+        const params = this.parseParams(paramsStr);
+
+        // First positional param can be the author (for convenience)
+        const author = params.named.author || params.positional[0] || '';
+        const anchorId = params.named.anchor || null;
+
+        // Process the content through markdown
+        const processedContent = this.parseMarkdown(content);
+
+        // Build the HTML
+        let html = '<blockquote class="quote-block"';
+        if (anchorId) {
+            html += ` data-anchor-id="${anchorId}"`;
+        }
+        html += '>';
+        html += `<div class="quote-content">${processedContent}</div>`;
+        if (author) {
+            html += `<footer class="quote-author">— ${author}</footer>`;
+        }
+        html += '</blockquote>';
+
+        return html;
+    }
+
+    /**
+     * Render a code block with syntax highlighting
+     * Syntax: [[code(language)]] { code } or [[code(lang: javascript, anchor: id)]] { code }
+     */
+    renderCodeBlock(paramsStr, content) {
+        const params = this.parseParams(paramsStr);
+
+        // First positional param is the language (for convenience)
+        const language = params.named.lang || params.named.language || params.positional[0] || 'plaintext';
+        const anchorId = params.named.anchor || null;
+
+        // Escape HTML entities in the code
+        const escapedCode = this.escapeHtml(content);
+
+        // Build the HTML with Prism.js classes
+        let html = '<div class="code-block"';
+        if (anchorId) {
+            html += ` data-anchor-id="${anchorId}"`;
+        }
+        html += '>';
+        html += `<pre class="language-${language}"><code class="language-${language}">${escapedCode}</code></pre>`;
+        html += '</div>';
+
+        return html;
+    }
+
+    /**
+     * Escape HTML entities for safe code display
+     */
+    escapeHtml(text) {
+        const htmlEntities = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return text.replace(/[&<>"']/g, char => htmlEntities[char]);
     }
 
     /**
@@ -941,17 +1122,33 @@ export class MarkdownParser {
             return `<span class="styled-inline" style="${sanitizedStyles}">${text}</span>`;
         });
 
-        // Anchors: [[anchor(id)]]{text}
-        html = html.replace(this.getAnchorPattern(), '<span data-anchor-id="$1">$2</span>');
+        // Anchors: [[anchor(id)]]{text} - with clickable number badges for bidirectional navigation
+        html = html.replace(this.getAnchorPattern(), (match, anchorId, text) => {
+            const jumpInfos = this.anchorJumps.get(anchorId);
+            if (jumpInfos && jumpInfos.length > 0) {
+                // Create clickable numbers that link back to their sources
+                const numLinks = jumpInfos.map(info =>
+                    `<span class="jump-link anchor-back-link" data-jump-target="${info.sourceId}">${info.number}</span>`
+                ).join(', ');
+                return `<span data-anchor-id="${anchorId}" class="jump-anchor"><sup class="anchor-number">${numLinks}</sup>${text}</span>`;
+            }
+            return `<span data-anchor-id="${anchorId}">${text}</span>`;
+        });
 
         // Jump links: [[jump(target-id)]] or [[jump(target-id)]]{display text}
         html = html.replace(this.getJumpPattern(), (match, targetId, displayText) => {
+            const jumpInfos = this.anchorJumps.get(targetId);
+            const jumpIndex = this.getNextJumpIndex(targetId);
+            const jumpInfo = jumpInfos ? jumpInfos[jumpIndex] : null;
+            const number = jumpInfo ? jumpInfo.number : null;
+            const sourceId = jumpInfo ? jumpInfo.sourceId : null;
+            const numHtml = number ? `<sup class="ref-number">${number}</sup>` : '';
+            const anchorAttr = sourceId ? ` data-anchor-id="${sourceId}"` : '';
+
             if (displayText) {
-                // Custom display text with underline and superscript upward arrow
-                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link); text-decoration: underline;">${displayText}<sup style="margin-left: 1px;">↑</sup></span>`;
+                return `<span class="jump-link" data-jump-target="${targetId}"${anchorAttr} style="cursor: pointer; color: var(--color-link); text-decoration: underline dotted; text-underline-offset: 2px;">${displayText}${numHtml}</span>`;
             } else {
-                // No custom text, show arrow with target id
-                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link);">→ ${targetId}</span>`;
+                return `<span class="jump-link" data-jump-target="${targetId}"${anchorAttr} style="cursor: pointer; color: var(--color-link);">${targetId}${numHtml}</span>`;
             }
         });
 
@@ -1067,12 +1264,18 @@ export class MarkdownParser {
 
         // Jump links: [[jump(target-id)]] or [[jump(target-id)]]{display text}
         html = html.replace(this.getJumpPattern(), (match, targetId, displayText) => {
+            const jumpInfos = this.anchorJumps.get(targetId);
+            const jumpIndex = this.getNextJumpIndex(targetId);
+            const jumpInfo = jumpInfos ? jumpInfos[jumpIndex] : null;
+            const number = jumpInfo ? jumpInfo.number : null;
+            const sourceId = jumpInfo ? jumpInfo.sourceId : null;
+            const numHtml = number ? `<sup class="ref-number">${number}</sup>` : '';
+            const anchorAttr = sourceId ? ` data-anchor-id="${sourceId}"` : '';
+
             if (displayText) {
-                // Custom display text with underline and superscript upward arrow
-                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link); text-decoration: underline;">${displayText}<sup style="margin-left: 1px;">↑</sup></span>`;
+                return `<span class="jump-link" data-jump-target="${targetId}"${anchorAttr} style="cursor: pointer; color: var(--color-link); text-decoration: underline dotted; text-underline-offset: 2px;">${displayText}${numHtml}</span>`;
             } else {
-                // No custom text, show arrow with target id
-                return `<span class="jump-link" data-jump-target="${targetId}" style="cursor: pointer; color: var(--color-link);">→ ${targetId}</span>`;
+                return `<span class="jump-link" data-jump-target="${targetId}"${anchorAttr} style="cursor: pointer; color: var(--color-link);">${targetId}${numHtml}</span>`;
             }
         });
 
@@ -1098,34 +1301,26 @@ export class MarkdownParser {
 
     /**
      * Process a citation and return the formatted citation with superscript number
+     * Numbers are pre-assigned during the discovery pass
      */
     processCitation(url, title, text) {
-        let citationNumber;
-
-        // Check if we've seen this URL before
-        if (this.citations.has(url)) {
-            const citation = this.citations.get(url);
-            citation.count++;
-            citationNumber = citation.number;
-        } else {
-            // New citation - assign next number
-            this.citationCounter++;
-            const citationData = {
-                number: this.citationCounter,
-                url: url,
-                title: title || this.extractTitleFromUrl(url),
-                count: 1
-            };
-            this.citations.set(url, citationData);
-            citationNumber = this.citationCounter;
+        // Get the pre-assigned citation number from discovery pass
+        const citation = this.citations.get(url);
+        if (!citation) {
+            // Fallback: citation not found in discovery (shouldn't happen)
+            console.warn(`Citation for ${url} not found in discovery pass`);
+            return text || '';
         }
+        const citationNumber = citation.number;
+        const sourceId = this.getNextCitationSourceId(url);
+        const anchorAttr = sourceId ? ` data-anchor-id="${sourceId}"` : '';
 
         if (text) {
             // Citation with text: text opens URL, superscript jumps to bibliography
-            return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline;">${text}</a><span class="jump-link" data-jump-target="ref-${citationNumber}" style="cursor: pointer; color: var(--color-link);"><sup style="font-size: 0.7em;">${citationNumber}</sup></span>`;
+            return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: underline dotted; text-underline-offset: 2px;">${text}</a><span class="jump-link" data-jump-target="ref-${citationNumber}"${anchorAttr} style="cursor: pointer; color: var(--color-link);"><sup class="ref-number">${citationNumber}</sup></span>`;
         } else {
             // Citation without text: just the superscript that jumps to bibliography
-            return `<span class="jump-link" data-jump-target="ref-${citationNumber}" style="cursor: pointer; color: var(--color-link);"><sup style="font-size: 0.7em;">${citationNumber}</sup></span>`;
+            return `<span class="jump-link" data-jump-target="ref-${citationNumber}"${anchorAttr} style="cursor: pointer; color: var(--color-link);"><sup class="ref-number">${citationNumber}</sup></span>`;
         }
     }
 
@@ -1144,10 +1339,24 @@ export class MarkdownParser {
         // Sort citations by number
         const sortedCitations = Array.from(this.citations.values()).sort((a, b) => a.number - b.number);
 
-        // Traditional academic format showing URLs
+        // Traditional academic format showing URLs with clickable back-links
         for (const citation of sortedCitations) {
             html += `<p id="ref-${citation.number}" data-anchor-id="ref-${citation.number}" style="margin-bottom: 8px; text-indent: -20px; padding-left: 20px;">`;
-            html += `${citation.number}. <a href="${citation.url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: none;">${citation.url}</a>`;
+
+            // Create clickable number(s) that link back to citation occurrences
+            if (citation.sourceIds && citation.sourceIds.length > 0) {
+                const numLinks = citation.sourceIds.map((sourceId, index) => {
+                    const displayNum = citation.sourceIds.length > 1
+                        ? `${citation.number}.${index + 1}`
+                        : `${citation.number}`;
+                    return `<span class="jump-link anchor-back-link" data-jump-target="${sourceId}">${displayNum}</span>`;
+                }).join(', ');
+                html += `<sup class="anchor-number" style="margin-right: 4px;">${numLinks}</sup>`;
+            } else {
+                html += `${citation.number}. `;
+            }
+
+            html += `<a href="${citation.url}" target="_blank" rel="noopener noreferrer" style="color: var(--color-link); text-decoration: none;">${citation.url}</a>`;
             html += '</p>';
         }
 
