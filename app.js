@@ -874,6 +874,80 @@ class PaperCanvas {
             }
         });
 
+        // Handle TOC link taps on mobile (touchend for better mobile support)
+        // Track touch start position to distinguish taps from scrolls
+        let tocTouchStartY = null;
+        let tocTouchStartX = null;
+        let tocTouchTarget = null;
+
+        this.canvas.addEventListener('touchstart', (e) => {
+            const tocLink = e.target.closest('[data-toc-target]');
+            if (tocLink) {
+                tocTouchStartY = e.touches[0].clientY;
+                tocTouchStartX = e.touches[0].clientX;
+                tocTouchTarget = tocLink;
+            } else {
+                tocTouchTarget = null;
+            }
+        }, { passive: true });
+
+        this.canvas.addEventListener('touchend', (e) => {
+            if (!tocTouchTarget) return;
+
+            const tocLink = e.target.closest('[data-toc-target]');
+            if (!tocLink || tocLink !== tocTouchTarget) {
+                tocTouchTarget = null;
+                return;
+            }
+
+            // Check if this was a tap (minimal movement) vs a scroll
+            const touchEndY = e.changedTouches[0].clientY;
+            const touchEndX = e.changedTouches[0].clientX;
+            const deltaY = Math.abs(touchEndY - tocTouchStartY);
+            const deltaX = Math.abs(touchEndX - tocTouchStartX);
+
+            // If touch moved more than 10px, it's a scroll, not a tap
+            if (deltaY > 10 || deltaX > 10) {
+                tocTouchTarget = null;
+                return;
+            }
+
+            e.preventDefault();
+            const targetId = tocLink.dataset.tocTarget;
+            const cardElement = tocLink.closest('.card');
+
+            if (cardElement && targetId) {
+                const contentContainer = cardElement.querySelector('.card-content');
+                const targetElement = cardElement.querySelector(`#${CSS.escape(targetId)}`);
+                if (contentContainer && targetElement) {
+                    // Calculate offset within the scrollable container
+                    const containerRect = contentContainer.getBoundingClientRect();
+                    const targetRect = targetElement.getBoundingClientRect();
+                    const scrollOffset = targetRect.top - containerRect.top + contentContainer.scrollTop;
+
+                    // Scroll only the content container, not the whole page
+                    contentContainer.scrollTo({
+                        top: scrollOffset - 10,
+                        behavior: 'smooth'
+                    });
+
+                    // Update URL with heading ID
+                    const cardId = cardElement.dataset.cardId;
+                    const card = this.cards.get(cardId);
+                    if (card && card.sourceFile) {
+                        const newUrl = `#/${card.sourceFile}/${targetId}`;
+                        window.history.pushState(
+                            { cardName: card.sourceFile, headingId: targetId },
+                            '',
+                            newUrl
+                        );
+                    }
+                }
+            }
+
+            tocTouchTarget = null;
+        });
+
         // Handle heading link clicks to copy URL to clipboard
         this.canvas.addEventListener('click', (e) => {
             const headingLink = e.target.closest('.heading-link');
