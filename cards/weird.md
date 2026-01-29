@@ -40,6 +40,8 @@ In a traditional hardware-rasterized 3DGS implementation, each Gaussian is treat
 ## Geometric Optimization: Transitioning to Metal Mesh Shaders
 The most effective method to resolve a vertex shader bottleneck in a high-primitive-count pipeline on modern Apple hardware is to bypass the traditional vertex pipeline entirely and adopt Metal Mesh Shaders. Introduced in Metal 3 and supported on A13/M1 and later chips, mesh shaders provide a compute-centric approach to geometry processing that aligns perfectly with the "fast compute" characteristic of the current workload.
 
+[[viz(type: polynomial3d, a: 0.3, b: 0.3, c: 0, d: 0, width: 200, height: 280, display: float-right)]]
+
 ### The Inefficiency of the Vertex Pulling Model
 The current vertex shader implementation likely employs "vertex pulling" or instanced drawing. In this model, the rasterizer dictates the workload: it requests vertices, and the shader provides them. This model is rigid. It is difficult to cull an entire splat efficiently within the vertex shader without emitting degenerate triangles (which still consume rasterizer cycles). Furthermore, it requires redundant memory fetches for the Gaussian attributes (position, rotation, scale, opacity, SH coefficients) across the four vertices of the quad.
 
