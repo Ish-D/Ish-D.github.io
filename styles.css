@@ -832,13 +832,78 @@ sup.jump-link {
     padding: 0;
 }
 
-/* Dark mode adjustments for Prism */
+/* Dark mode adjustments for Prism - override default theme */
+[data-theme="dark"] pre[class*="language-"],
+[data-theme="dark"] code[class*="language-"] {
+    color: #e0e0e0;
+    background: none;
+    text-shadow: none;
+}
+
+[data-theme="dark"] pre[class*="language-"] {
+    background: var(--code-background);
+}
+
 [data-theme="dark"] .code-block pre[class*="language-"] {
     background: var(--code-background);
 }
 
 [data-theme="dark"] .code-block code[class*="language-"] {
-    color: var(--color-text);
+    color: #e0e0e0;
+}
+
+/* Dark mode Prism token colors */
+[data-theme="dark"] .token.comment,
+[data-theme="dark"] .token.prolog,
+[data-theme="dark"] .token.doctype,
+[data-theme="dark"] .token.cdata {
+    color: #6a9955;
+}
+
+[data-theme="dark"] .token.punctuation {
+    color: #d4d4d4;
+}
+
+[data-theme="dark"] .token.property,
+[data-theme="dark"] .token.tag,
+[data-theme="dark"] .token.boolean,
+[data-theme="dark"] .token.number,
+[data-theme="dark"] .token.constant,
+[data-theme="dark"] .token.symbol {
+    color: #b5cea8;
+}
+
+[data-theme="dark"] .token.selector,
+[data-theme="dark"] .token.attr-name,
+[data-theme="dark"] .token.string,
+[data-theme="dark"] .token.char,
+[data-theme="dark"] .token.builtin {
+    color: #ce9178;
+}
+
+[data-theme="dark"] .token.operator,
+[data-theme="dark"] .token.entity,
+[data-theme="dark"] .token.url,
+[data-theme="dark"] .language-css .token.string,
+[data-theme="dark"] .style .token.string {
+    color: #d4d4d4;
+}
+
+[data-theme="dark"] .token.atrule,
+[data-theme="dark"] .token.attr-value,
+[data-theme="dark"] .token.keyword {
+    color: #569cd6;
+}
+
+[data-theme="dark"] .token.function,
+[data-theme="dark"] .token.class-name {
+    color: #dcdcaa;
+}
+
+[data-theme="dark"] .token.regex,
+[data-theme="dark"] .token.important,
+[data-theme="dark"] .token.variable {
+    color: #d16969;
 }
 
 /* Margin annotation styling */
@@ -869,6 +934,7 @@ sup.jump-link {
     align-items: center;
     justify-content: center;
     text-align: center;
+    white-space: pre-line;
     height: 100%;
     width: 100%;
 }

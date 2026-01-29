@@ -244,6 +244,142 @@ export class MarkdownParser {
     }
 
     /**
+     * Find the matching closing brace for an opening brace, accounting for nested braces.
+     * This solves the problem where code blocks contain braces like `function() { }`
+     * which would otherwise confuse the simple regex-based extraction.
+     * @param {string} text - The text to search in
+     * @param {number} openBraceIndex - Index of the opening brace
+     * @returns {number} Index of the matching closing brace, or -1 if not found
+     */
+    findMatchingBrace(text, openBraceIndex) {
+        let braceCount = 1;
+        let i = openBraceIndex + 1;
+
+        while (i < text.length && braceCount > 0) {
+            if (text[i] === '{') {
+                braceCount++;
+            } else if (text[i] === '}') {
+                braceCount--;
+            }
+            i++;
+        }
+
+        return braceCount === 0 ? i - 1 : -1;
+    }
+
+    /**
+     * Find the matching closing parenthesis for an opening parenthesis, accounting for nested parens.
+     * @param {string} text - The text to search in
+     * @param {number} openParenIndex - Index of the opening parenthesis
+     * @returns {number} Index of the matching closing parenthesis, or -1 if not found
+     */
+    findMatchingParen(text, openParenIndex) {
+        let parenCount = 1;
+        let i = openParenIndex + 1;
+
+        while (i < text.length && parenCount > 0) {
+            if (text[i] === '(') {
+                parenCount++;
+            } else if (text[i] === ')') {
+                parenCount--;
+            }
+            i++;
+        }
+
+        return parenCount === 0 ? i - 1 : -1;
+    }
+
+    /**
+     * Extract all blocks from markdown using brace counting for correct nesting.
+     * Returns blocks in document order with their positions for index-based replacement.
+     * @param {string} markdown - The markdown text to extract blocks from
+     * @returns {Array} Array of {type, params, content, fullMatch, startIndex, endIndex}
+     */
+    extractAllBlocks(markdown) {
+        const blocks = [];
+        // Pattern to find block type starts: [[type
+        const blockTypePattern = /\[\[(\w+)/g;
+
+        let match;
+        while ((match = blockTypePattern.exec(markdown)) !== null) {
+            const type = match[1];
+            const typeEndIndex = match.index + match[0].length;
+
+            let params = '';
+            let headerEndIndex = typeEndIndex;
+
+            // Check if there are parameters (next char is '(')
+            if (markdown[typeEndIndex] === '(') {
+                // Find matching closing paren using counting
+                const closeParenIndex = this.findMatchingParen(markdown, typeEndIndex);
+                if (closeParenIndex === -1) {
+                    continue; // Malformed, skip
+                }
+                params = markdown.slice(typeEndIndex + 1, closeParenIndex);
+                headerEndIndex = closeParenIndex + 1;
+            }
+
+            // Now expect ]] followed by optional whitespace and { with newline (block syntax)
+            // This distinguishes from inline syntax like [[style(css)]]{text}
+            const afterParams = markdown.slice(headerEndIndex);
+            const closeBracketMatch = afterParams.match(/^\]\]\s*\{[ \t]*\n/);
+            if (!closeBracketMatch) {
+                continue; // Not a block syntax (might be inline), skip
+            }
+
+            const openBraceIndex = headerEndIndex + closeBracketMatch[0].indexOf('{');
+
+            // Find the matching closing brace using brace counting
+            const closeBraceIndex = this.findMatchingBrace(markdown, openBraceIndex);
+
+            if (closeBraceIndex === -1) {
+                // No matching brace found, skip this block
+                continue;
+            }
+
+            // Extract content between braces (excluding the braces themselves)
+            // The content starts after { and any trailing whitespace/newline
+            let contentStart = openBraceIndex + 1;
+            // Skip optional whitespace and newline after opening brace
+            if (markdown[contentStart] === ' ' || markdown[contentStart] === '\t') {
+                while (contentStart < closeBraceIndex && (markdown[contentStart] === ' ' || markdown[contentStart] === '\t')) {
+                    contentStart++;
+                }
+            }
+            if (markdown[contentStart] === '\n') {
+                contentStart++;
+            }
+
+            // Content ends before } and any preceding whitespace/newline
+            let contentEnd = closeBraceIndex;
+            // Skip back over optional whitespace and newline before closing brace
+            if (contentEnd > contentStart && markdown[contentEnd - 1] === '\n') {
+                contentEnd--;
+            }
+            while (contentEnd > contentStart && (markdown[contentEnd - 1] === ' ' || markdown[contentEnd - 1] === '\t')) {
+                contentEnd--;
+            }
+
+            const content = markdown.slice(contentStart, contentEnd);
+            const fullMatch = markdown.slice(match.index, closeBraceIndex + 1);
+
+            blocks.push({
+                type: type,
+                params: params,
+                content: content,
+                fullMatch: fullMatch,
+                startIndex: match.index,
+                endIndex: closeBraceIndex + 1
+            });
+
+            // Move past this block to avoid re-matching nested blocks at the outer level
+            // We don't update lastIndex because we want to find ALL blocks including nested ones
+        }
+
+        return blocks;
+    }
+
+    /**
      * Get LaTeX patterns for inline and display math
      */
     getInlineMathPattern() {
@@ -367,20 +503,15 @@ export class MarkdownParser {
         // Discovery pass: pre-assign unified numbers to all jumps and citations
         this.discoverReferences(processedMarkdown);
 
-        // Extract and process blocks using fresh regex instance
-        const blockPattern = this.getBlockPattern();
-        let blockMatch;
+        // Extract margin blocks using brace counting for correct nested block handling
+        const allBlocks = this.extractAllBlocks(processedMarkdown);
         const marginBlocks = [];
         let marginCounter = 0;
 
-        while ((blockMatch = blockPattern.exec(processedMarkdown)) !== null) {
-            const fullMatch = blockMatch[0];
-            const type = blockMatch[1];
-            const params = blockMatch[2] || '';
-            const content = blockMatch[3].trim();
-
-            if (type === 'margin') {
-                const marginData = this.parseMarginBlock(params, content);
+        // Process margin blocks only
+        for (const block of allBlocks) {
+            if (block.type === 'margin') {
+                const marginData = this.parseMarginBlock(block.params, block.content);
 
                 // For relative margins without explicit anchors, auto-generate one
                 let autoAnchorId = null;
@@ -390,7 +521,8 @@ export class MarkdownParser {
                 }
 
                 marginBlocks.push({
-                    match: fullMatch,
+                    startIndex: block.startIndex,
+                    endIndex: block.endIndex,
                     autoAnchor: autoAnchorId,
                     isRelative: marginData.type === 'relative'
                 });
@@ -399,22 +531,25 @@ export class MarkdownParser {
             }
         }
 
-        // Replace margin blocks in content
-        // Relative margins get anchor placeholders, absolute margins are just removed
+        // Replace margin blocks in content using index-based replacement
+        // Process in reverse order to maintain correct indices
+        marginBlocks.sort((a, b) => b.startIndex - a.startIndex);
+
         for (const block of marginBlocks) {
+            let replacement;
             if (block.isRelative && block.autoAnchor) {
                 // Replace with placeholder that survives markdown parsing
-                processedMarkdown = processedMarkdown.replace(
-                    block.match,
-                    `__MARGIN_ANCHOR_${block.autoAnchor}__`
-                );
+                replacement = `__MARGIN_ANCHOR_${block.autoAnchor}__`;
             } else {
-                processedMarkdown = processedMarkdown.replace(block.match, '');
+                replacement = '';
             }
+            processedMarkdown = processedMarkdown.slice(0, block.startIndex) + replacement + processedMarkdown.slice(block.endIndex);
         }
 
-        // Process remaining blocks (center, style) in main content
-        processedMarkdown = this.processBlocks(processedMarkdown);
+        // Process remaining blocks (center, style, code, quote) in main content
+        // Use placeholders to protect multi-line block HTML from parseMarkdown's paragraph splitting
+        const mainBlockPlaceholders = [];
+        processedMarkdown = this.processBlocks(processedMarkdown, mainBlockPlaceholders);
 
         // Process anchors in main content (with clickable number badges for bidirectional navigation)
         processedMarkdown = processedMarkdown.replace(
@@ -447,6 +582,9 @@ export class MarkdownParser {
         // Parse remaining markdown to HTML
         result.content = this.parseMarkdown(processedMarkdown.trim());
 
+        // Restore block HTML from placeholders
+        result.content = this.restoreBlockPlaceholders(result.content, mainBlockPlaceholders);
+
         // Auto-generate bibliography at the end of main content if there are citations
         if (this.citations.size > 0) {
             const bibliography = this.generateBibliography();
@@ -463,28 +601,102 @@ export class MarkdownParser {
     }
 
     /**
-     * Process center, style, and image blocks, converting them to HTML
+     * Process center, style, image, quote, and code blocks, converting them to HTML.
+     * Uses brace counting for correct handling of nested braces in code blocks.
+     * @param {string} markdown - The markdown to process
+     * @param {Array|null} placeholders - Optional array to store HTML with placeholders.
+     *   When provided, block HTML is stored here and placeholders are returned instead.
+     *   This protects multi-line HTML from being mangled by parseMarkdown().
      */
-    processBlocks(markdown) {
-        return markdown.replace(this.getBlockPattern(), (match, type, params, content) => {
-            if (type === 'center') {
-                return `<div class="center-block">${content.trim()}</div>`;
-            } else if (type === 'style') {
-                const sanitizedStyles = this.sanitizeStyles(params || '');
-                if (!sanitizedStyles) {
-                    return content.trim();
+    processBlocks(markdown, placeholders = null) {
+        let result = markdown;
+        let changed = true;
+
+        // Process one block at a time to handle nested blocks correctly
+        while (changed) {
+            changed = false;
+
+            // Extract blocks from current state
+            const blocks = this.extractAllBlocks(result);
+
+            // Find first processable block
+            const block = blocks.find(b =>
+                ['center', 'style', 'image', 'quote', 'code'].includes(b.type)
+            );
+
+            if (block) {
+                let replacement;
+                const content = block.content;
+                const params = block.params;
+
+                if (block.type === 'center') {
+                    // Recursively process nested blocks in content
+                    const processedContent = this.processBlocks(content, placeholders);
+                    // Parse as inline markdown to handle links, bold, etc. (newlines preserved by CSS)
+                    const htmlContent = this.parseInlineMarkdown(processedContent.trim());
+                    replacement = `<div class="center-block">${htmlContent}</div>`;
+                } else if (block.type === 'style') {
+                    const sanitizedStyles = this.sanitizeStyles(params || '');
+                    const processedContent = this.processBlocks(content, placeholders);
+                    // Parse as inline markdown to handle links, bold, etc.
+                    const htmlContent = this.parseInlineMarkdown(processedContent.trim());
+                    if (!sanitizedStyles) {
+                        replacement = htmlContent;
+                    } else {
+                        replacement = `<div class="styled-block" style="${sanitizedStyles}">${htmlContent}</div>`;
+                    }
+                } else if (block.type === 'image') {
+                    replacement = this.renderImageBlock(params || '', content.trim());
+                } else if (block.type === 'quote') {
+                    // Recursively process nested blocks in quote content
+                    const processedContent = this.processBlocks(content, placeholders);
+                    replacement = this.renderQuoteBlock(params || '', processedContent.trim());
+                } else if (block.type === 'code') {
+                    // Do NOT recursively process code blocks - preserve content exactly
+                    replacement = this.renderCodeBlock(params || '', content);
+                } else {
+                    replacement = block.fullMatch;
                 }
-                return `<div class="styled-block" style="${sanitizedStyles}">${content.trim()}</div>`;
-            } else if (type === 'image') {
-                return this.renderImageBlock(params || '', content.trim());
-            } else if (type === 'quote') {
-                return this.renderQuoteBlock(params || '', content.trim());
-            } else if (type === 'code') {
-                return this.renderCodeBlock(params || '', content.trim());
+
+                // If using placeholders, store HTML and use placeholder instead
+                if (placeholders !== null) {
+                    const placeholder = `__BLOCK_PLACEHOLDER_${placeholders.length}__`;
+                    placeholders.push({ placeholder, html: replacement });
+                    replacement = placeholder;
+                }
+
+                // Replace this block in result
+                result = result.slice(0, block.startIndex) + replacement + result.slice(block.endIndex);
+                changed = true;
             }
-            // Return unchanged for unknown types
-            return match;
-        });
+        }
+
+        return result;
+    }
+
+    /**
+     * Restore block placeholders with their actual HTML.
+     * Handles nested placeholders by iterating until all are resolved.
+     */
+    restoreBlockPlaceholders(html, placeholders) {
+        if (!placeholders || placeholders.length === 0) return html;
+
+        let result = html;
+        let changed = true;
+
+        // Keep replacing until no more placeholders are found
+        // This handles nested blocks where outer HTML contains inner placeholders
+        while (changed) {
+            changed = false;
+            for (const { placeholder, html: blockHtml } of placeholders) {
+                if (result.includes(placeholder)) {
+                    result = result.split(placeholder).join(blockHtml);
+                    changed = true;
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -509,7 +721,9 @@ export class MarkdownParser {
         html += '>';
         html += `<div class="quote-content">${processedContent}</div>`;
         if (author) {
-            html += `<footer class="quote-author">— ${author}</footer>`;
+            // Process author through inline markdown to support links
+            const processedAuthor = this.parseInlineMarkdown(author);
+            html += `<footer class="quote-author">— ${processedAuthor}</footer>`;
         }
         html += '</blockquote>';
 
@@ -579,11 +793,17 @@ export class MarkdownParser {
         // Process the content through the full markdown pipeline
         let processedContent = content;
 
-        // Process any nested blocks (center, style)
-        processedContent = this.processBlocks(processedContent);
+        // Use placeholders to protect block HTML from parseMarkdown's paragraph splitting
+        const blockPlaceholders = [];
 
-        // Parse as full markdown
-        const html = this.parseMarkdown(processedContent);
+        // Process any nested blocks (center, style, code, quote)
+        processedContent = this.processBlocks(processedContent, blockPlaceholders);
+
+        // Parse as full markdown (placeholders survive paragraph splitting)
+        let html = this.parseMarkdown(processedContent);
+
+        // Restore block HTML from placeholders
+        html = this.restoreBlockPlaceholders(html, blockPlaceholders);
 
         return {
             side: side,
@@ -613,12 +833,21 @@ export class MarkdownParser {
             if (!trimmed) continue;
 
             const colonIndex = trimmed.indexOf(':');
-            if (colonIndex === -1) {
+
+            // Only treat as named param if:
+            // 1. There's a colon
+            // 2. The key part looks like a valid identifier (word chars, hyphens)
+            // 3. It's not a URL pattern (colon followed by //)
+            const isUrl = colonIndex !== -1 && trimmed.slice(colonIndex, colonIndex + 3) === '://';
+            const potentialKey = colonIndex !== -1 ? trimmed.slice(0, colonIndex).trim() : '';
+            const isValidKey = /^[\w-]+$/.test(potentialKey);
+
+            if (colonIndex === -1 || isUrl || !isValidKey) {
                 // Positional param
                 result.positional.push(trimmed);
             } else {
                 // Named param
-                const key = trimmed.slice(0, colonIndex).trim();
+                const key = potentialKey;
                 let value = trimmed.slice(colonIndex + 1).trim();
                 // Remove quotes if present
                 if ((value.startsWith('"') && value.endsWith('"')) ||
@@ -1181,7 +1410,8 @@ export class MarkdownParser {
                 para.startsWith('<div') ||
                 para.startsWith('<hr') ||
                 para.startsWith('__CODE_') ||
-                para.startsWith('__MARGIN_ANCHOR_')) {
+                para.startsWith('__MARGIN_ANCHOR_') ||
+                para.startsWith('__BLOCK_PLACEHOLDER_')) {
                 return para;
             }
             if (para.startsWith('->') && para.endsWith('<-')) {
@@ -1222,6 +1452,32 @@ export class MarkdownParser {
         const latexResult = this.processLaTeX(html);
         html = latexResult.processed;
         const mathPlaceholders = latexResult.mathPlaceholders;
+
+        // Process citations (before other links to avoid conflicts)
+        html = html.replace(this.getCitePattern(), (match, url, title, text) => {
+            return this.processCitation(url.trim(), title ? title.trim() : null, text ? text.trim() : null);
+        });
+
+        // Interactive elements
+        html = html.replace(this.getTogglePattern(), (match, params) => {
+            return this.renderToggle(params);
+        });
+
+        html = html.replace(this.getSliderPattern(), (match, params) => {
+            return this.renderSlider(params);
+        });
+
+        html = html.replace(this.getButtonPattern(), (match, params) => {
+            return this.renderButton(params);
+        });
+
+        html = html.replace(this.getInputPattern(), (match, params) => {
+            return this.renderInput(params);
+        });
+
+        html = html.replace(this.getTextareaPattern(), (match, params) => {
+            return this.renderTextarea(params);
+        });
 
         // Full link syntax
         html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
@@ -1341,7 +1597,7 @@ export class MarkdownParser {
 
         // Traditional academic format showing URLs with clickable back-links
         for (const citation of sortedCitations) {
-            html += `<p id="ref-${citation.number}" data-anchor-id="ref-${citation.number}" style="margin-bottom: 8px; text-indent: -20px; padding-left: 20px;">`;
+            html += `<p id="ref-${citation.number}" data-anchor-id="ref-${citation.number}" style="margin-bottom: 8px;">`;
 
             // Create clickable number(s) that link back to citation occurrences
             if (citation.sourceIds && citation.sourceIds.length > 0) {

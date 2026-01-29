@@ -56,7 +56,7 @@ The solicitor's letter was vague. I do not recall any relatives in this county. 
 The coachman—if that is what he was—refused to approach within a quarter mile of the gates. He stopped the carriage at a bend in the road where the trees grew thick and the light seemed to fail despite the hour. When I asked why, he simply pointed toward the manor and made a sound that might have been laughter or might have been a sob. I could not tell. I did not ask again.
 
 [[anchor(gates)]]{The gates} were already open when I arrived. Wrought iron, twisted into patterns I could not quite follow—shapes that seemed to move when viewed from the corner of one's eye. I stood before them for some time, my hand on the latch that did not need lifting, staring at the house that waited at the end of the drive. [[# Heading 1
-(initial-resolve)]]{My ear[[card-name]]lier resolve} seemed distant now.
+(initial-resolve)]]{My earlier resolve} seemed distant now.
 # Heading 1
 
 `code`
@@ -768,13 +768,13 @@ Is there a well, somewhere, with your name scratched into the stones?
 
 [[margin(left, type: relative, orient: vertical, size: 200)]]
 {
-[[quote(Edgar Allan Poe)]]
+[[quote([[cite(https://en.wikipedia.org/wiki/Edgar_Allan_Poe)]]{Edgar Allan Poe})]]
 {
 Deep into that darkness peering, long I stood there wondering, fearing.
 }
 }
 
-[[quote(H.P. Lovecraft)]]
+[[quote([[cite(https://en.wikipedia.org/wiki/H._P._Lovecraft)]]{H.P. Lovecraft})]]
 {
 The oldest and strongest emotion of mankind is fear, and the oldest and strongest kind of fear is **fear of the unknown**.
 }

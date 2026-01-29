@@ -1511,7 +1511,7 @@ export class Card {
             return;
         }
 
-        // Highlight all code blocks in the card
+        // Highlight all code blocks in the card (including in margins)
         const codeBlocks = this.element.querySelectorAll('pre code[class*="language-"]');
         codeBlocks.forEach(block => {
             window.Prism.highlightElement(block);
