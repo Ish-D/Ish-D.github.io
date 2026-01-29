@@ -103,9 +103,9 @@ export class Card {
         const container = document.createElement('div');
         container.className = 'card-container';
 
-        // Apply margin sizes (default 10% or custom if specified)
-        const marginLR = this.marginLR !== null ? this.marginLR : 10;
-        const marginTB = this.marginTB !== null ? this.marginTB : 10;
+        // Apply margin sizes (default 6% or custom if specified)
+        const marginLR = this.marginLR !== null ? this.marginLR : 6;
+        const marginTB = this.marginTB !== null ? this.marginTB : 6;
 
         const lrSize = `${(marginLR / 100) * this.width}px`;
         const tbSize = `${(marginTB / 100) * this.height}px`;
@@ -1692,7 +1692,7 @@ export class Card {
      */
     getMarginSizePercent() {
         const container = this.element.querySelector('.card-container');
-        if (!container) return 10; // Default
+        if (!container) return 6; // Default
 
         const computedStyle = getComputedStyle(container);
         const cols = computedStyle.gridTemplateColumns.split(' ');

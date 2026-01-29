@@ -101,17 +101,17 @@
        Spacing - Margins
        ============================================ */
 
-    --margin-padding-top: 32px;
-    --margin-padding-bottom: 32px;
-    --margin-padding-inner: 12px;      /* Padding toward content */
-    --margin-padding-outer: 4px;       /* Padding toward edge - closer to edge */
+    --margin-padding-top: 16px;
+    --margin-padding-bottom: 16px;
+    --margin-padding-inner: 6px;      /* Padding toward content */
+    --margin-padding-outer: 2px;       /* Padding toward edge - closer to edge */
 
     /* Top/bottom margin spacing */
-    --margin-top-padding-top: 12px;
-    --margin-top-padding-bottom: 8px;
-    --margin-bottom-padding-top: 8px;
-    --margin-bottom-padding-bottom: 12px;
-    --margin-bottom-padding-horizontal: 16px;
+    --margin-top-padding-top: 6px;
+    --margin-top-padding-bottom: 4px;
+    --margin-bottom-padding-top: 4px;
+    --margin-bottom-padding-bottom: 6px;
+    --margin-bottom-padding-horizontal: 8px;
 
     /* ============================================
        Card Dimensions
@@ -120,7 +120,7 @@
     --card-default-width: 280px;
     --card-default-height: 360px;
     --card-min-size: 150px;
-    --margin-column-max-width: 120px;
+    --margin-column-max-width: 60px;
 
     /* ============================================
        Animations & Transitions

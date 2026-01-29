@@ -80,7 +80,7 @@ export const SettingsConfig = {
     },
 
     marginSize: {
-        default: 10,
+        default: 6,
         type: 'number',
         storage: 'settings-marginSize',
         onSet(value, context) {
