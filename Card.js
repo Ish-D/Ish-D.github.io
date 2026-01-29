@@ -48,6 +48,9 @@ export class Card {
         this.tags = options.tags || [];
         this.showTags = options.showTags || false;
 
+        // Date (for [[date]] directive)
+        this.date = options.date || null;
+
         // Source file tracking (for live-reload)
         this.sourceFile = options.sourceFile || null;
         this.isDynamic = options.isDynamic || false;
@@ -188,6 +191,23 @@ export class Card {
 
                     placeholder.innerHTML = tagsHTML;
                     placeholder.classList.add('card-tags-inline');
+                });
+            }
+
+            // Process [[date]] placeholders after setting content
+            if (this.date) {
+                const datePlaceholders = content.querySelectorAll('[data-date-placeholder="true"]');
+                datePlaceholders.forEach(placeholder => {
+                    // Format date as "Month Day, Year" (e.g., "January 29, 2026")
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                                    'July', 'August', 'September', 'October', 'November', 'December'];
+                    const month = months[this.date.getMonth()];
+                    const day = this.date.getDate();
+                    const year = this.date.getFullYear();
+                    const formattedDate = `${month} ${day}, ${year}`;
+
+                    placeholder.textContent = formattedDate;
+                    placeholder.classList.add('card-date-inline');
                 });
             }
 

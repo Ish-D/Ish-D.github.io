@@ -1675,6 +1675,14 @@ class PaperCanvas {
                     const nameMatch = frontmatter.match(/name:\s*(.+)/);
                     const displayName = nameMatch ? nameMatch[1].trim() : cardName;
 
+                    // Parse date from front matter (format: MM-DD-YYYY)
+                    const dateMatch = frontmatter.match(/date:\s*(\d{2}-\d{2}-\d{4})/);
+                    let dateValue = null;
+                    if (dateMatch) {
+                        const [month, day, year] = dateMatch[1].split('-').map(Number);
+                        dateValue = new Date(year, month - 1, day);
+                    }
+
                     if (tagsMatch) {
                         const tagsStr = tagsMatch[1].trim();
 
@@ -1703,7 +1711,8 @@ class PaperCanvas {
                             mainTags: mainTags,      // Main tags (for indexing)
                             subtagToMain: subtagToMain,
                             sourceFile: cardName,
-                            title: displayName       // Display name from front matter
+                            title: displayName,      // Display name from front matter
+                            date: dateValue          // Date for sorting (null if not specified)
                         };
 
                         // Store in cache for later use
@@ -1741,6 +1750,20 @@ class PaperCanvas {
     // Get cards with a specific tag from the global index
     getGlobalCardsWithTag(tagName) {
         return this.globalTagIndex[tagName] || [];
+    }
+
+    // Sort cards by date (most recent first), with undated cards at the end
+    sortCardsByDate(cards) {
+        return [...cards].sort((a, b) => {
+            if (a.date && b.date) {
+                const dateDiff = b.date.getTime() - a.date.getTime();
+                if (dateDiff !== 0) return dateDiff;
+                return a.title.localeCompare(b.title);
+            }
+            if (a.date && !b.date) return -1;
+            if (!a.date && b.date) return 1;
+            return a.title.localeCompare(b.title);
+        });
     }
 
     // Register content providers for dynamic cards
@@ -1860,8 +1883,7 @@ ${renderColumn(rightColumn)}
         // Helper to render a column
         const renderColumn = (items) => {
             return items.map(({ mainTag, cards }) => {
-                const cardLinks = cards
-                    .sort((a, b) => a.title.localeCompare(b.title))
+                const cardLinks = this.sortCardsByDate(cards)
                     .map(card => {
                         const subtags = card.tags || [];
                         const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
@@ -1921,8 +1943,7 @@ ${renderColumn(rightColumn)}
         // Helper to render a column - returns parsed HTML
         const renderColumn = (items) => {
             return items.map(({ mainTag, cards }) => {
-                const cardLinks = cards
-                    .sort((a, b) => a.title.localeCompare(b.title))
+                const cardLinks = this.sortCardsByDate(cards)
                     .map(card => {
                         const subtags = card.tags || [];
                         const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
@@ -2011,7 +2032,7 @@ ${renderColumn(rightColumn)}
             if (taggedCards.length === 0) {
                 content += 'No pages found with this tag.';
             } else {
-                taggedCards.forEach(card => {
+                this.sortCardsByDate(taggedCards).forEach(card => {
                     const subtags = card.tags || [];
                     const subtagsStr = subtags.length > 0 ? ` [${subtags.join(', ')}]` : '';
                     content += `- [[${card.sourceFile}|${card.title}]]${subtagsStr}\n`;
@@ -2125,6 +2146,16 @@ ${renderColumn(rightColumn)}
                     if (!subtags.includes(subtag)) subtags.push(subtag);
                 }
                 return subtags;
+            })(),
+            // Parse date from frontmatter (format: MM-DD-YYYY)
+            date: (() => {
+                const dateStr = parsed.metadata.date || '';
+                const dateMatch = dateStr.match(/(\d{2})-(\d{2})-(\d{4})/);
+                if (dateMatch) {
+                    const [, month, day, year] = dateMatch;
+                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                }
+                return null;
             })(),
             // Mark dynamic cards
             isDynamic: contentData.isDynamic || false

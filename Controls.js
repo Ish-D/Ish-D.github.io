@@ -62,6 +62,10 @@ export const SettingsConfig = {
 
             // Page number (default: 11px)
             document.documentElement.style.setProperty('--font-size-page-number', `${Math.max(9, Math.round(11 * scale))}px`);
+
+            // Tags and date (default: tags=13px, date=12px)
+            document.documentElement.style.setProperty('--font-size-tags', `${Math.max(9, Math.round(13 * scale))}px`);
+            document.documentElement.style.setProperty('--font-size-date', `${Math.max(8, Math.round(12 * scale))}px`);
         }
     },
 

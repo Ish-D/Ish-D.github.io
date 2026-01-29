@@ -1458,7 +1458,7 @@ sup.jump-link {
 
 .card-tags-inline .card-tag {
     font-weight: bold;
-    font-size: 10px; /* Restore font-size */
+    font-size: var(--font-size-tags, 13px); /* Scales with font-size slider */
     color: var(--color-text-primary);
     cursor: pointer;
     transition: color 0.2s ease;
@@ -1467,6 +1467,16 @@ sup.jump-link {
 
 .card-tags-inline .card-tag:hover {
     color: var(--color-text-secondary);
+}
+
+/* Date display in cards - inline version for [[date]] directive */
+.card-date-inline {
+    display: block;
+    text-align: center;
+    margin: 12px 0;
+    font-weight: bold;
+    font-size: var(--font-size-date, 12px); /* Scales with font-size slider */
+    color: var(--color-text-primary);
 }
 
 /* Legacy tags display (now unused) */
@@ -1479,7 +1489,7 @@ sup.jump-link {
 .card-tag {
     display: inline;
     font-weight: bold;
-    font-size: 10px;
+    font-size: var(--font-size-tags, 13px);
     color: var(--color-text-primary);
     cursor: pointer;
     margin-right: 8px;

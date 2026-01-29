@@ -232,6 +232,10 @@ export class MarkdownParser {
         return /\[\[tags\]\]/g;
     }
 
+    getDatePattern() {
+        return /\[\[date\]\]/g;
+    }
+
     getTocPattern() {
         return /\[\[toc\]\]/g;
     }
@@ -692,6 +696,12 @@ export class MarkdownParser {
         processedMarkdown = processedMarkdown.replace(
             this.getTagsPattern(),
             '<div class="card-tags-placeholder" data-tags-placeholder="true"></div>'
+        );
+
+        // Process [[date]] directive with placeholder for card date
+        processedMarkdown = processedMarkdown.replace(
+            this.getDatePattern(),
+            '<span class="card-date-placeholder" data-date-placeholder="true"></span>'
         );
 
         // Process [[toc]] directive with generated table of contents
