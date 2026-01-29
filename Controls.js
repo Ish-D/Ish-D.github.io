@@ -7,6 +7,16 @@
  */
 
 // ============================================
+// CONSTANTS
+// ============================================
+
+/**
+ * Default margin size as a percentage of card dimensions.
+ * Used as the default for the margin slider and fallback values.
+ */
+export const DEFAULT_MARGIN_PERCENT = 7;
+
+// ============================================
 // SETTINGS CONFIGURATION
 // ============================================
 
@@ -80,7 +90,7 @@ export const SettingsConfig = {
     },
 
     marginSize: {
-        default: 6,
+        default: DEFAULT_MARGIN_PERCENT,
         type: 'number',
         storage: 'settings-marginSize',
         onSet(value, context) {
@@ -205,10 +215,27 @@ export const ActionsConfig = {
     resetSettings: {
         label: 'Reset to Defaults',
         handler(context, button) {
+            // Settings to skip onSet callbacks for (View Mode options that have disruptive side effects)
+            const skipOnSetFor = ['theme', 'readerMode'];
+
             // Reset each setting to its default value
             Object.entries(SettingsConfig).forEach(([key, config]) => {
-                context.setSetting(key, config.default);
-                localStorage.removeItem(config.storage);
+                // Update the settings object directly
+                if (context.settings) {
+                    context.settings[key] = config.default;
+                }
+                // Update localStorage
+                localStorage.setItem(config.storage, config.default);
+
+                // Run apply() for CSS variable updates
+                if (config.apply) {
+                    config.apply(config.default, context);
+                }
+
+                // Run onSet() for side effects, except for View Mode options
+                if (config.onSet && !skipOnSetFor.includes(key)) {
+                    config.onSet(config.default, context);
+                }
             });
 
             // Sync all settings cards to reflect the reset

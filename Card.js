@@ -1,3 +1,5 @@
+import { DEFAULT_MARGIN_PERCENT } from './Controls.js';
+
 /**
  * Card class - Handles creation and interaction of paper cards
  *
@@ -37,6 +39,13 @@ export class Card {
         // Custom margin sizes (as percentage of card dimensions)
         this.marginTB = options.marginTB || null;  // Top/bottom as % of height
         this.marginLR = options.marginLR || null;  // Left/right as % of width
+
+        // Dynamic margin percentage (used for scaling margins with card size)
+        this.marginPercent = null;
+
+        // Track previous dimensions for resize detection
+        this.prevWidth = this.width;
+        this.prevHeight = this.height;
 
         // Reading stats options
         this.progressBar = options.progressBar || false;
@@ -103,9 +112,9 @@ export class Card {
         const container = document.createElement('div');
         container.className = 'card-container';
 
-        // Apply margin sizes (default 6% or custom if specified)
-        const marginLR = this.marginLR !== null ? this.marginLR : 6;
-        const marginTB = this.marginTB !== null ? this.marginTB : 6;
+        // Apply margin sizes (default or custom if specified)
+        const marginLR = this.marginLR !== null ? this.marginLR : DEFAULT_MARGIN_PERCENT;
+        const marginTB = this.marginTB !== null ? this.marginTB : DEFAULT_MARGIN_PERCENT;
 
         const lrSize = `${(marginLR / 100) * this.width}px`;
         const tbSize = `${(marginTB / 100) * this.height}px`;
@@ -409,6 +418,13 @@ export class Card {
         element.style.height = `${this.height}px`;
         element.style.transform = `rotate(${this.rotation}deg) scale(${this.scale})`;
         element.style.zIndex = this.zIndex;
+
+        // Dynamically scale margins if card was resized
+        if (this.marginPercent !== null && (this.width !== this.prevWidth || this.height !== this.prevHeight)) {
+            this.updateMarginSize(this.marginPercent);
+            this.prevWidth = this.width;
+            this.prevHeight = this.height;
+        }
 
         // Counter-rotate handles so they stay visually fixed regardless of card rotation
         const counterRotation = -this.rotation;
@@ -1671,6 +1687,9 @@ export class Card {
         const container = this.element.querySelector('.card-container');
         if (!container) return;
 
+        // Store the percentage for dynamic scaling on resize
+        this.marginPercent = marginPercent;
+
         // Calculate pixel values from percentage
         const lrSize = (marginPercent / 100) * this.width;
         const tbSize = (marginPercent / 100) * this.height;
@@ -1692,7 +1711,7 @@ export class Card {
      */
     getMarginSizePercent() {
         const container = this.element.querySelector('.card-container');
-        if (!container) return 6; // Default
+        if (!container) return 10; // Default
 
         const computedStyle = getComputedStyle(container);
         const cols = computedStyle.gridTemplateColumns.split(' ');

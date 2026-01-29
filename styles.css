@@ -112,7 +112,7 @@ body {
         "margin-top margin-top margin-top"
         "margin-left content margin-right"
         "margin-bottom margin-bottom margin-bottom";
-    grid-template-columns: minmax(30px, var(--margin-column-max-width)) 1fr minmax(30px, var(--margin-column-max-width));
+    grid-template-columns: minmax(60px, var(--margin-column-max-width)) 1fr minmax(60px, var(--margin-column-max-width));
     grid-template-rows: auto 1fr auto;
     /* Background on container for fold transparency */
     background: var(--color-card-background);

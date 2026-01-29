@@ -1,7 +1,7 @@
 import { Card } from './Card.js';
 import { MarkdownParser } from './MarkdownParser.js';
 import { CardCrypto } from './Crypto.js';
-import { controlsManager, SettingsConfig } from './Controls.js';
+import { controlsManager, SettingsConfig, DEFAULT_MARGIN_PERCENT } from './Controls.js';
 import { vizManager } from './Visualizations.js';
 
 // Editor is loaded dynamically only on localhost
@@ -1257,6 +1257,10 @@ class PaperCanvas {
         if (this.settings) {
             if (!this.settings.cardShadow) {
                 card.element.style.filter = 'none';
+            }
+            // Apply global margin size if no custom margins were specified
+            if (card.marginTB === null && card.marginLR === null && this.settings.marginSize !== undefined) {
+                card.updateMarginSize(this.settings.marginSize);
             }
         }
 
@@ -3801,7 +3805,7 @@ ${renderColumn(rightColumn)}
         // Use larger card margins in reader mode on mobile, slightly larger on desktop
         const isMobile = window.innerWidth < 768;
         const marginMultiplier = isMobile ? 1.4 : 1.1;
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * marginMultiplier);
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || DEFAULT_MARGIN_PERCENT) * marginMultiplier);
 
         const card = this.addCard({
             x: margin,
@@ -3856,7 +3860,7 @@ ${renderColumn(rightColumn)}
         // Use larger card margins in reader mode on mobile, slightly larger on desktop
         const isMobile = window.innerWidth < 768;
         const marginMultiplier = isMobile ? 1.4 : 1.1;
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || 10) * marginMultiplier);
+        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || DEFAULT_MARGIN_PERCENT) * marginMultiplier);
 
         // Create a simple locked card display
         const lockedContent = `
