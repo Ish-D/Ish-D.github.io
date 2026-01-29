@@ -236,6 +236,11 @@ export class MarkdownParser {
         return /\[\[date\]\]/g;
     }
 
+    getDropCapPattern() {
+        // Drop cap: [[drop(L)]] where L is the letter to make a drop cap
+        return /\[\[drop\(([^)]+)\)\]\]/g;
+    }
+
     getTocPattern() {
         return /\[\[toc\]\]/g;
     }
@@ -1451,6 +1456,11 @@ export class MarkdownParser {
             return this.renderTextarea(params);
         });
 
+        // Drop cap
+        html = html.replace(this.getDropCapPattern(), (match, letter) => {
+            return `<span class="drop-cap">${letter.trim()}</span>`;
+        });
+
         html = html.replace(this.getVizPattern(), (match, params) => {
             return this.renderViz(params);
         });
@@ -1669,6 +1679,11 @@ export class MarkdownParser {
 
         html = html.replace(this.getTextareaPattern(), (match, params) => {
             return this.renderTextarea(params);
+        });
+
+        // Drop cap
+        html = html.replace(this.getDropCapPattern(), (match, letter) => {
+            return `<span class="drop-cap">${letter.trim()}</span>`;
         });
 
         // Full link syntax

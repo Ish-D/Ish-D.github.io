@@ -15,9 +15,9 @@
     --color-card-background: #ffffff;       /* Card background */
 
     /* Text colors */
-    --color-text-primary: #1a1a1a;          /* Main text color */
+    --color-text-primary: #2d2926;          /* Main text color - dried ink look */
     --color-text-secondary: #555555;        /* Secondary/muted text */
-    --color-link: #1a1a1a;                  /* Link color */
+    --color-link: #2d2926;                  /* Link color */
     --color-link-hover: #555555;            /* Link hover color */
 
     /* UI colors */

@@ -131,6 +131,7 @@ body {
     overflow-x: hidden;
     font-size: var(--font-size-base);
     line-height: var(--line-height-base);
+    text-align: justify;
     /* Allow touch scrolling in card content */
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
@@ -205,17 +206,23 @@ body {
 .card-margin-left {
     grid-area: margin-left;
     text-align: right;
-    padding-right: var(--margin-padding-inner);
+    padding-right: calc(var(--margin-padding-inner) - 6px); /* Slight adjustment to prevent text clipping */
     padding-left: var(--margin-padding-outer);
     padding-top: var(--margin-padding-top);
     padding-bottom: var(--margin-padding-bottom);
-    overflow: hidden;
+    overflow: visible; /* Changed from hidden to prevent text clipping */
     /* Ensure horizontal content doesn't get clipped */
     min-width: 0;
 }
 
 .card-margin-left .margin-item {
     font-size: var(--font-size-margin-small);
+}
+
+/* Allow left margin text to extend slightly to prevent clipping */
+.card-margin-left .margin-relative-container .margin-item {
+    right: -6px;
+    overflow: visible;
 }
 
 /* Removed side-specific left positioning for consistency */
@@ -285,10 +292,11 @@ body {
     box-sizing: border-box;
 }
 
-/* Horizontal text in left margin - right aligned with extra left padding to prevent clipping */
+/* Horizontal text in left margin - right aligned with extra padding to prevent clipping */
 .card-margin-left .margin-orientation-horizontal {
     text-align: right;
     padding-left: 4px; /* Add small left padding to prevent text clipping */
+    padding-right: 8px; /* Add right padding to prevent clipping toward content */
 }
 
 /* Horizontal text in right margin - left aligned */
@@ -592,12 +600,14 @@ body {
     font-size: var(--font-size-h2);
     font-weight: bold;
     margin-bottom: var(--heading-margin-h2);
+    text-align: left;
 }
 
 .card-content h3 {
     font-size: var(--font-size-h3);
     font-weight: bold;
     margin-bottom: var(--heading-margin-h3);
+    text-align: left;
 }
 
 /* Heading link icon - copy link on click */
@@ -634,7 +644,7 @@ body {
     background: var(--color-card-background);
     border: 1px solid var(--color-border);
     padding: 8px 10px 8px 4px;
-    margin: 0 12px 10px 0;
+    margin: 0 24px 14px 0;
     max-width: 340px;
     font-size: calc(var(--font-size-base) - 2px);
     font-family: var(--font-family-sans);
@@ -721,20 +731,33 @@ h3:target {
 
 .card-content p {
     margin-bottom: var(--paragraph-margin);
-    text-align: left;
+    text-align: justify;
 }
 
 .card-content p.centered {
     text-align: center;
 }
 
+/* Drop cap - large initial letter */
+.drop-cap {
+    float: left;
+    font-size: 3.5em;
+    line-height: 0.8;
+    padding-right: 8px;
+    padding-top: 4px;
+    font-weight: bold;
+    color: var(--color-text-primary);
+}
+
 .card-content ul, .card-content ol {
     margin-left: var(--list-margin-left);
     margin-bottom: var(--list-margin-bottom);
+    text-align: left;
 }
 
 .card-content li {
     margin-bottom: var(--list-item-margin);
+    text-align: left;
 }
 
 .card-content a {
@@ -1118,8 +1141,9 @@ sup.jump-link {
     overflow-y: auto;
     overflow-x: hidden;
     /* Ensure text wraps properly in narrow columns */
-    word-break: break-word;
-    hyphens: auto;
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
 }
 
 .card-margin-left .margin-orientation-horizontal .margin-item-content,
@@ -1132,6 +1156,12 @@ sup.jump-link {
     /* Increase max-height since horizontal text wraps more */
     max-height: 400px;
     box-sizing: border-box;
+}
+
+/* Add padding to left margin text to prevent right-side clipping */
+.card-margin-left .margin-orientation-horizontal .margin-item-content {
+    padding-right: 6px;
+    width: calc(100% + 6px);
 }
 
 /* ---- Vertical text in margins ---- */
@@ -1157,6 +1187,7 @@ sup.jump-link {
 .card-margin-left .margin-orientation-vertical .margin-item-content {
     padding-bottom: 4px;
     padding-right: 2px;
+    padding-left: 8px; /* Extra padding to prevent clipping on visual right edge after rotation */
 }
 
 /* Subtle scrollbar styling */
