@@ -1377,10 +1377,10 @@ class PaperCanvas {
 
     // Build comprehensive tag index from ALL card files at startup
     async buildGlobalTagIndex() {
-        // Load card list dynamically - NO MANUAL STEPS
+        // Load card list dynamically
         // 1. Localhost: /api/cards endpoint (server scans directory)
-        // 2. GitHub Pages: GitHub API lists files in repo
-        // 3. Fallback: manifest.json if it exists
+        // 2. Production: manifest.json (reliable for static hosting)
+        // 3. Fallback: GitHub API (rate-limited, less reliable)
         let cardFiles = [];
 
         if (this.isLocal) {
@@ -1394,7 +1394,20 @@ class PaperCanvas {
             } catch (e) {}
         }
 
-        // GitHub Pages: use GitHub API to list files
+        // Production: use manifest.json (most reliable for static hosting)
+        if (cardFiles.length === 0) {
+            try {
+                const response = await fetch(`cards/manifest.json?t=${Date.now()}`);
+                if (response.ok) {
+                    const manifest = await response.json();
+                    cardFiles = manifest.cards || [];
+                }
+            } catch (e) {
+                console.warn('Failed to load manifest.json:', e);
+            }
+        }
+
+        // Fallback: GitHub API (rate-limited, less reliable)
         if (cardFiles.length === 0) {
             const hostname = window.location.hostname;
             if (hostname.endsWith('.github.io')) {
@@ -1416,17 +1429,6 @@ class PaperCanvas {
                     console.warn('GitHub API request failed:', e);
                 }
             }
-        }
-
-        // Final fallback: manifest.json
-        if (cardFiles.length === 0) {
-            try {
-                const response = await fetch(`cards/manifest.json?t=${Date.now()}`);
-                if (response.ok) {
-                    const manifest = await response.json();
-                    cardFiles = manifest.cards || [];
-                }
-            } catch (e) {}
         }
 
         if (cardFiles.length === 0) {

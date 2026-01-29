@@ -77,11 +77,22 @@
  *   display       - inline|float-left|float-right (display mode)
  *   align         - left|center|right (block alignment)
  *
+ * Model Parameters:
+ *   src           - URL or path to GLTF/GLB model (required)
+ *   scale         - Scale factor (default: auto-fit)
+ *   autorotate    - Enable rotation (default: true for tiny/small)
+ *   speed         - Rotation speed multiplier (default: 1)
+ *   background    - "transparent", "theme", or hex color
+ *   zoom          - Enable zoom controls (default: false for tiny/small)
+ *   pan           - Enable pan controls (default: false for tiny/small)
+ *
  * Examples:
  *   [[viz(type: polynomial, a2: 1, a1: 0, a0: -1)]]
  *   [[viz(type: surface, fn: "sin(x)*cos(y)", size: medium)]]
  *   [[viz(type: curve3d, x: "cos(t)", y: "sin(t)", z: "t/5", display: inline, size: small)]]
  *   [[viz(type: polynomial3d, a: 0.5, b: 0.5, width: 300, height: 350)]]
+ *   [[viz(type: model, src: "model.glb", size: small, display: inline)]]
+ *   [[viz(type: model, src: "https://example.com/model.glb", autorotate: true, speed: 2)]]
  *
  * INLINE ELEMENTS
  * ---------------

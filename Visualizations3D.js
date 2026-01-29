@@ -879,24 +879,70 @@ class Curve3DViz extends Base3DViz {
 // ============================================
 
 /**
- * ModelViewer - Load and display 3D models
+ * ModelViewer - Load and display 3D models (GLTF/GLB)
  *
  * DSL Usage:
- *   [[viz(type: model, src: "/models/robot.glb", scale: 2, autorotate: true)]]
+ *   [[viz(type: model, src: "/models/robot.glb")]]
+ *   [[viz(type: model, src: "https://example.com/model.glb", scale: 2, autorotate: true)]]
+ *   [[viz(type: model, src: "model.glb", size: tiny, display: inline)]]
+ *
+ * Parameters:
+ *   src         - URL or path to GLTF/GLB model (required)
+ *   scale       - Scale factor for the model (default: auto-fit)
+ *   autorotate  - Enable auto-rotation (default: true for tiny/small, false otherwise)
+ *   speed       - Rotation speed multiplier (default: 1)
+ *   background  - Background color: "transparent", "theme", or hex color (default: theme)
+ *   zoom        - Enable zoom controls (default: true for large, false for tiny/small)
+ *   pan         - Enable pan controls (default: true for large, false for tiny/small)
  */
 class ModelViewer extends Base3DViz {
     async build() {
         const src = this.params.src;
-        const scale = parseFloat(this.params.scale) || 1;
-        this.autoRotate = this.params.autorotate === 'true';
+        const size = this.params.size || 'medium';
+        const isSmall = size === 'tiny' || size === 'small';
+
+        // Scale: auto-fit by default
+        this.customScale = this.params.scale ? parseFloat(this.params.scale) : null;
+
+        // Auto-rotate defaults to true for small sizes
+        if (this.params.autorotate !== undefined) {
+            this.autoRotate = this.params.autorotate === 'true';
+        } else {
+            this.autoRotate = isSmall;
+        }
+
+        // Rotation speed
+        this.rotationSpeed = parseFloat(this.params.speed) || 1;
+
+        // Controls: simplified for small sizes
+        if (this.params.zoom !== undefined) {
+            this.controls.enableZoom = this.params.zoom === 'true';
+        } else {
+            this.controls.enableZoom = !isSmall;
+        }
+
+        if (this.params.pan !== undefined) {
+            this.controls.enablePan = this.params.pan === 'true';
+        } else {
+            this.controls.enablePan = !isSmall;
+        }
+
+        // Background handling
+        if (this.params.background === 'transparent') {
+            this.scene.background = null;
+            this.renderer.setClearColor(0x000000, 0);
+        } else if (this.params.background && this.params.background !== 'theme') {
+            this.scene.background = new THREE.Color(this.params.background);
+        }
 
         if (!src) {
-            this.showError('Model src is required');
+            this.showError('src required');
             return;
         }
 
         // Show loading indicator
         this.container.classList.add('loading');
+        this.showLoadingIndicator();
 
         const loader = new THREE.GLTFLoader();
 
@@ -905,48 +951,115 @@ class ModelViewer extends Base3DViz {
                 loader.load(
                     src,
                     resolve,
-                    undefined,
+                    (progress) => {
+                        if (progress.lengthComputable) {
+                            const percent = Math.round((progress.loaded / progress.total) * 100);
+                            this.updateLoadingProgress(percent);
+                        }
+                    },
                     reject
                 );
             });
 
             this.container.classList.remove('loading');
+            this.hideLoadingIndicator();
 
             this.model = gltf.scene;
-            this.model.scale.setScalar(scale);
 
-            // Center model
+            // Calculate bounding box for auto-fit
             const box = new THREE.Box3().setFromObject(this.model);
+            const modelSize = box.getSize(new THREE.Vector3());
             const center = box.getCenter(new THREE.Vector3());
-            this.model.position.sub(center);
+            const maxDim = Math.max(modelSize.x, modelSize.y, modelSize.z);
+
+            // Auto-scale to fit viewport if no custom scale
+            if (this.customScale) {
+                this.model.scale.setScalar(this.customScale);
+            } else {
+                // Scale model to fit nicely in the viewport
+                const targetSize = 2; // Target size in scene units
+                const autoScale = targetSize / maxDim;
+                this.model.scale.setScalar(autoScale);
+            }
+
+            // Center model at origin
+            this.model.position.sub(center.multiplyScalar(this.model.scale.x));
 
             this.scene.add(this.model);
 
-            // Adjust camera to fit model
-            const size = box.getSize(new THREE.Vector3());
-            const maxDim = Math.max(size.x, size.y, size.z);
-            this.camera.position.set(maxDim * 1.5, maxDim * 1, maxDim * 1.5);
+            // Position camera to see the full model
+            const scaledSize = maxDim * this.model.scale.x;
+            const distance = scaledSize * 2.5;
+            this.camera.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
             this.controls.target.set(0, 0, 0);
             this.controls.update();
 
+            // Handle animations if present
+            if (gltf.animations && gltf.animations.length > 0) {
+                this.mixer = new THREE.AnimationMixer(this.model);
+                gltf.animations.forEach(clip => {
+                    this.mixer.clipAction(clip).play();
+                });
+            }
+
         } catch (error) {
             this.container.classList.remove('loading');
-            this.showError(`Failed to load model: ${error.message}`);
+            this.hideLoadingIndicator();
+            console.error('Model load error:', error);
+            this.showError('Load failed');
+        }
+    }
+
+    showLoadingIndicator() {
+        this.loadingEl = document.createElement('div');
+        this.loadingEl.className = 'viz-loading';
+        this.loadingEl.innerHTML = '<span class="viz-loading-spinner"></span><span class="viz-loading-text">0%</span>';
+        this.container.appendChild(this.loadingEl);
+    }
+
+    updateLoadingProgress(percent) {
+        if (this.loadingEl) {
+            const textEl = this.loadingEl.querySelector('.viz-loading-text');
+            if (textEl) textEl.textContent = `${percent}%`;
+        }
+    }
+
+    hideLoadingIndicator() {
+        if (this.loadingEl) {
+            this.loadingEl.remove();
+            this.loadingEl = null;
         }
     }
 
     showError(message) {
+        // Compact error for small containers
+        const isSmall = this.width < 150 || this.height < 100;
         const errorDiv = document.createElement('div');
-        errorDiv.className = 'viz-error';
-        errorDiv.textContent = message;
+        errorDiv.className = 'viz-error viz-error-compact';
+        errorDiv.textContent = isSmall ? '⚠' : message;
+        errorDiv.title = message;
         this.container.appendChild(errorDiv);
     }
 
     animate(delta) {
+        // Handle auto-rotation
         if (this.autoRotate && this.model) {
-            this.model.rotation.y += delta * 0.5;
+            this.model.rotation.y += delta * 0.5 * this.rotationSpeed;
         }
+
+        // Update animation mixer if present
+        if (this.mixer) {
+            this.mixer.update(delta);
+        }
+
         super.animate(delta);
+    }
+
+    updateMaterials() {
+        // Update background on theme change (unless transparent or custom)
+        if (this.params.background !== 'transparent' && !this.params.background) {
+            this.scene.background = themeColors.three.background;
+        }
     }
 }
 

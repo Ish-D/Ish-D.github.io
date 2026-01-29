@@ -1,7 +1,7 @@
 ---
 title: Math & Visualizations
 width: 600
-height: 2800
+height: 3400
 ---
 
 # Math & Visualizations
@@ -20,6 +20,41 @@ This card demonstrates the flexible visualization system with various sizing and
 You can place small visualizations [[viz(type: surface, fn: "sin(x)*cos(y)", size: tiny, display: inline)]] directly inline with your text, just like an image or icon.
 
 Here's another example with a node graph [[viz(type: nodegraph3d, nodes: "A,B,C", edges: "A-B,B-C,C-A", size: tiny, display: inline)]] embedded in a sentence.
+
+---
+
+## 3D Models
+
+[[viz(type: model, src: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/Duck/glTF-Binary/Duck.glb", size: small, display: float-right)]]
+
+Load any GLTF/GLB 3D model directly into your content. This duck model floats to the right while text wraps around it. Small models auto-rotate by default.
+
+Models support several options:
+- **autorotate**: Spin continuously (default for small sizes)
+- **scale**: Custom scale factor
+- **speed**: Rotation speed multiplier
+- **background**: "transparent", "theme", or hex color
+
+---
+
+## Inline 3D Models
+
+You can also embed tiny 3D models inline with text [[viz(type: model, src: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/BoxAnimated/glTF-Binary/BoxAnimated.glb", size: tiny, display: inline)]] just like mathematical symbols or icons.
+
+---
+
+## Model in Margin
+
+[[margin(right, type: relative)]]
+{
+[[viz(type: model, src: "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/ToyCar/glTF-Binary/ToyCar.glb")]]
+
+*A toy car model*
+}
+
+3D models work beautifully in margins too. The toy car in the right margin stays anchored to this paragraph as you scroll.
+
+The model automatically fits to the available space and rotates slowly to show all angles.
 
 ---
 

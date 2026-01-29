@@ -1,0 +1,44 @@
+name: Update Cards Manifest
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'cards/*.md'
+
+jobs:
+  update-manifest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate manifest.json
+        run: |
+          cd cards
+          echo '{"cards":[' > manifest.json.tmp
+          first=true
+          for f in *.md; do
+            name="${f%.md}"
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo ',' >> manifest.json.tmp
+            fi
+            echo -n "\"$name\"" >> manifest.json.tmp
+          done
+          echo ']}' >> manifest.json.tmp
+          # Pretty print with sorted keys
+          cat manifest.json.tmp | python3 -c "import sys,json; d=json.load(sys.stdin); d['cards'].sort(); print(json.dumps(d, indent=2))" > manifest.json
+          rm manifest.json.tmp
+
+      - name: Commit if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cards/manifest.json
+          if git diff --staged --quiet; then
+            echo "No changes to manifest.json"
+          else
+            git commit -m "Auto-update cards manifest"
+            git push
+          fi
