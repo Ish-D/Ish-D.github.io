@@ -1,6 +1,6 @@
 ---
-width: 520
-height: 680
+width: 900
+height: 600
 progressBar: true
 wordCount: true
 readTime: true

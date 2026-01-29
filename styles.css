@@ -583,38 +583,67 @@ body {
 /* Typography within cards */
 .card-content h1 {
     font-size: var(--font-size-h1);
-    font-weight: var(--font-weight-h1);
+    font-weight: bold;
     margin-bottom: var(--heading-margin-h1);
     text-align: center;
 }
 
 .card-content h2 {
     font-size: var(--font-size-h2);
-    font-weight: var(--font-weight-h2);
+    font-weight: bold;
     margin-bottom: var(--heading-margin-h2);
 }
 
 .card-content h3 {
     font-size: var(--font-size-h3);
-    font-weight: var(--font-weight-h3);
+    font-weight: bold;
     margin-bottom: var(--heading-margin-h3);
+}
+
+/* Heading link icon - copy link on click */
+.card-content h1,
+.card-content h2,
+.card-content h3 {
+    position: relative;
+}
+
+.heading-link {
+    opacity: 0;
+    margin-left: 8px;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-weight: normal;
+    font-size: 0.8em;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    user-select: none;
+}
+
+.card-content h1:hover .heading-link,
+.card-content h2:hover .heading-link,
+.card-content h3:hover .heading-link {
+    opacity: 0.6;
+}
+
+.heading-link:hover {
+    opacity: 1 !important;
+    color: var(--color-link);
 }
 
 /* Table of Contents */
 .toc {
     background: var(--color-card-background);
     border: 1px solid var(--color-border);
-    padding: 12px 14px 12px 10px;
-    margin: 0 24px 20px 0;
+    padding: 8px 10px 8px 4px;
+    margin: 0 12px 10px 0;
     max-width: 340px;
-    font-size: 15px;
+    font-size: calc(var(--font-size-base) - 2px);
     font-family: var(--font-family-sans);
     float: left;
 }
 
 .toc-title {
     font-weight: bold;
-    font-size: 17px;
+    font-size: var(--font-size-base);
     margin-bottom: 12px;
     color: var(--color-text-primary);
     border-bottom: 1px solid var(--color-border);
@@ -634,12 +663,13 @@ body {
 .toc-h2 > .toc-link {
     font-weight: bold;
     color: var(--color-text-primary);
+    font-size: calc(var(--font-size-base) - 1px);
 }
 
 .toc-sublist {
     list-style: none;
     margin: 1px 0 2px 0;
-    padding-left: 24px;
+    padding-left: 8px;
 }
 
 .toc-h3 {
@@ -648,16 +678,16 @@ body {
 
 .toc-h3 > .toc-link {
     font-weight: bold;
-    color: var(--color-text-secondary);
-    font-size: 14px;
+    color: var(--color-text-primary);
+    font-size: calc(var(--font-size-base) - 2px);
 }
 
 .toc-number {
     display: inline-block;
-    min-width: 32px;
+    margin-right: 8px;
     color: var(--color-text-secondary);
     font-weight: bold;
-    font-size: 14px;
+    font-size: calc(var(--font-size-base) - 1px);
 }
 
 .toc-link,

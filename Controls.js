@@ -39,13 +39,29 @@ export const SettingsConfig = {
         type: 'number',
         storage: 'settings-fontSize',
         apply(value, context) {
+            // Base font size
             document.documentElement.style.setProperty('--font-size-base', `${value}px`);
-            // Scale margin font sizes proportionally (margins are slightly smaller)
-            const marginFontSize = Math.max(9, value - 1);
-            const marginSmallFontSize = Math.max(8, value - 2);
+
+            // Scale all font sizes proportionally based on default ratios (base = 17px)
+            const scale = value / 17;
+
+            // Headings (default: h1=28px, h2=22px, h3=16px)
+            document.documentElement.style.setProperty('--font-size-h1', `${Math.round(28 * scale)}px`);
+            document.documentElement.style.setProperty('--font-size-h2', `${Math.round(22 * scale)}px`);
+            document.documentElement.style.setProperty('--font-size-h3', `${Math.round(16 * scale)}px`);
+
+            // Code (default: 13px)
+            document.documentElement.style.setProperty('--font-size-code', `${Math.round(13 * scale)}px`);
+
+            // Margins (default: 11px, small: 10px)
+            const marginFontSize = Math.max(9, Math.round(11 * scale));
+            const marginSmallFontSize = Math.max(8, Math.round(10 * scale));
             document.documentElement.style.setProperty('--font-size-margin', `${marginFontSize}px`);
             document.documentElement.style.setProperty('--font-size-margin-small', `${marginSmallFontSize}px`);
             document.documentElement.style.setProperty('--font-size-margin-title', `${marginFontSize}px`);
+
+            // Page number (default: 11px)
+            document.documentElement.style.setProperty('--font-size-page-number', `${Math.max(9, Math.round(11 * scale))}px`);
         }
     },
 

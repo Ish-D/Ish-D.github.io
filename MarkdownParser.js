@@ -535,7 +535,7 @@ export class MarkdownParser {
         }
 
         let html = '<nav class="toc" aria-label="Table of Contents">';
-        html += '<ol class="toc-list">';
+        html += '<ul class="toc-list">';
 
         let h2Counter = 0;
         let h3Counter = 0;
@@ -545,7 +545,7 @@ export class MarkdownParser {
             if (header.level === 2) {
                 // Close any open H3 list
                 if (inH3List) {
-                    html += '</ol></li>';
+                    html += '</ul></li>';
                     inH3List = false;
                 }
 
@@ -560,7 +560,7 @@ export class MarkdownParser {
             } else if (header.level === 3) {
                 // Start H3 sublist if not already in one
                 if (!inH3List) {
-                    html += '<ol class="toc-sublist">';
+                    html += '<ul class="toc-sublist">';
                     inH3List = true;
                 }
 
@@ -576,12 +576,12 @@ export class MarkdownParser {
 
         // Close any remaining open elements
         if (inH3List) {
-            html += '</ol></li>';
+            html += '</ul></li>';
         } else if (h2Counter > 0) {
             html += '</li>';
         }
 
-        html += '</ol>';
+        html += '</ul>';
         html += '</nav>';
 
         return html;
@@ -1502,17 +1502,17 @@ export class MarkdownParser {
         html = html.replace(/^### (.*$)/gim, (match, p1) => {
             const header = h3Headers[h3Index++];
             const id = header ? header.id : this.slugify(p1);
-            return `<h3 id="${id}">${p1}</h3>`;
+            return `<h3 id="${id}">${p1}<span class="heading-link" data-heading-id="${id}" title="Copy link">§</span></h3>`;
         });
         html = html.replace(/^## (.*$)/gim, (match, p1) => {
             const header = h2Headers[h2Index++];
             const id = header ? header.id : this.slugify(p1);
-            return `<h2 id="${id}">${p1}</h2>`;
+            return `<h2 id="${id}">${p1}<span class="heading-link" data-heading-id="${id}" title="Copy link">§</span></h2>`;
         });
         html = html.replace(/^# (.*$)/gim, (match, p1) => {
             const header = h1Headers[h1Index++];
             const id = header ? header.id : this.slugify(p1);
-            return `<h1 id="${id}">${p1}</h1>`;
+            return `<h1 id="${id}">${p1}<span class="heading-link" data-heading-id="${id}" title="Copy link">§</span></h1>`;
         });
 
         // Horizontal rules

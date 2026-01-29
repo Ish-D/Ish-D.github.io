@@ -237,6 +237,10 @@ class PaperCanvas {
             if (urlInfo.readerMode) {
                 // Enter reader mode directly from URL
                 await this.enterReaderMode(urlInfo.cardName, false);
+                // Scroll to heading if specified
+                if (urlInfo.headingId) {
+                    this.scrollToHeadingInReaderMode(urlInfo.headingId);
+                }
             } else {
                 // Normal mode with specific card
                 // Reset canvas view
@@ -252,6 +256,9 @@ class PaperCanvas {
                     // Card not found, fall back to menu
                     console.warn(`Card "${urlInfo.cardName}" not found, loading menu`);
                     await this.loadMenuCard();
+                } else if (urlInfo.headingId) {
+                    // Scroll to heading if specified
+                    this.scrollToHeadingInCard(card, urlInfo.headingId);
                 }
             }
         } else {
@@ -287,9 +294,12 @@ class PaperCanvas {
         if (pathCard) {
             // Check for reader mode prefix in pathname
             if (pathCard.startsWith('r/')) {
-                return { cardName: pathCard.slice(2), readerMode: true };
+                const rest = pathCard.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: true, headingId };
             }
-            return { cardName: pathCard, readerMode: false };
+            const [cardName, headingId] = this.parseCardAndHeading(pathCard);
+            return { cardName, readerMode: false, headingId };
         }
 
         // Check hash (works with any static server: /#journal or #journal)
@@ -298,9 +308,12 @@ class PaperCanvas {
         if (hashCard) {
             // Check for reader mode prefix in hash (e.g., #/r/journal or #r/journal)
             if (hashCard.startsWith('r/')) {
-                return { cardName: hashCard.slice(2), readerMode: true };
+                const rest = hashCard.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: true, headingId };
             }
-            return { cardName: hashCard, readerMode: false };
+            const [cardName, headingId] = this.parseCardAndHeading(hashCard);
+            return { cardName, readerMode: false, headingId };
         }
 
         // Check query parameter (?page=journal)
@@ -309,12 +322,70 @@ class PaperCanvas {
         if (queryCard) {
             const decoded = decodeURIComponent(queryCard);
             if (decoded.startsWith('r/')) {
-                return { cardName: decoded.slice(2), readerMode: true };
+                const rest = decoded.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: true, headingId };
             }
-            return { cardName: decoded, readerMode: false };
+            const [cardName, headingId] = this.parseCardAndHeading(decoded);
+            return { cardName, readerMode: false, headingId };
         }
 
         return null;
+    }
+
+    /**
+     * Parse a URL path segment into card name and optional heading ID.
+     * E.g., "journal/day-one" → ["journal", "day-one"]
+     *       "journal" → ["journal", null]
+     */
+    parseCardAndHeading(path) {
+        const slashIndex = path.indexOf('/');
+        if (slashIndex === -1) {
+            return [path, null];
+        }
+        const cardName = path.slice(0, slashIndex);
+        const headingId = path.slice(slashIndex + 1) || null;
+        return [cardName, headingId];
+    }
+
+    /**
+     * Scroll to a heading within a card's content area.
+     */
+    scrollToHeadingInCard(card, headingId) {
+        // Small delay to ensure DOM is fully rendered
+        setTimeout(() => {
+            const contentContainer = card.element.querySelector('.card-content');
+            const targetElement = card.element.querySelector(`#${CSS.escape(headingId)}`);
+            if (contentContainer && targetElement) {
+                const containerRect = contentContainer.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                const scrollOffset = targetRect.top - containerRect.top + contentContainer.scrollTop;
+                contentContainer.scrollTo({
+                    top: scrollOffset - 10,
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
+    }
+
+    /**
+     * Scroll to a heading in reader mode.
+     */
+    scrollToHeadingInReaderMode(headingId) {
+        // Small delay to ensure DOM is fully rendered
+        setTimeout(() => {
+            const readerContent = document.querySelector('.reader-mode-content');
+            const targetElement = readerContent?.querySelector(`#${CSS.escape(headingId)}`);
+            if (readerContent && targetElement) {
+                const containerRect = readerContent.getBoundingClientRect();
+                const targetRect = targetElement.getBoundingClientRect();
+                const scrollOffset = targetRect.top - containerRect.top + readerContent.scrollTop;
+                readerContent.scrollTo({
+                    top: scrollOffset - 20,
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
     }
 
 
@@ -770,11 +841,11 @@ class PaperCanvas {
                 e.preventDefault();
                 e.stopPropagation();
                 const targetId = tocLink.dataset.tocTarget;
-                const card = tocLink.closest('.card');
+                const cardElement = tocLink.closest('.card');
 
-                if (card && targetId) {
-                    const contentContainer = card.querySelector('.card-content');
-                    const targetElement = card.querySelector(`#${CSS.escape(targetId)}`);
+                if (cardElement && targetId) {
+                    const contentContainer = cardElement.querySelector('.card-content');
+                    const targetElement = cardElement.querySelector(`#${CSS.escape(targetId)}`);
                     if (contentContainer && targetElement) {
                         // Calculate offset within the scrollable container
                         const containerRect = contentContainer.getBoundingClientRect();
@@ -785,6 +856,41 @@ class PaperCanvas {
                         contentContainer.scrollTo({
                             top: scrollOffset - 10, // Small offset from top
                             behavior: 'smooth'
+                        });
+
+                        // Update URL with heading ID
+                        const cardId = cardElement.dataset.cardId;
+                        const card = this.cards.get(cardId);
+                        if (card && card.sourceFile) {
+                            const newUrl = `#/${card.sourceFile}/${targetId}`;
+                            window.history.pushState(
+                                { cardName: card.sourceFile, headingId: targetId },
+                                '',
+                                newUrl
+                            );
+                        }
+                    }
+                }
+            }
+        });
+
+        // Handle heading link clicks to copy URL to clipboard
+        this.canvas.addEventListener('click', (e) => {
+            const headingLink = e.target.closest('.heading-link');
+
+            if (headingLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const headingId = headingLink.dataset.headingId;
+                const cardElement = headingLink.closest('.card');
+
+                if (cardElement && headingId) {
+                    const cardId = cardElement.dataset.cardId;
+                    const card = this.cards.get(cardId);
+                    if (card && card.sourceFile) {
+                        const url = `${window.location.origin}${window.location.pathname}#/${card.sourceFile}/${headingId}`;
+                        navigator.clipboard.writeText(url).catch(err => {
+                            console.error('Failed to copy link:', err);
                         });
                     }
                 }
@@ -3732,6 +3838,9 @@ ${renderColumn(rightColumn)}
         if (state?.readerMode) {
             // Navigate to the specified card in reader mode
             this.enterReaderMode(state.cardName, false);
+            if (state.headingId) {
+                this.scrollToHeadingInReaderMode(state.headingId);
+            }
         } else if (this.isReaderMode) {
             // Exiting reader mode via back button
             this.exitReaderMode();
@@ -3740,7 +3849,11 @@ ${renderColumn(rightColumn)}
             const urlInfo = this.getCardNameFromURL();
             if (urlInfo) {
                 this.clearAllCards();
-                this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
+                this.loadCardFromFile(urlInfo.cardName, { fillViewport: true }).then(card => {
+                    if (card && urlInfo.headingId) {
+                        this.scrollToHeadingInCard(card, urlInfo.headingId);
+                    }
+                });
             } else {
                 // Navigating to plain URL (no card specified)
                 // Clear cards and load menu
