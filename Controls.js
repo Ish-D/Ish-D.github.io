@@ -45,10 +45,10 @@ export const SettingsConfig = {
             // Scale all font sizes proportionally based on default ratios (base = 17px)
             const scale = value / 17;
 
-            // Headings (default: h1=28px, h2=22px, h3=16px)
-            document.documentElement.style.setProperty('--font-size-h1', `${Math.round(28 * scale)}px`);
-            document.documentElement.style.setProperty('--font-size-h2', `${Math.round(22 * scale)}px`);
-            document.documentElement.style.setProperty('--font-size-h3', `${Math.round(16 * scale)}px`);
+            // Headings (default: h1=32px, h2=26px, h3=20px)
+            document.documentElement.style.setProperty('--font-size-h1', `${Math.round(32 * scale)}px`);
+            document.documentElement.style.setProperty('--font-size-h2', `${Math.round(26 * scale)}px`);
+            document.documentElement.style.setProperty('--font-size-h3', `${Math.round(20 * scale)}px`);
 
             // Code (default: 13px)
             document.documentElement.style.setProperty('--font-size-code', `${Math.round(13 * scale)}px`);
