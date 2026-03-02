@@ -13,7 +13,7 @@
  * }
  *
  * Block Types:
- *   margin(side, type: absolute|relative, orient: vertical|horizontal, size: pixels, anchor: id, pos: pixels)
+ *   margin(side, type: absolute|relative, orient: vertical|horizontal, size: pixels, anchor: id, pos: pixels, maxh: percentage_or_pixels)
  *   center
  *   style(css properties separated by semicolons)
  *   image(src, scale: percentage, fit: cover|contain|fill, align: left|center|right, caption: text)
@@ -27,6 +27,7 @@
  *   size      - max height/width in pixels
  *   anchor    - id of anchor point to position relative to
  *   pos       - offset from start of margin area in pixels (absolute margins only)
+ *   maxh      - max height as percentage (e.g. "20%") or pixels (e.g. "50px"), defaults to 10% of card height
  *
  * Examples:
  *   [[margin(left, type: absolute, orient: vertical)]]
@@ -104,6 +105,7 @@
  * [[anchor(id)]]{text}           - Anchor point
  * [[jump(target-id)]]            - Jump to anchor (uses target-id as display)
  * [[jump(target-id)]]{text}      - Jump to anchor with custom display text
+ * [[note(side, params)]]{anchor text}{margin content} - Inline margin note anchored to specific word
  * [[cite(url)]]                  - Citation with auto-numbered superscript
  * [[cite(url, title)]]           - Citation with custom title
  * [[tab]]                         - Inline tab/indent (em-space indent for paragraphs)
@@ -117,6 +119,7 @@
  *   [[About]] or [[About|Click here]]
  *   [[anchor(section1)]]{Section 1}
  *   [[jump(section1)]] or [[jump(section1)]]{Go to Section 1}
+ *   [[note(right)]]{quantum physics}{This note tracks "quantum physics"}
  *   [[cite(https://example.com)]] or [[cite(https://example.com, Example Site)]]
  *   [[bibliography]]
  *
@@ -651,6 +654,62 @@ export class MarkdownParser {
         // Discovery pass: find all headers for TOC generation
         this.discoverHeaders(processedMarkdown);
 
+        // Extract [[note(...)]] inline margin anchors before block extraction
+        // Syntax: [[note(side, params)]]{anchor text}{margin content}
+        // These can't be handled by extractAllBlocks() due to the dual-brace format
+        let noteCounter = 0;
+        const notePattern = /\[\[note(?:\(([^)]*)\))?\]\]/g;
+        let noteMatch;
+        while ((noteMatch = notePattern.exec(processedMarkdown)) !== null) {
+            const noteStart = noteMatch.index;
+            const paramsStr = noteMatch[1] || '';
+            const afterHeader = noteMatch.index + noteMatch[0].length;
+
+            // Expect first brace group immediately: {anchor text}
+            if (processedMarkdown[afterHeader] !== '{') continue;
+            const firstBraceClose = this.findMatchingBrace(processedMarkdown, afterHeader);
+            if (firstBraceClose === -1) continue;
+            const anchorText = processedMarkdown.slice(afterHeader + 1, firstBraceClose);
+
+            // Expect second brace group immediately after: {margin content}
+            if (processedMarkdown[firstBraceClose + 1] !== '{') continue;
+            const secondBraceClose = this.findMatchingBrace(processedMarkdown, firstBraceClose + 1);
+            if (secondBraceClose === -1) continue;
+            let marginContent = processedMarkdown.slice(firstBraceClose + 2, secondBraceClose);
+
+            // Trim leading/trailing newlines from margin content (like block extraction does)
+            if (marginContent.startsWith('\n')) marginContent = marginContent.slice(1);
+            if (marginContent.endsWith('\n')) marginContent = marginContent.slice(0, -1);
+            marginContent = marginContent.trim();
+
+            // Parse params — default side to 'right', default type to 'relative'
+            const params = this.parseParams(paramsStr);
+            const side = params.positional[0] || 'right';
+            if (!params.named.type) params.named.type = 'relative';
+
+            // Reconstruct params string with defaults applied
+            const reconstructedParams = paramsStr || 'right';
+
+            // Generate anchor ID
+            const anchorId = `__note_margin_${noteCounter++}`;
+
+            // Process margin content through parseMarginBlock logic
+            const marginData = this.parseMarginBlock(
+                reconstructedParams + (params.named.type === 'relative' && !paramsStr.includes('type:') ? ', type: relative' : ''),
+                marginContent
+            );
+            marginData.anchor = anchorId;
+
+            result.margins[marginData.side].push(marginData);
+
+            // Replace full match with placeholder wrapping the anchor text
+            const placeholder = `__NOTE_ANCHOR_${anchorId}_START__${anchorText}__NOTE_ANCHOR_END__`;
+            processedMarkdown = processedMarkdown.slice(0, noteStart) + placeholder + processedMarkdown.slice(secondBraceClose + 1);
+
+            // Reset regex to continue scanning after the replacement
+            notePattern.lastIndex = noteStart + placeholder.length;
+        }
+
         // Extract margin blocks using brace counting for correct nested block handling
         const allBlocks = this.extractAllBlocks(processedMarkdown);
         const marginBlocks = [];
@@ -755,6 +814,12 @@ export class MarkdownParser {
         result.content = result.content.replace(
             /__MARGIN_ANCHOR_(__auto_margin_\d+)__/g,
             '<span data-anchor-id="$1" class="margin-anchor"></span>'
+        );
+
+        // Replace note anchor placeholders with actual anchor spans
+        result.content = result.content.replace(
+            /__NOTE_ANCHOR_([a-z0-9_]+)_START__([\s\S]*?)__NOTE_ANCHOR_END__/g,
+            '<span data-anchor-id="$1" class="margin-anchor margin-note-anchor">$2</span>'
         );
 
         return result;
@@ -980,6 +1045,7 @@ export class MarkdownParser {
         const size = params.named.size ? parseInt(params.named.size) : null;
         const anchor = params.named.anchor || null;
         const pos = params.named.pos ? parseInt(params.named.pos) : null;
+        const maxh = params.named.maxh || null; // e.g. "20%" or "50px"
 
         // Resolve 'auto' orientation based on side
         let resolvedOrientation = orientation;
@@ -1009,6 +1075,7 @@ export class MarkdownParser {
             anchor: anchor,
             size: size,
             pos: pos,
+            maxh: maxh,
             html: html
         };
     }

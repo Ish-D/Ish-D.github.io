@@ -78,13 +78,19 @@ export class Card {
         this.startWidth = 0;
         this.startHeight = 0;
 
+        // Margin layout registry — tracks all margin items per side for collision resolution
+        this.marginItemRegistry = { left: [], right: [], top: [], bottom: [] };
+        this.cachedMarginMetrics = {};
+        this.marginLayoutPending = false;
+
         // Create DOM element
         this.element = this.createElement();
         this.bindEvents();
 
-        // Initial positioning of relative margins
+        // Initial positioning of margins
         requestAnimationFrame(() => {
-            this.updateRelativeMargins();
+            this.cacheMarginMetrics();
+            this.updateMarginLayout();
             this.updateProgressBar();
             // Also render LaTeX and highlight code in margins after DOM is ready
             this.renderLaTeX();
@@ -322,32 +328,41 @@ export class Card {
         const margin = document.createElement('div');
         margin.className = `card-margin card-margin-${side}`;
 
-        // Separate items by type
-        const absoluteItems = items ? items.filter(item => item.type !== 'relative') : [];
-        const relativeItems = items ? items.filter(item => item.type === 'relative') : [];
+        // Clear registry for this side
+        this.marginItemRegistry[side] = [];
 
-        // Container for absolute items (fixed position) - don't include page number here
-        if (absoluteItems.length > 0) {
-            const absoluteContainer = document.createElement('div');
-            absoluteContainer.className = 'margin-absolute-container';
+        if (items && items.length > 0) {
+            const container = document.createElement('div');
+            container.className = 'margin-items-container';
 
-            absoluteItems.forEach(item => {
-                absoluteContainer.innerHTML += this.renderMarginItem(item, 'absolute', side);
+            items.forEach((item, index) => {
+                const html = this.renderMarginItem(item, item.type, side);
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = html;
+                const el = wrapper.firstElementChild;
+                el.dataset.marginOrder = index;
+
+                // Store raw HTML for overflow arrow card spawning
+                el.dataset.rawHtml = item.html || '';
+
+                container.appendChild(el);
+
+                // Register item for layout algorithm
+                this.marginItemRegistry[side].push({
+                    element: el,
+                    type: item.type,
+                    anchorId: item.anchor || null,
+                    pos: item.pos !== null && item.pos !== undefined ? item.pos : null,
+                    maxh: item.maxh || null,
+                    desiredPos: 0,
+                    actualPos: 0,
+                    size: 0,
+                    heightDirty: true,
+                    order: index
+                });
             });
 
-            margin.appendChild(absoluteContainer);
-        }
-
-        // Container for relative items (scroll-synced)
-        if (relativeItems.length > 0) {
-            const relativeContainer = document.createElement('div');
-            relativeContainer.className = 'margin-relative-container';
-
-            relativeItems.forEach(item => {
-                relativeContainer.innerHTML += this.renderMarginItem(item, 'relative', side);
-            });
-
-            margin.appendChild(relativeContainer);
+            margin.appendChild(container);
         }
 
         return margin;
@@ -357,20 +372,10 @@ export class Card {
         const anchorAttr = item.anchor ? `data-anchor="${item.anchor}"` : '';
         const typeClass = `margin-type-${type}`;
         const orientationClass = `margin-orientation-${item.orientation || 'auto'}`;
+        const maxhAttr = item.maxh ? `data-maxh="${item.maxh}"` : '';
 
-        // Position offset for absolute margins (pos parameter)
-        // For left/right margins: offset from top
-        // For top/bottom margins: offset from left
-        let posStyle = '';
-        if (item.pos !== null && item.pos !== undefined && type === 'absolute') {
-            if (side === 'left' || side === 'right') {
-                posStyle = `top: ${item.pos}px;`;
-            } else {
-                posStyle = `left: ${item.pos}px;`;
-            }
-        }
-
-        let html = `<div class="margin-item margin-annotation ${typeClass} ${orientationClass}" ${anchorAttr} data-margin-side="${side}" data-orientation="${item.orientation || 'auto'}"${posStyle ? ` style="${posStyle}"` : ''}>`;
+        // Position is now handled by updateMarginLayout(), not inline styles
+        let html = `<div class="margin-item margin-annotation ${typeClass} ${orientationClass}" ${anchorAttr} ${maxhAttr} data-margin-side="${side}" data-margin-type="${type}" data-orientation="${item.orientation || 'auto'}"${item.pos !== null && item.pos !== undefined ? ` data-pos="${item.pos}"` : ''}>`;
 
         // Determine size style based on orientation
         // For vertical text (in left/right margins), size controls max-height
@@ -379,10 +384,8 @@ export class Card {
         let sizeStyle = '';
         if (item.size) {
             if (side === 'top' || side === 'bottom') {
-                // Top/bottom margins: size controls width
                 sizeStyle = `max-width: ${item.size}px;`;
             } else {
-                // Left/right margins: size controls height
                 sizeStyle = `max-height: ${item.size}px;`;
             }
         }
@@ -395,15 +398,13 @@ export class Card {
 
         html += '</div>'; // close margin-item-content
 
+        // Overflow arrow — shown when content exceeds max height
+        html += '<div class="margin-overflow-arrow" title="Open in card">\u2192</div>';
+
         // Add resize handles based on side and orientation
-        // Left/right margins with horizontal text: resize height (vertical handle)
-        // Left/right margins with vertical text: resize height (vertical handle)
-        // Top/bottom margins: resize width (horizontal handle)
         if (side === 'left' || side === 'right') {
-            // For left/right margins, allow resizing the height of the content area
             html += '<div class="margin-item-resize-handle resize-vertical"></div>';
         } else {
-            // For top/bottom margins, allow resizing the width
             html += '<div class="margin-item-resize-handle resize-horizontal"></div>';
         }
 
@@ -561,6 +562,31 @@ export class Card {
                 }));
             });
         });
+
+        // ResizeObserver for margin items — remeasure when content size changes
+        this.marginResizeObserver = new ResizeObserver((entries) => {
+            let dirty = false;
+            for (const entry of entries) {
+                for (const side of ['left', 'right', 'top', 'bottom']) {
+                    const item = this.marginItemRegistry[side]?.find(i => i.element === entry.target);
+                    if (item) {
+                        item.heightDirty = true;
+                        dirty = true;
+                        break;
+                    }
+                }
+            }
+            if (dirty) {
+                this.updateMarginLayout();
+            }
+        });
+
+        // Observe all margin item elements
+        for (const side of ['left', 'right', 'top', 'bottom']) {
+            for (const item of this.marginItemRegistry[side]) {
+                this.marginResizeObserver.observe(item.element);
+            }
+        }
     }
 
     onDragHandleStart(e) {
@@ -1080,7 +1106,14 @@ export class Card {
     }
 
     onContentScroll(e) {
-        this.updateRelativeMargins();
+        // rAF throttle margin layout to avoid layout thrashing during scroll
+        if (!this.marginLayoutPending) {
+            this.marginLayoutPending = true;
+            requestAnimationFrame(() => {
+                this.updateMarginLayout();
+                this.marginLayoutPending = false;
+            });
+        }
         this.updateReadingStats();
         // Dispatch state change for scroll position persistence
         this.element.dispatchEvent(new CustomEvent('card-state-changed', { bubbles: true }));
@@ -1234,39 +1267,392 @@ export class Card {
         this.bringToFront();
     }
 
-    updateRelativeMargins() {
+    /**
+     * Cache layout metrics to avoid getComputedStyle on every scroll
+     */
+    cacheMarginMetrics() {
         const content = this.element.querySelector('.card-content');
         if (!content) return;
 
-        // Get content's scroll position and padding
+        this.cachedMarginMetrics.contentPaddingTop = parseInt(getComputedStyle(content).paddingTop) || 0;
+        this.cachedMarginMetrics.cardHeight = this.element.getBoundingClientRect().height;
+
+        for (const side of ['left', 'right', 'top', 'bottom']) {
+            const marginArea = this.element.querySelector(`.card-margin-${side}`);
+            if (marginArea) {
+                this.cachedMarginMetrics[`${side}PaddingTop`] = parseInt(getComputedStyle(marginArea).paddingTop) || 0;
+                this.cachedMarginMetrics[`${side}Height`] = marginArea.clientHeight;
+                this.cachedMarginMetrics[`${side}PaddingLeft`] = parseInt(getComputedStyle(marginArea).paddingLeft) || 0;
+                this.cachedMarginMetrics[`${side}Width`] = marginArea.clientWidth;
+            }
+        }
+
+        // Mark all items for height remeasurement
+        for (const side of ['left', 'right', 'top', 'bottom']) {
+            for (const item of this.marginItemRegistry[side]) {
+                item.heightDirty = true;
+            }
+        }
+    }
+
+    /**
+     * Resolve a maxh value to pixels.
+     * Accepts "20%" (percentage of card height) or "50px" or "50" (pixels).
+     * Returns null if not specified (will use default).
+     */
+    resolveMaxH(maxhStr, cardHeight) {
+        if (!maxhStr) return null;
+        const str = String(maxhStr).trim();
+        if (str.endsWith('%')) {
+            const pct = parseFloat(str) / 100;
+            return cardHeight * pct;
+        }
+        return parseFloat(str) || null;
+    }
+
+    /**
+     * Unified margin layout algorithm — positions all margin items on all sides,
+     * prevents overlap using distribute-evenly collision resolution, and manages
+     * max height constraints with overflow arrows.
+     */
+    updateMarginLayout() {
+        const content = this.element.querySelector('.card-content');
+        if (!content) return;
+
         const scrollTop = content.scrollTop;
-        const contentPaddingTop = parseInt(getComputedStyle(content).paddingTop) || 0;
+        const contentPaddingTop = this.cachedMarginMetrics.contentPaddingTop ??
+            (parseInt(getComputedStyle(content).paddingTop) || 0);
+        const cardHeight = this.cachedMarginMetrics.cardHeight || this.element.getBoundingClientRect().height;
 
-        // Find all relative margin items with anchors
-        this.element.querySelectorAll('.margin-type-relative[data-anchor]').forEach(marginItem => {
-            const anchorId = marginItem.dataset.anchor;
-            const anchor = content.querySelector(`[data-anchor-id="${anchorId}"]`);
+        const DEFAULT_MAXH_PERCENT = 0.35; // 35% of card height
+        const MIN_GAP = 12; // Noticeable gap between margin items
 
-            if (anchor) {
-                // Use offsetTop which is unaffected by CSS transforms
-                // This gives position relative to the content's scrollable area
-                const anchorOffsetTop = anchor.offsetTop;
+        for (const side of ['left', 'right', 'top', 'bottom']) {
+            const registry = this.marginItemRegistry[side];
+            if (!registry || registry.length === 0) continue;
 
-                // Calculate visible position: anchor's offset minus scroll position
-                const visibleTop = anchorOffsetTop - scrollTop;
+            const isHorizontalAxis = (side === 'top' || side === 'bottom');
+            const marginPaddingTop = this.cachedMarginMetrics[`${side}PaddingTop`] ??
+                (() => {
+                    const el = this.element.querySelector(`.card-margin-${side}`);
+                    return el ? parseInt(getComputedStyle(el).paddingTop) || 0 : 0;
+                })();
+            const marginAreaSize = isHorizontalAxis
+                ? (this.cachedMarginMetrics[`${side}Width`] ??
+                    this.element.querySelector(`.card-margin-${side}`)?.clientWidth ?? 200)
+                : (this.cachedMarginMetrics[`${side}Height`] ??
+                    this.element.querySelector(`.card-margin-${side}`)?.clientHeight ?? 300);
 
-                // Get margin area padding to align properly
-                const marginArea = marginItem.closest('.card-margin');
-                if (marginArea) {
-                    const marginPaddingTop = parseInt(getComputedStyle(marginArea).paddingTop) || 0;
+            // Phase 1: Compute max heights and constrain items
+            for (const item of registry) {
+                const resolvedMaxH = this.resolveMaxH(item.maxh, cardHeight);
+                const maxH = resolvedMaxH || (cardHeight * DEFAULT_MAXH_PERCENT);
 
-                    // Adjust for difference between content padding and margin padding
-                    const topPosition = visibleTop + marginPaddingTop - contentPaddingTop;
+                const contentEl = item.element.querySelector('.margin-item-content');
+                const arrowEl = item.element.querySelector('.margin-overflow-arrow');
 
-                    marginItem.style.top = `${topPosition}px`;
+                if (contentEl) {
+                    if (isHorizontalAxis) {
+                        contentEl.style.maxWidth = `${maxH}px`;
+                    } else {
+                        contentEl.style.maxHeight = `${maxH}px`;
+                    }
+
+                    // Check if content overflows — show/hide arrow
+                    const isOverflowing = isHorizontalAxis
+                        ? contentEl.scrollWidth > contentEl.clientWidth
+                        : contentEl.scrollHeight > contentEl.clientHeight;
+
+                    if (arrowEl) {
+                        if (isOverflowing) {
+                            arrowEl.classList.add('visible');
+                        } else {
+                            arrowEl.classList.remove('visible');
+                        }
+                    }
                 }
             }
-        });
+
+            // Phase 2: Measure sizes
+            for (const item of registry) {
+                const rect = item.element.getBoundingClientRect();
+                item.size = isHorizontalAxis ? rect.width : rect.height;
+                if (item.size === 0) item.size = 16;
+                item.heightDirty = false;
+            }
+
+            // Phase 3: Compute desired positions
+            let absoluteStack = 0;
+            for (const item of registry) {
+                if (item.type === 'relative' && item.anchorId) {
+                    const anchor = content.querySelector(`[data-anchor-id="${item.anchorId}"]`);
+                    if (anchor) {
+                        const anchorOffset = anchor.offsetTop;
+                        const visibleTop = anchorOffset - scrollTop;
+                        item.desiredPos = visibleTop + marginPaddingTop - contentPaddingTop;
+                    } else {
+                        item.desiredPos = absoluteStack;
+                    }
+                } else if (item.pos !== null) {
+                    item.desiredPos = item.pos;
+                } else {
+                    item.desiredPos = absoluteStack;
+                }
+                absoluteStack = item.desiredPos + item.size + MIN_GAP;
+            }
+
+            // Phase 4: Resolve collisions.
+            // Absolute and relative items are handled independently.
+            // Relative items scroll freely at their anchor position and pass
+            // BEHIND absolute items (lower z-index). Only same-type items
+            // have collision resolution between them.
+            const absoluteItems = registry.filter(item => item.type !== 'relative');
+            const relativeItems = registry.filter(item => item.type === 'relative');
+
+            this.resolveCollisionsSameType(absoluteItems, MIN_GAP, marginAreaSize);
+            this.resolveCollisionsSameType(relativeItems, MIN_GAP, marginAreaSize);
+
+            // Phase 5: Apply positions and z-index layering
+            for (const item of registry) {
+                if (isHorizontalAxis) {
+                    item.element.style.left = `${item.actualPos}px`;
+                } else {
+                    item.element.style.top = `${item.actualPos}px`;
+                }
+
+                // Absolute items always render on top of relative items
+                if (item.type === 'relative') {
+                    item.element.style.zIndex = '1';
+                } else {
+                    item.element.style.zIndex = '2';
+                }
+            }
+
+            // Phase 6: Clip relative items where they overlap absolute items.
+            // For each relative item, compute a clip-path that hides any region
+            // covered by an absolute item.
+            if (absoluteItems.length > 0 && relativeItems.length > 0) {
+                for (const relItem of relativeItems) {
+                    const relStart = relItem.actualPos;
+                    const relEnd = relStart + relItem.size;
+
+                    // Collect absolute regions that overlap this relative item
+                    const clips = [];
+                    for (const absItem of absoluteItems) {
+                        const absStart = absItem.actualPos;
+                        const absEnd = absStart + absItem.size;
+
+                        // Check if they overlap
+                        if (absStart < relEnd && absEnd > relStart) {
+                            // Overlap region relative to the relative item's own coordinate space
+                            const clipStart = Math.max(0, absStart - relStart);
+                            const clipEnd = Math.min(relItem.size, absEnd - relStart);
+                            clips.push({ start: clipStart, end: clipEnd });
+                        }
+                    }
+
+                    if (clips.length === 0) {
+                        relItem.element.style.clipPath = '';
+                        continue;
+                    }
+
+                    // Sort clips by start position
+                    clips.sort((a, b) => a.start - b.start);
+
+                    // Build a polygon clip-path that includes only the visible
+                    // (non-overlapped) regions. The polygon traces the outline
+                    // of the item while cutting out the absolute-covered bands.
+                    if (isHorizontalAxis) {
+                        // Horizontal axis: cut out vertical bands (left/right clips)
+                        const points = [];
+                        // Top edge left-to-right, skipping clipped bands
+                        let x = 0;
+                        for (const clip of clips) {
+                            if (clip.start > x) {
+                                points.push(`${x}px 0%`);
+                                points.push(`${clip.start}px 0%`);
+                            }
+                            points.push(`${clip.start}px 100%`);
+                            points.push(`${clip.end}px 100%`);
+                            points.push(`${clip.end}px 0%`);
+                            x = clip.end;
+                        }
+                        // Remaining visible area after last clip
+                        if (x < relItem.size) {
+                            points.push(`${x}px 0%`);
+                            points.push(`100% 0%`);
+                            points.push(`100% 100%`);
+                        }
+                        // Close back along bottom
+                        points.push(`0% 100%`);
+                        relItem.element.style.clipPath = `polygon(${points.join(', ')})`;
+                    } else {
+                        // Vertical axis (left/right margins): cut out horizontal bands.
+                        // Build a polygon that is the full item rectangle minus
+                        // horizontal strips where absolute items overlap.
+                        // Approach: list visible vertical segments, build a polygon
+                        // going down the right edge through visible parts, then
+                        // back up the left edge.
+
+                        // Merge overlapping clips
+                        const merged = [clips[0]];
+                        for (let i = 1; i < clips.length; i++) {
+                            const last = merged[merged.length - 1];
+                            if (clips[i].start <= last.end) {
+                                last.end = Math.max(last.end, clips[i].end);
+                            } else {
+                                merged.push({ ...clips[i] });
+                            }
+                        }
+
+                        // Build visible segments (gaps between clips, plus before first and after last)
+                        const visible = [];
+                        let cursor = 0;
+                        for (const clip of merged) {
+                            if (clip.start > cursor) {
+                                visible.push({ start: cursor, end: clip.start });
+                            }
+                            cursor = clip.end;
+                        }
+                        if (cursor < relItem.size) {
+                            visible.push({ start: cursor, end: relItem.size });
+                        }
+
+                        if (visible.length === 0) {
+                            // Entirely hidden
+                            relItem.element.style.clipPath = 'polygon(0 0, 0 0, 0 0)';
+                        } else {
+                            // Build polygon: for each visible segment, add a rectangle
+                            // We use an inset approach instead for simplicity with
+                            // multiple segments — use polygon with all visible rects
+                            const points = [];
+                            for (const seg of visible) {
+                                const y1 = (seg.start / relItem.size * 100).toFixed(2);
+                                const y2 = (seg.end / relItem.size * 100).toFixed(2);
+                                points.push(`0% ${y1}%`);
+                                points.push(`100% ${y1}%`);
+                                points.push(`100% ${y2}%`);
+                                points.push(`0% ${y2}%`);
+                            }
+                            relItem.element.style.clipPath = `polygon(evenodd, ${points.join(', ')})`;
+                        }
+                    }
+                }
+            } else {
+                // No absolute items — clear any clip-paths on relative items
+                for (const relItem of relativeItems) {
+                    relItem.element.style.clipPath = '';
+                }
+            }
+        }
+    }
+
+    /**
+     * Collision resolution within a single type group (all absolute or all relative).
+     *
+     * Absolute items with explicit `pos` are locked in place; others are placed
+     * at their desired position and pushed to the nearest free spot if they overlap.
+     * Relative items are all flexible — they keep source order when pushed apart.
+     */
+    resolveCollisionsSameType(items, minGap, areaSize) {
+        if (items.length === 0) return;
+
+        // Occupied intervals sorted by start position.
+        const occupied = [];
+
+        const insertOccupied = (start, size) => {
+            const entry = { start, end: start + size };
+            let lo = 0, hi = occupied.length;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (occupied[mid].start < entry.start) lo = mid + 1;
+                else hi = mid;
+            }
+            occupied.splice(lo, 0, entry);
+        };
+
+        const findFreePosition = (desiredPos, size) => {
+            const wouldOverlap = (pos) => {
+                const itemEnd = pos + size;
+                for (const occ of occupied) {
+                    if (itemEnd + minGap <= occ.start || pos >= occ.end + minGap) continue;
+                    return true;
+                }
+                return false;
+            };
+
+            const clampedDesired = Math.max(0, desiredPos);
+            if (!wouldOverlap(clampedDesired)) return clampedDesired;
+
+            let bestPos = null;
+            let bestDist = Infinity;
+
+            // Try placing just after each occupied interval
+            for (const occ of occupied) {
+                const candidate = occ.end + minGap;
+                if (candidate >= 0 && !wouldOverlap(candidate)) {
+                    const dist = Math.abs(candidate - desiredPos);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestPos = candidate;
+                    }
+                }
+            }
+
+            // Try placing just before each occupied interval
+            for (const occ of occupied) {
+                const candidate = occ.start - size - minGap;
+                if (candidate >= 0 && !wouldOverlap(candidate)) {
+                    const dist = Math.abs(candidate - desiredPos);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestPos = candidate;
+                    }
+                }
+            }
+
+            // Try at position 0
+            if (!wouldOverlap(0)) {
+                const dist = Math.abs(desiredPos);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestPos = 0;
+                }
+            }
+
+            if (bestPos === null) {
+                const lastEnd = occupied.length > 0 ? occupied[occupied.length - 1].end + minGap : 0;
+                bestPos = lastEnd;
+            }
+
+            return bestPos;
+        };
+
+        // Pass 1: Lock fixed items (absolute with explicit pos)
+        for (const item of items) {
+            if (item.type !== 'relative' && item.pos !== null) {
+                item.actualPos = Math.max(0, item.desiredPos);
+                item.fixed = true;
+                insertOccupied(item.actualPos, item.size);
+            } else {
+                item.fixed = false;
+            }
+        }
+
+        // Pass 2: Place flex items in source order (preserves natural ordering
+        // so items don't swap positions during scroll)
+        const flexItems = items.filter(item => !item.fixed);
+        flexItems.sort((a, b) => a.order - b.order);
+
+        for (const item of flexItems) {
+            item.actualPos = findFreePosition(item.desiredPos, item.size);
+            insertOccupied(item.actualPos, item.size);
+        }
+    }
+
+    // Keep old name as alias for compatibility
+    updateRelativeMargins() {
+        this.updateMarginLayout();
     }
 
     bringToFront() {
@@ -1432,7 +1818,8 @@ export class Card {
             this.highlightCode();
 
             // Update relative margins
-            this.updateRelativeMargins();
+            this.cacheMarginMetrics();
+            this.updateMarginLayout();
 
             // Update progress bar if enabled
             this.updateProgressBar();
@@ -1444,6 +1831,11 @@ export class Card {
      * @param {Object} margins - Margins object with left, right, top, bottom arrays
      */
     updateMargins(margins) {
+        // Disconnect existing ResizeObserver before rebuilding
+        if (this.marginResizeObserver) {
+            this.marginResizeObserver.disconnect();
+        }
+
         ['left', 'right', 'top', 'bottom'].forEach(side => {
             const marginEl = this.element.querySelector(`.card-margin-${side}`);
             if (!marginEl) return;
@@ -1454,28 +1846,40 @@ export class Card {
             const pageNumEl = marginEl.querySelector('.page-number');
             marginEl.innerHTML = '';
 
-            // Separate items by type
-            const absoluteItems = items.filter(item => item.type !== 'relative');
-            const relativeItems = items.filter(item => item.type === 'relative');
+            // Clear registry for this side
+            this.marginItemRegistry[side] = [];
 
-            // Rebuild absolute container
-            if (absoluteItems.length > 0) {
-                const absoluteContainer = document.createElement('div');
-                absoluteContainer.className = 'margin-absolute-container';
-                absoluteItems.forEach(item => {
-                    absoluteContainer.innerHTML += this.renderMarginItem(item, 'absolute', side);
-                });
-                marginEl.appendChild(absoluteContainer);
-            }
+            // Rebuild with unified container
+            if (items.length > 0) {
+                const container = document.createElement('div');
+                container.className = 'margin-items-container';
 
-            // Rebuild relative container
-            if (relativeItems.length > 0) {
-                const relativeContainer = document.createElement('div');
-                relativeContainer.className = 'margin-relative-container';
-                relativeItems.forEach(item => {
-                    relativeContainer.innerHTML += this.renderMarginItem(item, 'relative', side);
+                items.forEach((item, index) => {
+                    const html = this.renderMarginItem(item, item.type, side);
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = html;
+                    const el = wrapper.firstElementChild;
+                    el.dataset.marginOrder = index;
+                    el.dataset.rawHtml = item.html || '';
+
+                    container.appendChild(el);
+
+                    // Register item
+                    this.marginItemRegistry[side].push({
+                        element: el,
+                        type: item.type,
+                        anchorId: item.anchor || null,
+                        pos: item.pos !== null && item.pos !== undefined ? item.pos : null,
+                        maxh: item.maxh || null,
+                        desiredPos: 0,
+                        actualPos: 0,
+                        size: 0,
+                        heightDirty: true,
+                        order: index
+                    });
                 });
-                marginEl.appendChild(relativeContainer);
+
+                marginEl.appendChild(container);
             }
 
             // Re-add page number if it existed (bottom margin)
@@ -1494,6 +1898,19 @@ export class Card {
         this.element.querySelectorAll('.margin-orientation-vertical .margin-item-content').forEach(content => {
             content.addEventListener('wheel', this.onVerticalMarginWheel.bind(this), { passive: false });
         });
+
+        // Re-observe all margin items with ResizeObserver
+        if (this.marginResizeObserver) {
+            for (const side of ['left', 'right', 'top', 'bottom']) {
+                for (const item of this.marginItemRegistry[side]) {
+                    this.marginResizeObserver.observe(item.element);
+                }
+            }
+        }
+
+        // Re-run layout
+        this.cacheMarginMetrics();
+        this.updateMarginLayout();
     }
 
     /**

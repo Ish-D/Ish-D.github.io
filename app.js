@@ -2359,6 +2359,57 @@ ${renderColumn(rightColumn)}
 
         // Process any dynamic embeds in this card
         this.processEmbeds(cardElement);
+
+        // Bind margin overflow arrows — spawn card with full margin content
+        cardElement.querySelectorAll('.margin-overflow-arrow').forEach(arrow => {
+            arrow.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.spawnMarginCard(arrow);
+            });
+        });
+    }
+
+    /**
+     * Spawn a new card containing the full content of an overflowed margin item
+     */
+    spawnMarginCard(arrowElement) {
+        const marginItem = arrowElement.closest('.margin-item');
+        if (!marginItem) return;
+
+        const rawHtml = marginItem.dataset.rawHtml || '';
+        if (!rawHtml) return;
+
+        // Find the parent card to position relative to it
+        const parentCardEl = marginItem.closest('.card');
+        if (!parentCardEl) return;
+        const parentCard = this.cards.get(parentCardEl.id);
+        if (!parentCard) return;
+
+        const side = marginItem.dataset.marginSide || 'right';
+
+        // Position the new card near the parent, offset based on margin side
+        let spawnX = parentCard.x;
+        let spawnY = parentCard.y;
+        const offset = 60;
+
+        if (side === 'right') {
+            spawnX = parentCard.x + parentCard.width + offset;
+        } else if (side === 'left') {
+            spawnX = parentCard.x - 320 - offset;
+        } else if (side === 'top') {
+            spawnY = parentCard.y - 400 - offset;
+        } else if (side === 'bottom') {
+            spawnY = parentCard.y + parentCard.height + offset;
+        }
+
+        this.createCard({
+            x: spawnX,
+            y: spawnY,
+            width: 280,
+            height: 320,
+            content: rawHtml
+        });
     }
 
     /**

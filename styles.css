@@ -158,49 +158,63 @@ body {
     transform-style: preserve-3d;
 }
 
-/* Container for relative margin items - these scroll with content */
-.margin-relative-container {
+/* Unified container for all margin items (both absolute and relative) */
+.margin-items-container {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     pointer-events: none;
-    /* Clip items at margin boundaries */
     overflow: hidden;
-    /* Ensure container doesn't extend beyond parent */
     max-width: 100%;
     box-sizing: border-box;
 }
 
-.margin-relative-container .margin-item {
+.margin-items-container .margin-item {
     pointer-events: auto;
     position: absolute;
-    transition: top 0.08s ease-out;
-    /* Constrain width with consistent small padding on both sides */
+    transition: top 0.08s ease-out, left 0.08s ease-out;
     left: 2px;
     right: 2px;
     overflow: hidden;
 }
 
-/* Ensure scrollable content works in relative containers */
-.margin-relative-container .margin-item-content {
+/* Relative margins scroll behind absolute margins */
+.margin-items-container .margin-item.margin-type-relative {
+    z-index: 1;
+}
+
+.margin-items-container .margin-item.margin-type-absolute {
+    z-index: 2;
+}
+
+.margin-items-container .margin-item-content {
     position: relative;
 }
 
-/* Container for absolute margin items - these stay fixed */
-.margin-absolute-container {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-}
-
-/* Absolute margin items with pos offset need absolute positioning */
-.margin-absolute-container .margin-item[style*="top:"],
-.margin-absolute-container .margin-item[style*="left:"] {
+/* Overflow arrow for margin items that exceed max height */
+.margin-overflow-arrow {
     position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 10px;
+    opacity: 0;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: opacity 0.15s ease;
+    color: var(--text-color);
+    z-index: 2;
+    user-select: none;
+    line-height: 1;
+}
+
+.margin-item:hover .margin-overflow-arrow.visible {
+    opacity: 0.3;
+}
+
+.margin-overflow-arrow.visible:hover {
+    opacity: 0.7 !important;
 }
 
 .card-margin-left {
@@ -220,7 +234,7 @@ body {
 }
 
 /* Allow left margin text to extend slightly to prevent clipping */
-.card-margin-left .margin-relative-container .margin-item {
+.card-margin-left .margin-items-container .margin-item {
     right: -6px;
     overflow: visible;
 }
