@@ -294,6 +294,58 @@ export const ActionsConfig = {
                 button.disabled = false;
             }
         }
+    },
+
+    scatterImage: {
+        label: 'Scatter Image',
+        async handler(context, button) {
+            button.disabled = true;
+
+            try {
+                const { scatterImage } = await import('./ImageScatter.js');
+                const specs = await scatterImage('images/koi.jpg', 12, 600);
+
+                // Remove previous scatter cards only after new specs are ready
+                const toRemove = [];
+                context.cards.forEach((card, id) => {
+                    if (card.element.dataset.scatterGroup) {
+                        toRemove.push(id);
+                    }
+                });
+                toRemove.forEach(id => {
+                    const card = context.cards.get(id);
+                    // Revoke blob URL to free memory
+                    const img = card.element.querySelector('.card-image');
+                    if (img && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+                    card.element.remove();
+                    context.cards.delete(id);
+                });
+
+                // Create new cards
+                const groupId = Date.now().toString();
+                specs.forEach(spec => {
+                    const card = context.createCard({
+                        x: spec.x,
+                        y: spec.y,
+                        width: spec.width,
+                        height: spec.height,
+                        rotation: spec.rotation,
+                        extra: { image: spec.dataUrl },
+                    });
+                    card.zIndex = spec.zIndex;
+                    card.element.style.zIndex = spec.zIndex;
+                    card.element.dataset.scatterGroup = groupId;
+                    const imgContainer = card.element.querySelector('.card-image-container');
+                    if (imgContainer) imgContainer.style.height = '100%';
+                });
+
+                button.disabled = false;
+            } catch (e) {
+                console.error('Scatter failed:', e);
+                button.textContent = 'Error - Retry';
+                button.disabled = false;
+            }
+        }
     }
 };
 
@@ -548,6 +600,7 @@ export class ControlsManager {
             removeConnectionsForCard: (id) => paperCanvas.removeConnectionsForCard?.(id),
             syncAllSettingsCards: () => paperCanvas.syncAllSettingsCards?.(),
             loadMenuCard: () => paperCanvas.loadMenuCard?.(),
+            createCard: (options) => paperCanvas.createCard(options),
             resetCanvasTransform: () => {
                 paperCanvas.panX = 0;
                 paperCanvas.panY = 0;

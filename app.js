@@ -409,6 +409,43 @@ class PaperCanvas {
         });
     }
 
+    async addScatterCards(centerX, centerY) {
+        // Remove any existing scatter cards
+        const toRemove = [];
+        this.cards.forEach((card, id) => {
+            if (card.element.dataset.scatterGroup) {
+                toRemove.push(id);
+            }
+        });
+        toRemove.forEach(id => {
+            const card = this.cards.get(id);
+            const img = card.element.querySelector('.card-image');
+            if (img && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
+            card.element.remove();
+            this.cards.delete(id);
+        });
+
+        const { scatterImage } = await import('./ImageScatter.js');
+        const specs = await scatterImage('images/higuchi.png', 8, 420, 0, centerX, centerY);
+
+        const groupId = Date.now().toString();
+        specs.forEach(spec => {
+            const card = this.createCard({
+                x: spec.x,
+                y: spec.y,
+                width: spec.width,
+                height: spec.height,
+                rotation: spec.rotation,
+                extra: { image: spec.dataUrl },
+            });
+            card.zIndex = spec.zIndex;
+            card.element.style.zIndex = spec.zIndex;
+            card.element.dataset.scatterGroup = groupId;
+            const imgContainer = card.element.querySelector('.card-image-container');
+            if (imgContainer) imgContainer.style.height = '100%';
+        });
+    }
+
     bindCanvasEvents() {
         // Canvas panning with left mouse on empty space
         this.canvas.addEventListener('mousedown', (e) => {
@@ -1295,7 +1332,8 @@ class PaperCanvas {
             progressBar: options.progressBar || false,
             wordCount: options.wordCount || false,
             readTime: options.readTime || false,
-            tags: options.tags || []
+            tags: options.tags || [],
+            ...options.extra,
         };
 
         return this.addCard(cardOptions);
@@ -2192,6 +2230,34 @@ ${renderColumn(rightColumn)}
         let x, y;
         const jitter = options.jitter || 0;
 
+        // Special handling for 'about' card: position left of menu with scatter image right of menu
+        if (cardName === 'about' && parentCard) {
+            const aboutW = options.width || 500;
+            const aboutH = options.height || 600;
+            const menuCenterX = parentCard.x + parentCard.width / 2;
+            const menuCenterY = parentCard.y + parentCard.height / 2;
+
+            x = menuCenterX - aboutW - 80;
+            y = menuCenterY - aboutH / 2;
+
+            await this.loadCardFromFile(cardName, {
+                x: x,
+                y: y,
+                width: options.width,
+                height: options.height,
+                rotation: options.rotation,
+                marginTB: options.marginTB,
+                marginLR: options.marginLR,
+                parentCard: parentCard
+            });
+
+            // Add scattered image to the right of menu
+            const scatterCenterX = menuCenterX + parentCard.width / 2 + 300;
+            const scatterCenterY = menuCenterY;
+            await this.addScatterCards(scatterCenterX, scatterCenterY);
+            return;
+        }
+
         // Determine position based on options
         if (typeof options.absX === 'number' && typeof options.absY === 'number') {
             // Absolute positioning
@@ -2981,9 +3047,10 @@ ${renderColumn(rightColumn)}
             editorCards: []
         };
 
-        // Serialize cards (skip preview cards)
+        // Serialize cards (skip preview and scatter cards)
         this.cards.forEach(card => {
             if (card.element.classList.contains('card-preview')) return;
+            if (card.element.dataset.scatterGroup) return;
             state.cards.push(card.toJSON());
         });
 
@@ -3041,6 +3108,12 @@ ${renderColumn(rightColumn)}
         this.isRestoring = true;
 
         try {
+            // 0. Clear any existing cards from DOM to prevent stacking on refresh
+            this.cards.forEach(card => card.element.remove());
+            this.cards.clear();
+            this.editorCards.forEach(editor => editor.element.remove());
+            this.editorCards.clear();
+
             // 1. Restore canvas transform
             this.panX = state.canvas.panX;
             this.panY = state.canvas.panY;

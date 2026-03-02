@@ -110,3 +110,9 @@ This is a **horizontal** note with multi-line content.
 
 It should render as horizontal text on the right side.
 } should have a horizontal margin attached to it.
+
+[[break]]
+
+## Image Scatter Test
+
+[[button(action: scatterImage, label: Scatter Image)]]

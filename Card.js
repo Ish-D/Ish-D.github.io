@@ -37,8 +37,8 @@ export class Card {
         this.embedUrl = options.embedUrl || null;
 
         // Custom margin sizes (as percentage of card dimensions)
-        this.marginTB = options.marginTB || null;  // Top/bottom as % of height
-        this.marginLR = options.marginLR || null;  // Left/right as % of width
+        this.marginTB = options.marginTB ?? null;  // Top/bottom as % of height
+        this.marginLR = options.marginLR ?? null;  // Left/right as % of width
 
         // Dynamic margin percentage (used for scaling margins with card size)
         this.marginPercent = null;
@@ -153,6 +153,15 @@ export class Card {
                 ${this.caption ? `<div class="card-image-caption">${this.caption}</div>` : ''}
             `;
             container.appendChild(content);
+
+            // Add page number for image cards
+            if (this.pageNumber) {
+                const pageNumberEl = document.createElement('span');
+                pageNumberEl.className = 'card-page-number-absolute';
+                pageNumberEl.textContent = this.pageNumber;
+                container.appendChild(pageNumberEl);
+            }
+
             card.appendChild(container);
         } else if (this.embedUrl) {
             // Embed cards contain an iframe with fallback
