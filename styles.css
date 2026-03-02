@@ -150,6 +150,7 @@ body {
     min-width: 0;
     overflow: hidden;
     position: relative;
+    box-sizing: border-box;
     /* Prevent rendering issues during card rotation */
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
@@ -184,8 +185,8 @@ body {
     pointer-events: auto;
     position: absolute;
     transition: top 0.08s ease-out, left 0.08s ease-out;
-    left: 2px;
-    right: 2px;
+    left: 0;
+    right: 0;
     overflow: hidden;
 }
 
@@ -228,24 +229,20 @@ body {
 
 .card-margin-left {
     grid-area: margin-left;
-    text-align: right;
-    padding-right: calc(var(--margin-padding-inner) - 6px); /* Slight adjustment to prevent text clipping */
-    padding-left: var(--margin-padding-outer);
+    text-align: left;
     padding-top: var(--margin-padding-top);
     padding-bottom: var(--margin-padding-bottom);
-    overflow: visible; /* Changed from hidden to prevent text clipping */
-    /* Ensure horizontal content doesn't get clipped */
+    overflow: hidden;
     min-width: 0;
+}
+
+.card-margin-left .margin-items-container {
+    left: 0;
+    right: 0;
 }
 
 .card-margin-left .margin-item {
     font-size: var(--font-size-margin-small);
-}
-
-/* Allow left margin text to extend slightly to prevent clipping */
-.card-margin-left .margin-items-container .margin-item {
-    right: -6px;
-    overflow: visible;
 }
 
 /* Vertical text items must clip at their height limit */
@@ -264,13 +261,15 @@ body {
 .card-margin-right {
     grid-area: margin-right;
     text-align: left;
-    padding-left: var(--margin-padding-inner);
-    padding-right: var(--margin-padding-outer);
     padding-top: var(--margin-padding-top);
     padding-bottom: var(--margin-padding-bottom);
     overflow: hidden;
-    /* Ensure horizontal content doesn't get clipped */
     min-width: 0;
+}
+
+.card-margin-right .margin-items-container {
+    left: 0;
+    right: 0;
 }
 
 .card-margin-right .margin-item {
@@ -320,14 +319,12 @@ body {
     box-sizing: border-box;
 }
 
-/* Horizontal text in left margin - right aligned with extra padding to prevent clipping */
+/* Horizontal text in left margin */
 .card-margin-left .margin-orientation-horizontal {
-    text-align: right;
-    padding-left: 4px; /* Add small left padding to prevent text clipping */
-    padding-right: 8px; /* Add right padding to prevent clipping toward content */
+    text-align: left;
 }
 
-/* Horizontal text in right margin - left aligned */
+/* Horizontal text in right margin */
 .card-margin-right .margin-orientation-horizontal {
     text-align: left;
 }
@@ -1220,10 +1217,11 @@ sup.jump-link {
     box-sizing: border-box;
 }
 
-/* Add padding to left margin text to prevent right-side clipping */
+/* Left margin horizontal text — match right margin sizing */
 .card-margin-left .margin-orientation-horizontal .margin-item-content {
-    padding-right: 6px;
-    width: calc(100% + 6px);
+    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* ---- Vertical text in margins ---- */

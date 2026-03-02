@@ -103,8 +103,7 @@
 
     --margin-padding-top: 32px;
     --margin-padding-bottom: 32px;
-    --margin-padding-inner: 12px;      /* Padding toward content */
-    --margin-padding-outer: 4px;       /* Padding toward edge - closer to edge */
+    --margin-padding-horizontal: 14px;  /* Equal padding on both sides of margin text */
 
     /* Top/bottom margin spacing */
     --margin-top-padding-top: 12px;

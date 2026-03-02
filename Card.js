@@ -1532,6 +1532,25 @@ export class Card {
             const marginAreaSize = this.cachedMarginMetrics[`${side}Height`] ??
                 this.element.querySelector(`.card-margin-${side}`)?.clientHeight ?? 300;
 
+            // Set horizontal inset on the items container, centering the
+            // text block within the margin area.
+            const marginEl = this.element.querySelector(`.card-margin-${side}`);
+            if (marginEl) {
+                const marginWidth = marginEl.offsetWidth || 100;
+                const innerInset = Math.round(marginWidth * 0.10); // toward content
+                const outerInset = Math.round(marginWidth * 0.25); // toward card edge
+                const container = marginEl.querySelector('.margin-items-container');
+                if (container) {
+                    if (side === 'left') {
+                        container.style.left = `${outerInset}px`;
+                        container.style.right = `${innerInset}px`;
+                    } else {
+                        container.style.left = `${innerInset}px`;
+                        container.style.right = `${outerInset}px`;
+                    }
+                }
+            }
+
             // Phase 1: Compute max heights and constrain items
             for (const item of registry) {
                 const isVerticalText = item.element.classList.contains('margin-orientation-vertical');
