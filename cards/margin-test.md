@@ -99,7 +99,7 @@ A note tracking "inline note syntax" wherever it reflows.
 
 Here we test [[note(left)]]{multiple notes}{
 This left-side note tracks the words "multiple notes".
-} appearing near each other to verify [[note(right)]]{collision resolution}{
+} appearing near each other to verify [[note(right, orient:horizontal)]]{collision resolution}{
 This right-side note tracks "collision resolution" and should not overlap with the one above.
 } works correctly.
 

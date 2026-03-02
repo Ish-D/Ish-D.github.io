@@ -239,6 +239,11 @@ body {
     overflow: visible;
 }
 
+/* Vertical text items must clip at their height limit */
+.card-margin-left .margin-items-container .margin-item.margin-orientation-vertical {
+    overflow: hidden;
+}
+
 /* Removed side-specific left positioning for consistency */
 
 .card-margin-left .margin-annotation-title {
@@ -367,6 +372,15 @@ body {
     width: 0;
     overflow: hidden;
     visibility: hidden;
+}
+
+/* Note anchors display their anchor text inline */
+.margin-note-anchor {
+    display: inline;
+    height: auto;
+    width: auto;
+    overflow: visible;
+    visibility: visible;
 }
 
 /* Page number styling */

@@ -1333,7 +1333,8 @@ export class Card {
             (parseInt(getComputedStyle(content).paddingTop) || 0);
         const cardHeight = this.cachedMarginMetrics.cardHeight || this.element.getBoundingClientRect().height;
 
-        const DEFAULT_MAXH_PERCENT = 0.35; // 35% of card height
+        const DEFAULT_MAXH_PERCENT = 0.25; // 25% of card height
+        const DEFAULT_MAXH_PERCENT_VERTICAL = 0.15; // 15% of card height for vertical text
         const MIN_GAP = 12; // Noticeable gap between margin items
 
         for (const side of ['left', 'right', 'top', 'bottom']) {
@@ -1354,8 +1355,10 @@ export class Card {
 
             // Phase 1: Compute max heights and constrain items
             for (const item of registry) {
+                const isVerticalText = item.element.classList.contains('margin-orientation-vertical');
+                const defaultPercent = isVerticalText ? DEFAULT_MAXH_PERCENT_VERTICAL : DEFAULT_MAXH_PERCENT;
                 const resolvedMaxH = this.resolveMaxH(item.maxh, cardHeight);
-                const maxH = resolvedMaxH || (cardHeight * DEFAULT_MAXH_PERCENT);
+                const maxH = resolvedMaxH || (cardHeight * defaultPercent);
 
                 const contentEl = item.element.querySelector('.margin-item-content');
                 const arrowEl = item.element.querySelector('.margin-overflow-arrow');
@@ -1363,8 +1366,10 @@ export class Card {
                 if (contentEl) {
                     if (isHorizontalAxis) {
                         contentEl.style.maxWidth = `${maxH}px`;
+                        item.element.style.maxWidth = `${maxH}px`;
                     } else {
                         contentEl.style.maxHeight = `${maxH}px`;
+                        item.element.style.maxHeight = `${maxH}px`;
                     }
 
                     // Check if content overflows — show/hide arrow
@@ -1392,13 +1397,25 @@ export class Card {
 
             // Phase 3: Compute desired positions
             let absoluteStack = 0;
+            const anchorStacks = {}; // anchorId -> next stacked position
             for (const item of registry) {
                 if (item.type === 'relative' && item.anchorId) {
                     const anchor = content.querySelector(`[data-anchor-id="${item.anchorId}"]`);
                     if (anchor) {
                         const anchorOffset = anchor.offsetTop;
+                        const anchorHeight = anchor.offsetHeight || 0;
                         const visibleTop = anchorOffset - scrollTop;
-                        item.desiredPos = visibleTop + marginPaddingTop - contentPaddingTop;
+                        // Align margin item above the anchor element
+                        const basePos = visibleTop + marginPaddingTop - contentPaddingTop
+                            - item.size * 1.5;
+
+                        // Stack same-anchor items sequentially
+                        if (anchorStacks[item.anchorId] !== undefined) {
+                            item.desiredPos = anchorStacks[item.anchorId];
+                        } else {
+                            item.desiredPos = basePos;
+                        }
+                        anchorStacks[item.anchorId] = item.desiredPos + item.size + MIN_GAP;
                     } else {
                         item.desiredPos = absoluteStack;
                     }
@@ -1418,8 +1435,8 @@ export class Card {
             const absoluteItems = registry.filter(item => item.type !== 'relative');
             const relativeItems = registry.filter(item => item.type === 'relative');
 
-            this.resolveCollisionsSameType(absoluteItems, MIN_GAP, marginAreaSize);
-            this.resolveCollisionsSameType(relativeItems, MIN_GAP, marginAreaSize);
+            this.resolveCollisionsSameType(absoluteItems, MIN_GAP, marginAreaSize, false);
+            this.resolveCollisionsSameType(relativeItems, MIN_GAP, marginAreaSize, true);
 
             // Phase 5: Apply positions and z-index layering
             for (const item of registry) {
@@ -1563,7 +1580,7 @@ export class Card {
      * at their desired position and pushed to the nearest free spot if they overlap.
      * Relative items are all flexible — they keep source order when pushed apart.
      */
-    resolveCollisionsSameType(items, minGap, areaSize) {
+    resolveCollisionsSameType(items, minGap, areaSize, isRelative = false) {
         if (items.length === 0) return;
 
         // Occupied intervals sorted by start position.
@@ -1590,7 +1607,7 @@ export class Card {
                 return false;
             };
 
-            const clampedDesired = Math.max(0, desiredPos);
+            const clampedDesired = isRelative ? desiredPos : Math.max(0, desiredPos);
             if (!wouldOverlap(clampedDesired)) return clampedDesired;
 
             let bestPos = null;
@@ -1599,7 +1616,7 @@ export class Card {
             // Try placing just after each occupied interval
             for (const occ of occupied) {
                 const candidate = occ.end + minGap;
-                if (candidate >= 0 && !wouldOverlap(candidate)) {
+                if ((isRelative || candidate >= 0) && !wouldOverlap(candidate)) {
                     const dist = Math.abs(candidate - desiredPos);
                     if (dist < bestDist) {
                         bestDist = dist;
@@ -1611,7 +1628,7 @@ export class Card {
             // Try placing just before each occupied interval
             for (const occ of occupied) {
                 const candidate = occ.start - size - minGap;
-                if (candidate >= 0 && !wouldOverlap(candidate)) {
+                if ((isRelative || candidate >= 0) && !wouldOverlap(candidate)) {
                     const dist = Math.abs(candidate - desiredPos);
                     if (dist < bestDist) {
                         bestDist = dist;
@@ -1620,8 +1637,8 @@ export class Card {
                 }
             }
 
-            // Try at position 0
-            if (!wouldOverlap(0)) {
+            // Try at position 0 (only meaningful for absolute items)
+            if (!isRelative && !wouldOverlap(0)) {
                 const dist = Math.abs(desiredPos);
                 if (dist < bestDist) {
                     bestDist = dist;
