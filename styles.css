@@ -738,6 +738,16 @@ h3:target {
     text-align: center;
 }
 
+/* Small vertical break - lighter than a heading gap */
+.small-break {
+    height: 8px;
+}
+
+/* Large vertical break - section-level gap */
+.big-break {
+    height: 32px;
+}
+
 /* Drop cap - large initial letter */
 .drop-cap {
     float: left;
@@ -930,7 +940,7 @@ sup.jump-link {
 /* Quote block styling */
 .quote-block {
     margin: var(--paragraph-margin) 0;
-    padding: 16px 20px;
+    padding: 8px 20px;
     border-left: 3px solid var(--color-link);
     background: var(--color-card-background);
     font-style: italic;

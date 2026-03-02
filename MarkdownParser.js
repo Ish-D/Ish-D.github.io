@@ -106,6 +106,9 @@
  * [[jump(target-id)]]{text}      - Jump to anchor with custom display text
  * [[cite(url)]]                  - Citation with auto-numbered superscript
  * [[cite(url, title)]]           - Citation with custom title
+ * [[tab]]                         - Inline tab/indent (em-space indent for paragraphs)
+ * [[break]]                       - Small vertical break (less gap than a heading)
+ * [[bigbreak]]                    - Large vertical break (section-level gap)
  * [[bibliography]]               - Auto-generated bibliography from citations
  *
  * Examples:
@@ -258,6 +261,21 @@ export class MarkdownParser {
     getBibliographyPattern() {
         // Bibliography placeholder: [[bibliography]]
         return /\[\[bibliography\]\]/g;
+    }
+
+    getTabPattern() {
+        // Inline tab/indent: [[tab]]
+        return /\[\[tab\]\]/g;
+    }
+
+    getBreakPattern() {
+        // Small vertical break: [[break]]
+        return /\[\[break\]\]/g;
+    }
+
+    getBigBreakPattern() {
+        // Large vertical break: [[bigbreak]]
+        return /\[\[bigbreak\]\]/g;
     }
 
     /**
@@ -1461,6 +1479,15 @@ export class MarkdownParser {
             return `<span class="drop-cap">${letter.trim()}</span>`;
         });
 
+        // Tab (inline indent)
+        html = html.replace(this.getTabPattern(), '&emsp;&emsp;');
+
+        // Small vertical break
+        html = html.replace(this.getBreakPattern(), '<div class="small-break"></div>');
+
+        // Large vertical break
+        html = html.replace(this.getBigBreakPattern(), '<div class="big-break"></div>');
+
         html = html.replace(this.getVizPattern(), (match, params) => {
             return this.renderViz(params);
         });
@@ -1685,6 +1712,9 @@ export class MarkdownParser {
         html = html.replace(this.getDropCapPattern(), (match, letter) => {
             return `<span class="drop-cap">${letter.trim()}</span>`;
         });
+
+        // Tab (inline indent)
+        html = html.replace(this.getTabPattern(), '&emsp;&emsp;');
 
         // Full link syntax
         html = html.replace(this.getFullLinkPattern(), (match, target, paramsStr) => {
