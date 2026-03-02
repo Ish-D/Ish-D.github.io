@@ -109,11 +109,9 @@ body {
     height: 100%;
     display: grid;
     grid-template-areas:
-        "margin-top margin-top margin-top"
-        "margin-left content margin-right"
-        "margin-bottom margin-bottom margin-bottom";
+        "margin-left content margin-right";
     grid-template-columns: minmax(60px, var(--margin-column-max-width)) 1fr minmax(60px, var(--margin-column-max-width));
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: 1fr;
     /* Background on container for fold transparency */
     background: var(--color-card-background);
     /* Prevent layout issues during rotation */
@@ -169,6 +167,17 @@ body {
     overflow: hidden;
     max-width: 100%;
     box-sizing: border-box;
+}
+
+/* Top/bottom margin items use flow layout instead of absolute positioning */
+.card-margin-top .margin-items-container,
+.card-margin-bottom .margin-items-container {
+    position: relative;
+    top: auto;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    overflow: hidden;
 }
 
 .margin-items-container .margin-item {
@@ -327,30 +336,45 @@ body {
 .card-margin-top .margin-item,
 .card-margin-bottom .margin-item {
     writing-mode: horizontal-tb;
+    overflow: hidden;
 }
 
 .card-margin-top {
-    grid-area: margin-top;
-    flex-direction: row;
-    justify-content: center;
-    text-align: center;
+    grid-row: 1;
+    grid-column: 2;
+    align-self: start;
+    flex-direction: column;
     padding-top: var(--margin-top-padding-top);
     padding-bottom: var(--margin-top-padding-bottom);
-    min-height: 20px;
+    padding-left: var(--card-padding-horizontal);
+    padding-right: var(--card-padding-horizontal);
+    min-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+    z-index: 10;
+    background: var(--color-card-background);
 }
 
 .card-margin-bottom {
-    grid-area: margin-bottom;
-    flex-direction: row;
-    justify-content: flex-start;
-    align-items: flex-end;
+    grid-row: 1;
+    grid-column: 2;
+    align-self: end;
+    flex-direction: column;
     text-align: left;
     padding-bottom: var(--margin-bottom-padding-bottom);
     padding-top: var(--margin-bottom-padding-top);
-    padding-left: calc(var(--margin-bottom-padding-horizontal) + 40px); /* Extra left padding to avoid page number */
-    padding-right: var(--margin-bottom-padding-horizontal);
-    min-height: 32px;
-    position: relative;
+    padding-left: var(--card-padding-horizontal);
+    padding-right: var(--card-padding-horizontal);
+    min-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+    z-index: 10;
+    background: var(--color-card-background);
+}
+
+.card-margin-top.margin-empty,
+.card-margin-bottom.margin-empty {
+    min-height: 0;
 }
 
 /* Margin item that anchors to content */
@@ -1375,8 +1399,9 @@ sup.jump-link {
     top: 0;
     height: 8px;
     cursor: ns-resize;
-    /* Position at the bottom edge of top margin row */
-    grid-area: margin-top;
+    /* Position at the bottom edge of top margin overlay */
+    grid-row: 1;
+    grid-column: 2;
     align-self: end;
     margin-bottom: -4px;
 }
@@ -1388,8 +1413,9 @@ sup.jump-link {
     bottom: 0;
     height: 8px;
     cursor: ns-resize;
-    /* Position at the top edge of bottom margin row */
-    grid-area: margin-bottom;
+    /* Position at the top edge of bottom margin overlay */
+    grid-row: 1;
+    grid-column: 2;
     align-self: start;
     margin-top: -4px;
 }

@@ -82,6 +82,10 @@ export class Card {
         this.marginItemRegistry = { left: [], right: [], top: [], bottom: [] };
         this.cachedMarginMetrics = {};
         this.marginLayoutPending = false;
+        // Track currently shown TB margin item to add hysteresis
+        this.currentTBItem = { top: null, bottom: null };
+        // Lock out TB margin re-evaluation during CSS transitions
+        this.tbMarginTransitioning = { top: false, bottom: false };
 
         // Create DOM element
         this.element = this.createElement();
@@ -120,13 +124,11 @@ export class Card {
 
         // Apply margin sizes (default or custom if specified)
         const marginLR = this.marginLR !== null ? this.marginLR : DEFAULT_MARGIN_PERCENT;
-        const marginTB = this.marginTB !== null ? this.marginTB : DEFAULT_MARGIN_PERCENT;
 
         const lrSize = `${(marginLR / 100) * this.width}px`;
-        const tbSize = `${(marginTB / 100) * this.height}px`;
 
         container.style.gridTemplateColumns = `${lrSize} 1fr ${lrSize}`;
-        container.style.gridTemplateRows = `${tbSize} 1fr ${tbSize}`;
+        container.style.gridTemplateRows = `1fr`;
 
         // Margins - now with separate containers for absolute and relative items
         const marginTop = this.createMarginElement('top', this.margins.top);
@@ -337,6 +339,19 @@ export class Card {
         const margin = document.createElement('div');
         margin.className = `card-margin card-margin-${side}`;
 
+        const isTB = (side === 'top' || side === 'bottom');
+
+        if (!items || items.length === 0) {
+            margin.classList.add('margin-empty');
+        }
+
+        // TB margins start collapsed; the first updateMarginLayout() will
+        // evaluate visibility and open them with a transition if needed.
+        if (isTB) {
+            margin.style.maxHeight = '0px';
+            margin.classList.add('margin-empty');
+        }
+
         // Clear registry for this side
         this.marginItemRegistry[side] = [];
 
@@ -411,11 +426,7 @@ export class Card {
         html += '<div class="margin-overflow-arrow" title="Open in card">\u2192</div>';
 
         // Add resize handles based on side and orientation
-        if (side === 'left' || side === 'right') {
-            html += '<div class="margin-item-resize-handle resize-vertical"></div>';
-        } else {
-            html += '<div class="margin-item-resize-handle resize-horizontal"></div>';
-        }
+        html += '<div class="margin-item-resize-handle resize-vertical"></div>';
 
         html += '</div>';
         return html;
@@ -579,6 +590,10 @@ export class Card {
                 for (const side of ['left', 'right', 'top', 'bottom']) {
                     const item = this.marginItemRegistry[side]?.find(i => i.element === entry.target);
                     if (item) {
+                        // For TB margins, ignore resize events caused by our own
+                        // show/hide toggling — these fire during the transition
+                        // and trigger a feedback loop.
+                        if (side === 'top' || side === 'bottom') continue;
                         item.heightDirty = true;
                         dirty = true;
                         break;
@@ -841,11 +856,11 @@ export class Card {
             this.marginAreaStartSizes.right = parseFloat(cols[2]) || 100;
         }
 
-        const rows = computedStyle.gridTemplateRows.split(' ');
-        if (rows.length >= 3) {
-            this.marginAreaStartSizes.top = parseFloat(rows[0]) || 40;
-            this.marginAreaStartSizes.bottom = parseFloat(rows[2]) || 40;
-        }
+        // Top/bottom margins are overlays, not grid rows — read their current height
+        const topMarginEl = this.element.querySelector('.card-margin-top');
+        const bottomMarginEl = this.element.querySelector('.card-margin-bottom');
+        this.marginAreaStartSizes.top = topMarginEl ? topMarginEl.offsetHeight : 0;
+        this.marginAreaStartSizes.bottom = bottomMarginEl ? bottomMarginEl.offsetHeight : 0;
 
         this.bringToFront();
     }
@@ -1046,12 +1061,14 @@ export class Card {
                 // Dragging down increases top margin
                 const newSize = Math.min(maxSize, Math.max(minSize, this.marginAreaStartSizes.top + localDy));
                 this.marginTopSize = newSize;
-                container.style.gridTemplateRows = `${newSize}px 1fr ${this.marginBottomSize || this.marginAreaStartSizes.bottom}px`;
+                const marginEl = this.element.querySelector('.card-margin-top');
+                if (marginEl) marginEl.style.maxHeight = `${newSize}px`;
             } else if (side === 'bottom') {
                 // Dragging up increases bottom margin
                 const newSize = Math.min(maxSize, Math.max(minSize, this.marginAreaStartSizes.bottom - localDy));
                 this.marginBottomSize = newSize;
-                container.style.gridTemplateRows = `${this.marginTopSize || this.marginAreaStartSizes.top}px 1fr ${newSize}px`;
+                const marginEl = this.element.querySelector('.card-margin-bottom');
+                if (marginEl) marginEl.style.maxHeight = `${newSize}px`;
             }
         }
     }
@@ -1267,11 +1284,11 @@ export class Card {
         }
 
         // Parse grid template rows for top/bottom
-        const rows = computedStyle.gridTemplateRows.split(' ');
-        if (rows.length >= 3) {
-            this.marginAreaStartSizes.top = parseFloat(rows[0]) || 40;
-            this.marginAreaStartSizes.bottom = parseFloat(rows[2]) || 40;
-        }
+        // Top/bottom margins are overlays, not grid rows — read their current height
+        const topMarginEl = this.element.querySelector('.card-margin-top');
+        const bottomMarginEl = this.element.querySelector('.card-margin-bottom');
+        this.marginAreaStartSizes.top = topMarginEl ? topMarginEl.offsetHeight : 0;
+        this.marginAreaStartSizes.bottom = bottomMarginEl ? bottomMarginEl.offsetHeight : 0;
 
         this.bringToFront();
     }
@@ -1290,6 +1307,7 @@ export class Card {
             const marginArea = this.element.querySelector(`.card-margin-${side}`);
             if (marginArea) {
                 this.cachedMarginMetrics[`${side}PaddingTop`] = parseInt(getComputedStyle(marginArea).paddingTop) || 0;
+                this.cachedMarginMetrics[`${side}PaddingBottom`] = parseInt(getComputedStyle(marginArea).paddingBottom) || 0;
                 this.cachedMarginMetrics[`${side}Height`] = marginArea.clientHeight;
                 this.cachedMarginMetrics[`${side}PaddingLeft`] = parseInt(getComputedStyle(marginArea).paddingLeft) || 0;
                 this.cachedMarginMetrics[`${side}Width`] = marginArea.clientWidth;
@@ -1341,17 +1359,178 @@ export class Card {
             const registry = this.marginItemRegistry[side];
             if (!registry || registry.length === 0) continue;
 
-            const isHorizontalAxis = (side === 'top' || side === 'bottom');
+            const isTBMargin = (side === 'top' || side === 'bottom');
+
+            if (isTBMargin) {
+                // If this side is mid-transition (CSS max-height animating),
+                // skip re-evaluation to prevent feedback loops — the decision
+                // made at transition start stays until the transition ends.
+                if (this.tbMarginTransitioning[side]) {
+                    continue;
+                }
+
+                // Top/bottom margins: show only the single item whose anchor is
+                // closest to the viewport center. All others are hidden.
+                // Use cardHeight as the stable viewport size to avoid feedback
+                // loops — content.clientHeight shifts when the margin resizes.
+                const stableViewport = cardHeight;
+                // Hysteresis buffer: once an item is shown, keep it shown
+                // until its anchor scrolls this far beyond the viewport edge.
+                // Prevents oscillation when the top margin's growth shifts content.
+                const HYSTERESIS = 50;
+                // Inset: require anchor to be this far inside the viewport
+                // before it counts as "in view" (tighter bounds).
+                const INSET = 30;
+
+                // First pass: find the best item to show
+                let bestItem = null;
+                let bestDistance = Infinity;
+                let hasAbsolute = false;
+                const currentItem = this.currentTBItem[side];
+
+                for (const item of registry) {
+                    if (item.type === 'relative' && item.anchorId) {
+                        const anchor = content.querySelector(`[data-anchor-id="${item.anchorId}"]`);
+                        if (anchor) {
+                            const anchorOffset = anchor.offsetTop;
+                            const anchorHeight = anchor.offsetHeight || 0;
+                            const visibleTop = anchorOffset - scrollTop;
+                            const visibleBottom = visibleTop + anchorHeight;
+                            // Currently-shown item: keep it until anchor fully
+                            // leaves the viewport + hysteresis buffer.
+                            // New items: require anchor to be INSET px inside
+                            // the viewport before showing.
+                            let inView;
+                            if (item === currentItem) {
+                                inView = visibleBottom > -HYSTERESIS && visibleTop < stableViewport + HYSTERESIS;
+                            } else {
+                                inView = visibleBottom > INSET && visibleTop < stableViewport - INSET;
+                            }
+
+                            if (inView) {
+                                const anchorCenter = visibleTop + anchorHeight / 2;
+                                const viewportCenter = stableViewport / 2;
+                                const dist = Math.abs(anchorCenter - viewportCenter);
+                                // Bias toward current item to prevent switching
+                                const adjustedDist = (item === currentItem) ? dist * 0.8 : dist;
+                                if (adjustedDist < bestDistance) {
+                                    bestDistance = adjustedDist;
+                                    bestItem = item;
+                                }
+                            }
+                        }
+                    } else {
+                        // Absolute / non-anchored items are always candidates
+                        hasAbsolute = true;
+                    }
+                }
+
+                // Track the currently shown item
+                this.currentTBItem[side] = bestItem;
+
+                // Second pass: show only the best item (and any absolute items), hide rest
+                const anyVisible = bestItem !== null || hasAbsolute;
+                // Detect if the visibility state changed (show→hide or hide→show)
+                const wasVisible = this.currentTBItem[side + 'Visible'];
+                const stateChanged = anyVisible !== wasVisible;
+                this.currentTBItem[side + 'Visible'] = anyVisible;
+
+                for (const item of registry) {
+                    const isAbsolute = !(item.type === 'relative' && item.anchorId);
+                    const show = item === bestItem || isAbsolute;
+
+                    item.element.style.position = 'relative';
+                    item.element.style.top = '';
+                    item.element.style.left = '';
+                    item.element.style.display = show ? '' : 'none';
+                    item.element.style.opacity = '';
+
+                    if (show) {
+                        const isVerticalText = item.element.classList.contains('margin-orientation-vertical');
+                        const defaultPercent = isVerticalText ? DEFAULT_MAXH_PERCENT_VERTICAL : DEFAULT_MAXH_PERCENT;
+                        const resolvedMaxH = this.resolveMaxH(item.maxh, cardHeight);
+                        const itemMaxH = resolvedMaxH || (cardHeight * defaultPercent * 0.5);
+
+                        const contentEl = item.element.querySelector('.margin-item-content');
+                        const arrowEl = item.element.querySelector('.margin-overflow-arrow');
+                        if (contentEl) {
+                            contentEl.style.maxHeight = `${itemMaxH}px`;
+                            contentEl.style.maxWidth = '';
+                            // Don't set maxHeight on the item wrapper — let it
+                            // size naturally around the capped content element
+                            item.element.style.maxHeight = '';
+                            item.element.style.maxWidth = '';
+
+                            const isOverflowing = contentEl.scrollHeight > contentEl.clientHeight;
+                            if (arrowEl) {
+                                arrowEl.classList.toggle('visible', isOverflowing);
+                            }
+                        }
+                    }
+                }
+
+                // Apply fixed max-height on the margin area
+                const marginEl = this.element.querySelector(`.card-margin-${side}`);
+                if (marginEl) {
+                    marginEl.classList.toggle('margin-empty', !anyVisible);
+                    if (anyVisible) {
+                        // Use the target CSS variable values for padding, NOT
+                        // getComputedStyle — during a CSS transition the computed
+                        // value is mid-animation and would give a wrong target.
+                        const rootStyle = getComputedStyle(document.documentElement);
+                        const padTop = parseInt(rootStyle.getPropertyValue(
+                            side === 'top' ? '--margin-top-padding-top' : '--margin-bottom-padding-top'
+                        )) || 0;
+                        const padBottom = parseInt(rootStyle.getPropertyValue(
+                            side === 'top' ? '--margin-top-padding-bottom' : '--margin-bottom-padding-bottom'
+                        )) || 0;
+                        const paddingV = padTop + padBottom;
+                        let itemH = 0;
+                        if (bestItem) {
+                            const contentEl = bestItem.element.querySelector('.margin-item-content');
+                            if (contentEl) {
+                                const maxH = parseInt(contentEl.style.maxHeight) || Infinity;
+                                // scrollHeight may be 0 if the item was just un-hidden;
+                                // in that case use the maxH cap as a safe estimate and
+                                // the next layout pass will correct it.
+                                const sh = contentEl.scrollHeight || maxH;
+                                itemH = Math.min(sh, maxH);
+                            }
+                        }
+                        marginEl.style.maxHeight = `${itemH + paddingV}px`;
+                    } else {
+                        marginEl.style.maxHeight = '0px';
+                    }
+
+                    // Lock out re-evaluation during the CSS transition so that
+                    // layout shifts (especially from the top margin pushing
+                    // content down) don't cause oscillation.
+                    if (stateChanged) {
+                        this.tbMarginTransitioning[side] = true;
+                        // Use transitionend to unlock; fall back to a timeout
+                        // in case the event doesn't fire (e.g. display:none).
+                        const unlock = () => {
+                            this.tbMarginTransitioning[side] = false;
+                            marginEl.removeEventListener('transitionend', onEnd);
+                        };
+                        const onEnd = (e) => {
+                            if (e.propertyName === 'max-height') unlock();
+                        };
+                        marginEl.addEventListener('transitionend', onEnd);
+                        setTimeout(unlock, 300); // safety fallback
+                    }
+                }
+
+                continue;
+            }
+
             const marginPaddingTop = this.cachedMarginMetrics[`${side}PaddingTop`] ??
                 (() => {
                     const el = this.element.querySelector(`.card-margin-${side}`);
                     return el ? parseInt(getComputedStyle(el).paddingTop) || 0 : 0;
                 })();
-            const marginAreaSize = isHorizontalAxis
-                ? (this.cachedMarginMetrics[`${side}Width`] ??
-                    this.element.querySelector(`.card-margin-${side}`)?.clientWidth ?? 200)
-                : (this.cachedMarginMetrics[`${side}Height`] ??
-                    this.element.querySelector(`.card-margin-${side}`)?.clientHeight ?? 300);
+            const marginAreaSize = this.cachedMarginMetrics[`${side}Height`] ??
+                this.element.querySelector(`.card-margin-${side}`)?.clientHeight ?? 300;
 
             // Phase 1: Compute max heights and constrain items
             for (const item of registry) {
@@ -1364,18 +1543,14 @@ export class Card {
                 const arrowEl = item.element.querySelector('.margin-overflow-arrow');
 
                 if (contentEl) {
-                    if (isHorizontalAxis) {
-                        contentEl.style.maxWidth = `${maxH}px`;
-                        item.element.style.maxWidth = `${maxH}px`;
-                    } else {
-                        contentEl.style.maxHeight = `${maxH}px`;
-                        item.element.style.maxHeight = `${maxH}px`;
-                    }
+                    contentEl.style.maxHeight = `${maxH}px`;
+                    item.element.style.maxHeight = `${maxH}px`;
+                    // Clear any stale maxWidth from previous horizontal-axis logic
+                    contentEl.style.maxWidth = '';
+                    item.element.style.maxWidth = '';
 
                     // Check if content overflows — show/hide arrow
-                    const isOverflowing = isHorizontalAxis
-                        ? contentEl.scrollWidth > contentEl.clientWidth
-                        : contentEl.scrollHeight > contentEl.clientHeight;
+                    const isOverflowing = contentEl.scrollHeight > contentEl.clientHeight;
 
                     if (arrowEl) {
                         if (isOverflowing) {
@@ -1390,7 +1565,7 @@ export class Card {
             // Phase 2: Measure sizes
             for (const item of registry) {
                 const rect = item.element.getBoundingClientRect();
-                item.size = isHorizontalAxis ? rect.width : rect.height;
+                item.size = rect.height;
                 if (item.size === 0) item.size = 16;
                 item.heightDirty = false;
             }
@@ -1405,9 +1580,9 @@ export class Card {
                         const anchorOffset = anchor.offsetTop;
                         const anchorHeight = anchor.offsetHeight || 0;
                         const visibleTop = anchorOffset - scrollTop;
-                        // Align margin item above the anchor element
+                        // Align margin item near the anchor element
                         const basePos = visibleTop + marginPaddingTop - contentPaddingTop
-                            - item.size * 1.5;
+                            - item.size * 0.0;
 
                         // Stack same-anchor items sequentially
                         if (anchorStacks[item.anchorId] !== undefined) {
@@ -1432,19 +1607,40 @@ export class Card {
             // Relative items scroll freely at their anchor position and pass
             // BEHIND absolute items (lower z-index). Only same-type items
             // have collision resolution between them.
+            //
+            // Reserve exclusion zones at top/bottom of side margins so items
+            // can't overlap the TB margin overlays or the page number.
+            const topMarginEl = this.element.querySelector('.card-margin-top');
+            const bottomMarginEl = this.element.querySelector('.card-margin-bottom');
+            const topExclusion = topMarginEl ? topMarginEl.offsetHeight : 0;
+            const bottomExclusion = bottomMarginEl ? bottomMarginEl.offsetHeight : 0;
+            // Page number (bottom-left) and reading stats (bottom-right) sit in
+            // the corners; reserve space so side margin items avoid them.
+            const pageNumEl = this.element.querySelector('.card-page-number-absolute');
+            const statsEl = this.element.querySelector('.card-reading-stats');
+            const cornerElHeight = (el) => el ? el.offsetHeight + 16 : 0; // 16px for offset + gap
+            let bottomReserve = bottomExclusion;
+            if (side === 'left') bottomReserve = Math.max(bottomReserve, cornerElHeight(pageNumEl));
+            if (side === 'right') bottomReserve = Math.max(bottomReserve, cornerElHeight(statsEl));
+
+            const exclusionZones = [];
+            if (topExclusion > 0) {
+                exclusionZones.push({ pos: 0, size: topExclusion });
+            }
+            if (bottomReserve > 0 && marginAreaSize > bottomReserve) {
+                exclusionZones.push({ pos: marginAreaSize - bottomReserve, size: bottomReserve });
+            }
+
             const absoluteItems = registry.filter(item => item.type !== 'relative');
             const relativeItems = registry.filter(item => item.type === 'relative');
 
-            this.resolveCollisionsSameType(absoluteItems, MIN_GAP, marginAreaSize, false);
-            this.resolveCollisionsSameType(relativeItems, MIN_GAP, marginAreaSize, true);
+            this.resolveCollisionsSameType(absoluteItems, MIN_GAP, marginAreaSize, false, exclusionZones);
+            this.resolveCollisionsSameType(relativeItems, MIN_GAP, marginAreaSize, true, exclusionZones);
 
             // Phase 5: Apply positions and z-index layering
             for (const item of registry) {
-                if (isHorizontalAxis) {
-                    item.element.style.left = `${item.actualPos}px`;
-                } else {
-                    item.element.style.top = `${item.actualPos}px`;
-                }
+                item.element.style.top = `${item.actualPos}px`;
+                item.element.style.left = '';  // Clear any stale left positioning
 
                 // Absolute items always render on top of relative items
                 if (item.type === 'relative') {
@@ -1488,80 +1684,46 @@ export class Card {
                     // Build a polygon clip-path that includes only the visible
                     // (non-overlapped) regions. The polygon traces the outline
                     // of the item while cutting out the absolute-covered bands.
-                    if (isHorizontalAxis) {
-                        // Horizontal axis: cut out vertical bands (left/right clips)
-                        const points = [];
-                        // Top edge left-to-right, skipping clipped bands
-                        let x = 0;
-                        for (const clip of clips) {
-                            if (clip.start > x) {
-                                points.push(`${x}px 0%`);
-                                points.push(`${clip.start}px 0%`);
-                            }
-                            points.push(`${clip.start}px 100%`);
-                            points.push(`${clip.end}px 100%`);
-                            points.push(`${clip.end}px 0%`);
-                            x = clip.end;
-                        }
-                        // Remaining visible area after last clip
-                        if (x < relItem.size) {
-                            points.push(`${x}px 0%`);
-                            points.push(`100% 0%`);
-                            points.push(`100% 100%`);
-                        }
-                        // Close back along bottom
-                        points.push(`0% 100%`);
-                        relItem.element.style.clipPath = `polygon(${points.join(', ')})`;
-                    } else {
-                        // Vertical axis (left/right margins): cut out horizontal bands.
-                        // Build a polygon that is the full item rectangle minus
-                        // horizontal strips where absolute items overlap.
-                        // Approach: list visible vertical segments, build a polygon
-                        // going down the right edge through visible parts, then
-                        // back up the left edge.
 
-                        // Merge overlapping clips
-                        const merged = [clips[0]];
-                        for (let i = 1; i < clips.length; i++) {
-                            const last = merged[merged.length - 1];
-                            if (clips[i].start <= last.end) {
-                                last.end = Math.max(last.end, clips[i].end);
-                            } else {
-                                merged.push({ ...clips[i] });
-                            }
-                        }
-
-                        // Build visible segments (gaps between clips, plus before first and after last)
-                        const visible = [];
-                        let cursor = 0;
-                        for (const clip of merged) {
-                            if (clip.start > cursor) {
-                                visible.push({ start: cursor, end: clip.start });
-                            }
-                            cursor = clip.end;
-                        }
-                        if (cursor < relItem.size) {
-                            visible.push({ start: cursor, end: relItem.size });
-                        }
-
-                        if (visible.length === 0) {
-                            // Entirely hidden
-                            relItem.element.style.clipPath = 'polygon(0 0, 0 0, 0 0)';
+                    // Cut out horizontal bands where absolute items overlap.
+                    // Merge overlapping clips
+                    const merged = [clips[0]];
+                    for (let i = 1; i < clips.length; i++) {
+                        const last = merged[merged.length - 1];
+                        if (clips[i].start <= last.end) {
+                            last.end = Math.max(last.end, clips[i].end);
                         } else {
-                            // Build polygon: for each visible segment, add a rectangle
-                            // We use an inset approach instead for simplicity with
-                            // multiple segments — use polygon with all visible rects
-                            const points = [];
-                            for (const seg of visible) {
-                                const y1 = (seg.start / relItem.size * 100).toFixed(2);
-                                const y2 = (seg.end / relItem.size * 100).toFixed(2);
-                                points.push(`0% ${y1}%`);
-                                points.push(`100% ${y1}%`);
-                                points.push(`100% ${y2}%`);
-                                points.push(`0% ${y2}%`);
-                            }
-                            relItem.element.style.clipPath = `polygon(evenodd, ${points.join(', ')})`;
+                            merged.push({ ...clips[i] });
                         }
+                    }
+
+                    // Build visible segments (gaps between clips, plus before first and after last)
+                    const visible = [];
+                    let cursor = 0;
+                    for (const clip of merged) {
+                        if (clip.start > cursor) {
+                            visible.push({ start: cursor, end: clip.start });
+                        }
+                        cursor = clip.end;
+                    }
+                    if (cursor < relItem.size) {
+                        visible.push({ start: cursor, end: relItem.size });
+                    }
+
+                    if (visible.length === 0) {
+                        // Entirely hidden
+                        relItem.element.style.clipPath = 'polygon(0 0, 0 0, 0 0)';
+                    } else {
+                        const points = [];
+                        for (const seg of visible) {
+                            const y1 = (seg.start / relItem.size * 100).toFixed(2);
+                            const y2 = (seg.end / relItem.size * 100).toFixed(2);
+                            points.push(`0% ${y1}%`);
+                            points.push(`100% ${y1}%`);
+                            points.push(`100% ${y2}%`);
+                            points.push(`0% ${y2}%`);
+                        }
+                        relItem.element.style.clipPath = `polygon(evenodd, ${points.join(', ')})`;
                     }
                 }
             } else {
@@ -1580,7 +1742,7 @@ export class Card {
      * at their desired position and pushed to the nearest free spot if they overlap.
      * Relative items are all flexible — they keep source order when pushed apart.
      */
-    resolveCollisionsSameType(items, minGap, areaSize, isRelative = false) {
+    resolveCollisionsSameType(items, minGap, areaSize, isRelative = false, exclusionZones = []) {
         if (items.length === 0) return;
 
         // Occupied intervals sorted by start position.
@@ -1596,6 +1758,11 @@ export class Card {
             }
             occupied.splice(lo, 0, entry);
         };
+
+        // Pre-seed exclusion zones (TB margin overlays, page number, etc.)
+        for (const zone of exclusionZones) {
+            insertOccupied(zone.pos, zone.size);
+        }
 
         const findFreePosition = (desiredPos, size) => {
             const wouldOverlap = (pos) => {
@@ -1872,6 +2039,9 @@ export class Card {
             const pageNumEl = marginEl.querySelector('.page-number');
             marginEl.innerHTML = '';
 
+            // Toggle empty class
+            marginEl.classList.toggle('margin-empty', items.length === 0);
+
             // Clear registry for this side
             this.marginItemRegistry[side] = [];
 
@@ -1935,6 +2105,7 @@ export class Card {
         }
 
         // Re-run layout
+        this.updateTBGridRows();
         this.cacheMarginMetrics();
         this.updateMarginLayout();
     }
@@ -2135,17 +2306,19 @@ export class Card {
 
         // Calculate pixel values from percentage
         const lrSize = (marginPercent / 100) * this.width;
-        const tbSize = (marginPercent / 100) * this.height;
 
         // Update stored values
         this.marginLeftSize = lrSize;
         this.marginRightSize = lrSize;
-        this.marginTopSize = tbSize;
-        this.marginBottomSize = tbSize;
 
-        // Update grid template
+        // Update grid template — top/bottom margins are absolutely positioned overlays
         container.style.gridTemplateColumns = `${lrSize}px 1fr ${lrSize}px`;
-        container.style.gridTemplateRows = `${tbSize}px 1fr ${tbSize}px`;
+        container.style.gridTemplateRows = `1fr`;
+    }
+
+    updateTBGridRows() {
+        // Top/bottom grid rows are always auto; actual height is controlled
+        // by max-height on the margin elements via updateMarginLayout().
     }
 
     /**
