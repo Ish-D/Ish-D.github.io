@@ -86,6 +86,9 @@ export class Card {
         this.currentTBItem = { top: null, bottom: null };
         // Lock out TB margin re-evaluation during CSS transitions
         this.tbMarginTransitioning = { top: false, bottom: false };
+        // Inline breakout state — when margins are too narrow, items float into body
+        this.marginInlineMode = { left: false, right: false };
+        this.inlineProxies = new Map(); // margin item element -> proxy element
 
         // Create DOM element
         this.element = this.createElement();
@@ -446,6 +449,16 @@ export class Card {
             this.updateMarginSize(this.marginPercent);
             this.prevWidth = this.width;
             this.prevHeight = this.height;
+
+            // Trigger margin layout update so inline breakout responds to resize
+            if (!this.marginLayoutPending) {
+                this.marginLayoutPending = true;
+                requestAnimationFrame(() => {
+                    this.cacheMarginMetrics();
+                    this.updateMarginLayout();
+                    this.marginLayoutPending = false;
+                });
+            }
         }
 
         // Counter-rotate handles so they stay visually fixed regardless of card rotation
@@ -595,6 +608,8 @@ export class Card {
                         // show/hide toggling — these fire during the transition
                         // and trigger a feedback loop.
                         if (side === 'top' || side === 'bottom') continue;
+                        // Skip items in inline breakout mode
+                        if (this.marginInlineMode[side]) continue;
                         item.heightDirty = true;
                         dirty = true;
                         break;
@@ -1071,6 +1086,16 @@ export class Card {
                 const marginEl = this.element.querySelector('.card-margin-bottom');
                 if (marginEl) marginEl.style.maxHeight = `${newSize}px`;
             }
+
+            // Trigger inline breakout check during left/right margin area resize
+            if ((side === 'left' || side === 'right') && !this.marginLayoutPending) {
+                this.marginLayoutPending = true;
+                requestAnimationFrame(() => {
+                    this.cacheMarginMetrics();
+                    this.updateMarginLayout();
+                    this.marginLayoutPending = false;
+                });
+            }
         }
     }
 
@@ -1338,6 +1363,222 @@ export class Card {
         return parseFloat(str) || null;
     }
 
+    /* ============================================
+       Margin Inline Breakout Helpers
+       ============================================ */
+
+    /**
+     * Walk up from an element to find the nearest direct child of container.
+     */
+    findContainingBlock(element, container) {
+        let current = element;
+        while (current && current.parentNode !== container) {
+            current = current.parentNode;
+            if (!current || current === document) return null;
+        }
+        return current;
+    }
+
+    /**
+     * Insert a proxy element at the content child closest to targetOffset (px).
+     */
+    insertProxyAtOffset(proxy, content, targetOffset) {
+        const children = Array.from(content.children);
+        let bestChild = null;
+        let bestDist = Infinity;
+
+        for (const child of children) {
+            if (child.classList.contains('margin-inline-proxy')) continue;
+            const dist = Math.abs(child.offsetTop - targetOffset);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestChild = child;
+            }
+        }
+
+        if (bestChild) {
+            // Insert after the closest element so the float appears
+            // alongside/below the relevant content, not above it.
+            if (bestChild.nextSibling) {
+                content.insertBefore(proxy, bestChild.nextSibling);
+            } else {
+                content.appendChild(proxy);
+            }
+        } else {
+            content.appendChild(proxy);
+        }
+    }
+
+    /**
+     * Remove all inline proxy elements and clear the map.
+     */
+    clearAllInlineProxies() {
+        for (const [, proxy] of this.inlineProxies) {
+            if (proxy.parentNode) proxy.parentNode.removeChild(proxy);
+        }
+        this.inlineProxies.clear();
+
+        // Reset any expanded padding
+        const content = this.element.querySelector('.card-content');
+        if (content) {
+            content.style.paddingLeft = '';
+            content.style.paddingRight = '';
+        }
+    }
+
+    /**
+     * Set proxy widths adaptively based on content width and remaining
+     * margin column width. Dynamically increases the content area's
+     * padding on the inline side so the proxy can straddle the
+     * margin/body boundary smoothly.
+     */
+    updateInlineProxyWidths() {
+        const content = this.element.querySelector('.card-content');
+        if (!content || this.inlineProxies.size === 0) return;
+
+        const contentWidth = content.clientWidth;
+        const basePadding = parseInt(
+            getComputedStyle(document.documentElement)
+                .getPropertyValue('--card-padding-horizontal')
+        ) || 16;
+
+        // Base proxy width as a fraction of content width
+        const minW = 300, maxW = 1500;
+        const pctAtMin = 0.60, pctAtMax = 0.20;
+        const t = Math.min(1, Math.max(0, (contentWidth - minW) / (maxW - minW)));
+        const pct = pctAtMin + (pctAtMax - pctAtMin) * t;
+        const baseProxyWidth = Math.round(contentWidth * pct);
+
+        // Determine margin widths for each active inline side
+        const sides = { left: false, right: false };
+        for (const [, proxy] of this.inlineProxies) {
+            sides[proxy.dataset.marginSide] = true;
+        }
+
+        // Expand content padding on inline sides to allow full straddling
+        for (const side of ['left', 'right']) {
+            const marginEl = this.element.querySelector(`.card-margin-${side}`);
+            const marginWidth = marginEl ? marginEl.offsetWidth : 0;
+            const paddingProp = side === 'left' ? 'paddingLeft' : 'paddingRight';
+
+            if (sides[side] && this.marginInlineMode[side]) {
+                // Expand padding to encompass the margin column width
+                content.style[paddingProp] = `${basePadding + marginWidth}px`;
+            } else {
+                content.style[paddingProp] = '';
+            }
+        }
+
+        for (const [, proxy] of this.inlineProxies) {
+            if (proxy.classList.contains('margin-inline-vertical')) continue;
+
+            const side = proxy.dataset.marginSide;
+            const marginEl = this.element.querySelector(`.card-margin-${side}`);
+            const marginWidth = marginEl ? marginEl.offsetWidth : 0;
+
+            // Proxy width = base + margin column width (it straddles both areas)
+            const totalWidth = baseProxyWidth + marginWidth;
+            proxy.style.width = `${totalWidth}px`;
+
+            // Pull into the expanded padding to visually overlap the margin column
+            if (side === 'left') {
+                proxy.style.marginLeft = `${-(basePadding + marginWidth)}px`;
+            } else {
+                proxy.style.marginRight = `${-(basePadding + marginWidth)}px`;
+            }
+        }
+    }
+
+    /**
+     * Activate inline breakout mode for a side: hide original margin items
+     * and insert floated proxy clones into the body content.
+     */
+    activateInlineMode(side, registry) {
+        const content = this.element.querySelector('.card-content');
+        if (!content) return;
+
+        const scrollBefore = content.scrollTop;
+
+        for (const item of registry) {
+            // Hide the original margin item
+            item.element.style.display = 'none';
+
+            // Create the inline proxy
+            const proxy = document.createElement('div');
+            proxy.className = `margin-inline-proxy margin-inline-${side}`;
+            proxy.dataset.marginSide = side;
+            proxy.dataset.marginOrder = item.order;
+
+            // Check if item is vertical orientation
+            if (item.element.classList.contains('margin-orientation-vertical')) {
+                proxy.classList.add('margin-inline-vertical');
+            }
+
+            // Clone the content (not the resize handle or overflow arrow)
+            const contentEl = item.element.querySelector('.margin-item-content');
+            if (contentEl) {
+                proxy.innerHTML = contentEl.innerHTML;
+            }
+
+            // Insert proxy right after the anchor span inside the same
+            // block of text, so the float sits inline with the referencing
+            // paragraph rather than above or below it.
+            if (item.type === 'relative' && item.anchorId) {
+                const anchor = content.querySelector(`[data-anchor-id="${item.anchorId}"]`);
+                if (anchor) {
+                    if (anchor.nextSibling) {
+                        anchor.parentNode.insertBefore(proxy, anchor.nextSibling);
+                    } else {
+                        anchor.parentNode.appendChild(proxy);
+                    }
+                } else {
+                    content.insertBefore(proxy, content.firstChild);
+                }
+            } else if (item.pos !== null) {
+                this.insertProxyAtOffset(proxy, content, item.pos);
+            } else {
+                content.insertBefore(proxy, content.firstChild);
+            }
+
+            this.inlineProxies.set(item.element, proxy);
+        }
+
+        // Set adaptive widths based on content area size
+        this.updateInlineProxyWidths();
+
+        // Preserve scroll position
+        content.scrollTop = scrollBefore;
+    }
+
+    /**
+     * Deactivate inline breakout mode: remove proxies, show originals.
+     */
+    deactivateInlineMode(side, registry) {
+        const content = this.element.querySelector('.card-content');
+        const scrollBefore = content ? content.scrollTop : 0;
+
+        for (const item of registry) {
+            // Show the original margin item again
+            item.element.style.display = '';
+
+            // Remove the inline proxy
+            const proxy = this.inlineProxies.get(item.element);
+            if (proxy && proxy.parentNode) {
+                proxy.parentNode.removeChild(proxy);
+            }
+            this.inlineProxies.delete(item.element);
+        }
+
+        // Reset expanded padding on the deactivated side
+        if (content) {
+            const paddingProp = side === 'left' ? 'paddingLeft' : 'paddingRight';
+            content.style[paddingProp] = '';
+        }
+
+        // Preserve scroll position
+        if (content) content.scrollTop = scrollBefore;
+    }
+
     /**
      * Unified margin layout algorithm — positions all margin items on all sides,
      * prevents overlap using distribute-evenly collision resolution, and manages
@@ -1485,7 +1726,9 @@ export class Card {
                         const padBottom = parseInt(rootStyle.getPropertyValue(
                             side === 'top' ? '--margin-top-padding-bottom' : '--margin-bottom-padding-bottom'
                         )) || 0;
-                        const paddingV = padTop + padBottom;
+                        // Extra clearance for bottom margin to avoid page number / reading stats
+                        const indicatorClearance = side === 'bottom' ? 18 : 0;
+                        const paddingV = padTop + padBottom + indicatorClearance;
                         let itemH = 0;
                         if (bestItem) {
                             const contentEl = bestItem.element.querySelector('.margin-item-content');
@@ -1523,6 +1766,36 @@ export class Card {
                 }
 
                 continue;
+            }
+
+            // --- Inline breakout threshold check for left/right margins ---
+            const marginElCheck = this.element.querySelector(`.card-margin-${side}`);
+            if (marginElCheck) {
+                const marginWidth = marginElCheck.offsetWidth || 100;
+                const BREAKIN_THRESHOLD = parseInt(
+                    getComputedStyle(document.documentElement)
+                        .getPropertyValue('--margin-breakin-threshold')
+                ) || 75;
+                const BREAKIN_HYSTERESIS = 10;
+
+                const wasInline = this.marginInlineMode[side];
+                const shouldBeInline = wasInline
+                    ? marginWidth < BREAKIN_THRESHOLD + BREAKIN_HYSTERESIS
+                    : marginWidth < BREAKIN_THRESHOLD;
+
+                if (shouldBeInline !== wasInline) {
+                    this.marginInlineMode[side] = shouldBeInline;
+                    if (shouldBeInline) {
+                        this.activateInlineMode(side, registry);
+                    } else {
+                        this.deactivateInlineMode(side, registry);
+                    }
+                }
+
+                if (this.marginInlineMode[side]) {
+                    this.updateInlineProxyWidths();
+                    continue; // skip normal absolute-positioning layout
+                }
             }
 
             const marginPaddingTop = this.cachedMarginMetrics[`${side}PaddingTop`] ??
@@ -2045,6 +2318,10 @@ export class Card {
      * @param {Object} margins - Margins object with left, right, top, bottom arrays
      */
     updateMargins(margins) {
+        // Clear inline breakout proxies before rebuilding
+        this.clearAllInlineProxies();
+        this.marginInlineMode = { left: false, right: false };
+
         // Disconnect existing ResizeObserver before rebuilding
         if (this.marginResizeObserver) {
             this.marginResizeObserver.disconnect();
@@ -2342,7 +2619,10 @@ export class Card {
     }
 
     /**
-     * Update margin size based on a percentage value (from global settings)
+     * Update margin size based on a percentage value (from global settings).
+     * The effective percentage scales down for smaller cards — large cards
+     * use the full system-set percentage, while narrow cards use a reduced
+     * percentage so the margins don't dominate the layout.
      * @param {number} marginPercent - Margin size as percentage (0-25)
      */
     updateMarginSize(marginPercent) {
@@ -2352,8 +2632,17 @@ export class Card {
         // Store the percentage for dynamic scaling on resize
         this.marginPercent = marginPercent;
 
-        // Calculate pixel values from percentage
-        const lrSize = (marginPercent / 100) * this.width;
+        // Scale down effective percentage for smaller cards.
+        // At fullWidth (600px+), use the full marginPercent.
+        // At minWidth (200px), use 5%.
+        // Linear interpolation between.
+        const minWidth = 500, fullWidth = 1500;
+        const minPercent = 1;
+        const t = Math.min(1, Math.max(0, (this.width - minWidth) / (fullWidth - minWidth)));
+        const effectivePercent = minPercent + (marginPercent - minPercent) * t;
+
+        // Calculate pixel values from effective percentage
+        const lrSize = (effectivePercent / 100) * this.width;
 
         // Update stored values
         this.marginLeftSize = lrSize;

@@ -382,7 +382,8 @@ body {
     align-self: end;
     flex-direction: column;
     text-align: left;
-    padding-bottom: var(--margin-bottom-padding-bottom);
+    /* Extra bottom padding to clear page number / reading stats indicators */
+    padding-bottom: calc(var(--margin-bottom-padding-bottom) + 18px);
     padding-top: var(--margin-bottom-padding-top);
     padding-left: var(--card-padding-horizontal);
     padding-right: var(--card-padding-horizontal);
@@ -396,6 +397,74 @@ body {
 .card-margin-top.margin-empty,
 .card-margin-bottom.margin-empty {
     min-height: 0;
+}
+
+/* ============================================
+   Margin Inline Proxy (break-in mode)
+   When margins are too narrow, items float
+   into the body content area.
+   ============================================ */
+
+.margin-inline-proxy {
+    box-sizing: border-box;
+    max-width: 50%;
+    min-width: 50px;
+    padding: 6px 10px 2px;
+    margin-bottom: 2px;
+    font-size: var(--font-size-margin-small);
+    line-height: var(--line-height-margin);
+    color: var(--color-text-primary);
+    opacity: 0.85;
+    animation: margin-inline-fadein 0.2s ease;
+}
+
+/* Strip trailing space from content inside proxies */
+.margin-inline-proxy > :last-child {
+    margin-bottom: 0;
+}
+
+.margin-inline-proxy p {
+    margin-bottom: 4px;
+}
+
+.margin-inline-proxy p:last-child {
+    margin-bottom: 0;
+}
+
+/* Vertical text proxy — stays vertical as a floated strip */
+.margin-inline-proxy.margin-inline-vertical {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    max-width: none;
+    width: auto;
+    min-width: 0;
+    max-height: 200px;
+    overflow: hidden;
+}
+
+.margin-inline-proxy.margin-inline-vertical.margin-inline-left {
+    transform: rotate(180deg);
+}
+
+.margin-inline-left {
+    float: left;
+    clear: left;
+    margin-right: 12px;
+    margin-left: 0;
+    border-left: 2px solid var(--color-border);
+}
+
+.margin-inline-right {
+    float: right;
+    clear: right;
+    margin-left: 12px;
+    margin-right: 0;
+    border-right: 2px solid var(--color-border);
+}
+
+@keyframes margin-inline-fadein {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 0.85; transform: translateY(0); }
 }
 
 /* Margin item that anchors to content */
@@ -443,7 +512,7 @@ body {
     font-size: var(--font-size-page-number);
     color: var(--color-text-primary);
     font-style: normal;
-    z-index: 4; /* Above card content (z-index 1-3) but below fold effects (z-index 5) */
+    z-index: 11; /* Above bottom margin overlay (z-index 10) */
     pointer-events: none; /* Don't interfere with margin interactions */
 }
 
@@ -1563,7 +1632,7 @@ sup.jump-link {
     font-size: var(--font-size-page-number, 11px);
     color: var(--color-text-primary);
     font-style: normal;
-    z-index: 5;
+    z-index: 11; /* Above bottom margin overlay (z-index 10) */
 }
 
 /* Tags display in cards - inline version for [[tags]] directive */

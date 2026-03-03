@@ -111,6 +111,7 @@
     --margin-bottom-padding-top: 8px;
     --margin-bottom-padding-bottom: 12px;
     --margin-bottom-padding-horizontal: 16px;
+    --margin-breakin-threshold: 100;  /* px — below this width, margin items break into body */
 
     /* ============================================
        Card Dimensions
