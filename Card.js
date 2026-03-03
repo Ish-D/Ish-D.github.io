@@ -241,6 +241,7 @@ export class Card {
             requestAnimationFrame(() => {
                 this.renderLaTeX();
                 this.highlightCode();
+                this.styleDropCaps();
             });
 
             // Assemble container with margins
@@ -2028,6 +2029,7 @@ export class Card {
             // Re-render LaTeX and highlight code
             this.renderLaTeX();
             this.highlightCode();
+            this.styleDropCaps();
 
             // Update relative margins
             this.cacheMarginMetrics();
@@ -2184,6 +2186,33 @@ export class Card {
         const codeBlocks = this.element.querySelectorAll('pre code[class*="language-"]');
         codeBlocks.forEach(block => {
             window.Prism.highlightElement(block);
+        });
+    }
+
+    /**
+     * Apply per-letter metrics to drop cap elements so that the visible ink
+     * has uniform spacing on the right and bottom edges.
+     */
+    styleDropCaps() {
+        const metrics = Card.dropcapMetrics;
+        if (!metrics) return;
+
+        const GAP = 12; // uniform spacing in px on right and bottom
+
+        const dropCaps = this.element.querySelectorAll('.drop-cap');
+        dropCaps.forEach(el => {
+            const letter = el.getAttribute('data-letter');
+            if (!letter || !metrics[letter]) return;
+
+            const m = metrics[letter];
+            const emSize = parseFloat(getComputedStyle(el).fontSize);
+
+            // The glyph renders within the em-square starting at offsetX/offsetY.
+            // Set width/height to include everything from the left/top edge of the
+            // em-square through the end of the ink, plus a uniform gap.
+            // This trims only the trailing dead space on the right and bottom.
+            el.style.width = ((m.offsetX + m.width) * emSize + GAP) + 'px';
+            el.style.height = ((m.offsetY + m.height) * emSize + GAP) + 'px';
         });
     }
 
@@ -2404,3 +2433,6 @@ export class Card {
         };
     }
 }
+
+// Static property for drop cap metrics (loaded by app.js at startup)
+Card.dropcapMetrics = null;

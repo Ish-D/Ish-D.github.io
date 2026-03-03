@@ -1543,7 +1543,8 @@ export class MarkdownParser {
 
         // Drop cap
         html = html.replace(this.getDropCapPattern(), (match, letter) => {
-            return `<span class="drop-cap">${letter.trim()}</span>`;
+            const l = letter.trim();
+            return `<span class="drop-cap" data-letter="${l}">${l}</span>`;
         });
 
         // Tab (inline indent)
@@ -1777,7 +1778,8 @@ export class MarkdownParser {
 
         // Drop cap
         html = html.replace(this.getDropCapPattern(), (match, letter) => {
-            return `<span class="drop-cap">${letter.trim()}</span>`;
+            const l = letter.trim();
+            return `<span class="drop-cap" data-letter="${l}">${l}</span>`;
         });
 
         // Tab (inline indent)

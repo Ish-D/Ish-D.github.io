@@ -188,6 +188,9 @@ class PaperCanvas {
         this.initConnectionsLayer();
         this.initEditor();
 
+        // Load drop cap metrics for per-letter spacing
+        this.loadDropcapMetrics();
+
         // Listen for hard refresh (Ctrl+Shift+R / Cmd+Shift+R) to clear saved state
         window.addEventListener('keydown', (e) => {
             const isHardRefresh = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r');
@@ -2370,6 +2373,16 @@ ${renderColumn(rightColumn)}
         // Bind settings button
         const settingsBtn = document.getElementById('settings-btn');
         settingsBtn.addEventListener('click', () => this.openSettingsCard());
+    }
+
+    async loadDropcapMetrics() {
+        try {
+            const response = await fetch('/dropcap-metrics.json');
+            Card.dropcapMetrics = await response.json();
+        } catch (e) {
+            console.warn('Could not load dropcap-metrics.json:', e);
+            Card.dropcapMetrics = null;
+        }
     }
 
     // Get a setting value

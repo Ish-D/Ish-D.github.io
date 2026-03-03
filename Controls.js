@@ -14,7 +14,7 @@
  * Default margin size as a percentage of card dimensions.
  * Used as the default for the margin slider and fallback values.
  */
-export const DEFAULT_MARGIN_PERCENT = 7;
+export const DEFAULT_MARGIN_PERCENT = 22;
 
 // ============================================
 // SETTINGS CONFIGURATION
@@ -45,7 +45,7 @@ export const SettingsConfig = {
     },
 
     fontSize: {
-        default: 17,
+        default: 19,
         type: 'number',
         storage: 'settings-fontSize',
         apply(value, context) {
@@ -63,9 +63,9 @@ export const SettingsConfig = {
             // Code (default: 13px)
             document.documentElement.style.setProperty('--font-size-code', `${Math.round(13 * scale)}px`);
 
-            // Margins (default: 11px, small: 10px)
-            const marginFontSize = Math.max(9, Math.round(11 * scale));
-            const marginSmallFontSize = Math.max(8, Math.round(10 * scale));
+            // Margins (85% and 79% of base)
+            const marginFontSize = Math.max(9, Math.round(value * 0.85));
+            const marginSmallFontSize = Math.max(8, Math.round(value * 0.79));
             document.documentElement.style.setProperty('--font-size-margin', `${marginFontSize}px`);
             document.documentElement.style.setProperty('--font-size-margin-small', `${marginSmallFontSize}px`);
             document.documentElement.style.setProperty('--font-size-margin-title', `${marginFontSize}px`);
@@ -80,7 +80,7 @@ export const SettingsConfig = {
     },
 
     lineHeight: {
-        default: 1.3,
+        default: 1.4,
         type: 'number',
         storage: 'settings-lineHeight',
         apply(value, context) {

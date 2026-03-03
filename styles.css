@@ -1,3 +1,12 @@
+/* Decorative drop cap font */
+@font-face {
+    font-family: 'ImprintMTShadow';
+    src: url('/imprint-mt-shadow.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* Reset and base styles */
 * {
     margin: 0;
@@ -15,6 +24,9 @@ body {
     font-family: var(--font-family-serif);
     background-color: var(--color-background);
     color: var(--color-text-primary);
+    -webkit-hyphens: auto;
+    hyphens: auto;
+    text-wrap: pretty;
 }
 
 /* Canvas - the infinite workspace */
@@ -130,6 +142,9 @@ body {
     font-size: var(--font-size-base);
     line-height: var(--line-height-base);
     text-align: justify;
+    overflow-wrap: break-word;
+    -webkit-hyphens: auto;
+    hyphens: auto;
     /* Allow touch scrolling in card content */
     touch-action: pan-y;
     -webkit-overflow-scrolling: touch;
@@ -797,15 +812,15 @@ h3:target {
     height: 32px;
 }
 
-/* Drop cap - large initial letter */
+/* Drop cap - decorative initial letter */
 .drop-cap {
     float: left;
-    font-size: 3.5em;
-    line-height: 0.8;
-    padding-right: 8px;
-    padding-top: 4px;
-    font-weight: bold;
+    font-family: 'ImprintMTShadow', serif;
+    font-size: 4em;
+    line-height: 1;
+    font-weight: normal;
     color: var(--color-text-primary);
+    overflow: hidden;
 }
 
 .card-content ul, .card-content ol {

@@ -38,12 +38,12 @@
        ============================================ */
 
     /* Font families */
-    --font-family-serif: 'Times New Roman', Times, Georgia, serif;
+    --font-family-serif: 'EB Garamond', Georgia, serif;
     --font-family-mono: 'Courier New', Courier, monospace;
 
     /* Base font settings (card content) */
-    --font-size-base: 17px;
-    --line-height-base: 1.3;
+    --font-size-base: 19px;
+    --line-height-base: 1.4;
 
     /* Headings */
     --font-size-h1: 32px;
@@ -80,10 +80,10 @@
        Typography - Margins
        ============================================ */
 
-    --font-size-margin: 11px;
-    --font-size-margin-small: 10px;
+    --font-size-margin: calc(var(--font-size-base) * 0.85);
+    --font-size-margin-small: calc(var(--font-size-base) * 0.79);
     --line-height-margin: 1.5;
-    --font-size-margin-title: 11px;
+    --font-size-margin-title: calc(var(--font-size-base) * 0.85);
     --font-weight-margin-title: bold;
     --margin-title-letter-spacing: 0.5px;
 
