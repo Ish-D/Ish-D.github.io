@@ -1,7 +1,16 @@
 /* Decorative drop cap font */
 @font-face {
     font-family: 'ImprintMTShadow';
-    src: url('/imprint-mt-shadow.ttf') format('truetype');
+    src: url('/fonts/imprint-mt-shadow.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Main body font */
+@font-face {
+    font-family: 'MonotypeModern';
+    src: url('/fonts/MonotypeModern.otf') format('opentype');
     font-weight: normal;
     font-style: normal;
     font-display: swap;
