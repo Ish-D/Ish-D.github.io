@@ -24,6 +24,7 @@
     --color-shadow: rgba(0, 0, 0, 0.04);    /* Shadow color */
     --color-border: #cccccc;                /* Border color */
     --color-selection: rgba(0, 0, 0, 0.1);  /* Text selection highlight */
+    --color-error: #c41e3a;                /* Error/validation color */
 
     /* Fold effect colors */
     --fold-gradient-start: #a8a5a0;
@@ -42,7 +43,7 @@
     --font-family-mono: 'Courier New', Courier, monospace;
 
     /* Base font settings (card content) */
-    --font-size-base: 19px;
+    --font-size-base: 20px;
     --line-height-base: 1.4;
 
     /* Headings */
@@ -111,7 +112,7 @@
     --margin-bottom-padding-top: 8px;
     --margin-bottom-padding-bottom: 12px;
     --margin-bottom-padding-horizontal: 16px;
-    --margin-breakin-threshold: 100;  /* px — below this width, margin items break into body */
+    --margin-breakin-threshold: 150;  /* px — below this width, margin items break into body */
 
     /* ============================================
        Card Dimensions
@@ -159,6 +160,7 @@
     --color-shadow: rgba(0, 0, 0, 0.4);     /* Shadow color */
     --color-border: #333333;                /* Border color */
     --color-selection: rgba(255, 255, 255, 0.15); /* Text selection highlight */
+    --color-error: #e85d75;                /* Lighter red for dark backgrounds */
 
     /* Code background */
     --code-background: #252525;

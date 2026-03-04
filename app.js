@@ -1,8 +1,9 @@
 import { Card } from './Card.js';
 import { MarkdownParser } from './MarkdownParser.js';
 import { CardCrypto } from './Crypto.js';
-import { controlsManager, SettingsConfig, DEFAULT_MARGIN_PERCENT } from './Controls.js';
+import { controlsManager, SettingsConfig } from './Controls.js';
 import { vizManager } from './Visualizations.js';
+import { Z_INDEX_BASE, Z_INDEX_CARD_CAP, Z_INDEX_PREVIEW, CARD_DEFAULT_WIDTH, CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, DEFAULT_MARGIN_PERCENT, isMobile } from './constants.js';
 
 // Editor is loaded dynamically only on localhost
 
@@ -134,7 +135,7 @@ class PaperCanvas {
         this.pageCounter = 0;
 
         // Z-index counter - ensures new cards always appear on top
-        this.zIndexCounter = 1000;
+        this.zIndexCounter = Z_INDEX_BASE;
 
         // Comprehensive tag index - built from all files at startup
         this.globalTagIndex = {}; // Subtags (for specific tag pages)
@@ -181,6 +182,10 @@ class PaperCanvas {
         if (sessionStorage.getItem('paper-canvas-hard-refresh')) {
             sessionStorage.removeItem('paper-canvas-hard-refresh');
             localStorage.removeItem('paper-canvas-state');
+            // Also clear saved settings so they reset to defaults
+            Object.values(SettingsConfig).forEach(config => {
+                localStorage.removeItem(config.storage);
+            });
         }
 
         this.bindCanvasEvents();
@@ -407,8 +412,8 @@ class PaperCanvas {
 
         await this.loadCardFromFile('menu', {
             centered: true,
-            width: 320,
-            height: 320
+            width: CARD_TEMPLATE_WIDTH,
+            height: CARD_TEMPLATE_WIDTH
         });
     }
 
@@ -719,8 +724,8 @@ class PaperCanvas {
 
                 // Set up the preview card
                 previewCard.element.classList.add('card-preview');
-                previewCard.zIndex = 10000;
-                previewCard.element.style.zIndex = 10000;
+                previewCard.zIndex = Z_INDEX_PREVIEW;
+                previewCard.element.style.zIndex = Z_INDEX_PREVIEW;
                 this.previewCard = previewCard;
                 this.previewCardLink = cardLink;
                 this.pendingPreviewLink = null; // No longer pending, now active
@@ -1300,7 +1305,14 @@ class PaperCanvas {
             }
             // Apply global margin size if no custom margins were specified
             if (card.marginTB === null && card.marginLR === null && this.settings.marginSize !== undefined) {
-                card.updateMarginSize(this.settings.marginSize);
+                // Reader mode cards get a slightly larger margin
+                if (card.isReaderMode) {
+                    const marginMultiplier = isMobile() ? 1.4 : 1.1;
+                    const readerMargin = Math.min(45, this.settings.marginSize * marginMultiplier);
+                    card.updateMarginSize(readerMargin);
+                } else {
+                    card.updateMarginSize(this.settings.marginSize);
+                }
             }
         }
 
@@ -1324,8 +1336,8 @@ class PaperCanvas {
         const cardOptions = {
             x: options.x || this.defaultOffset.x,
             y: options.y || this.defaultOffset.y,
-            width: options.width || 320,
-            height: options.height || 400,
+            width: options.width || CARD_TEMPLATE_WIDTH,
+            height: options.height || CARD_TEMPLATE_HEIGHT,
             rotation: options.rotation || 0,
             pageNumber: pageNumber,
             content: options.content || '',
@@ -2485,7 +2497,7 @@ ${renderColumn(rightColumn)}
         this.createCard({
             x: spawnX,
             y: spawnY,
-            width: 280,
+            width: CARD_DEFAULT_WIDTH,
             height: 320,
             content: rawHtml
         });
@@ -2831,12 +2843,20 @@ ${renderColumn(rightColumn)}
 
     /**
      * Update all card margins to match the global margin size setting
-     * @param {number} marginPercent - Margin size as percentage (0-25)
+     * @param {number} marginPercent - Margin size as percentage (0-45)
      */
     updateAllCardMargins(marginPercent) {
+        // In reader mode, apply the same multiplier used when creating the card
+        const marginMultiplier = isMobile() ? 1.4 : 1.1;
+        const readerModeMargin = Math.min(45, marginPercent * marginMultiplier);
+
         this.cards.forEach(card => {
             if (card.updateMarginSize) {
-                card.updateMarginSize(marginPercent);
+                // Reader mode cards use a multiplied margin
+                const effective = card.element.classList.contains('card-reader-mode')
+                    ? readerModeMargin
+                    : marginPercent;
+                card.updateMarginSize(effective);
             }
         });
     }
@@ -2877,8 +2897,8 @@ ${renderColumn(rightColumn)}
 
     updateConnectionsLayer() {
         if (this.connectionsSvg) {
-            // z-index 0 = below cards, z-index 9999 = above cards
-            this.connectionsSvg.style.zIndex = this.settings.connectionsAbove ? '9999' : '0';
+            // z-index 0 = below cards, Z_INDEX_CARD_CAP = above cards
+            this.connectionsSvg.style.zIndex = this.settings.connectionsAbove ? String(Z_INDEX_CARD_CAP) : '0';
         }
     }
 
@@ -3939,11 +3959,6 @@ ${renderColumn(rightColumn)}
 
         const margin = this.getReaderModeMargin();
 
-        // Use larger card margins in reader mode on mobile, slightly larger on desktop
-        const isMobile = window.innerWidth < 768;
-        const marginMultiplier = isMobile ? 1.4 : 1.1;
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || DEFAULT_MARGIN_PERCENT) * marginMultiplier);
-
         const card = this.addCard({
             x: margin,
             y: margin,
@@ -3954,8 +3969,6 @@ ${renderColumn(rightColumn)}
             content: parsed.content,
             margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
             sourceFile: contentData.sourceFile,
-            marginTB: readerModeCardMargin,
-            marginLR: readerModeCardMargin,
             progressBar: parsed.metadata.progressBar === 'true',
             wordCount: parsed.metadata.wordCount === 'true',
             readTime: parsed.metadata.readTime === 'true',
@@ -3994,11 +4007,6 @@ ${renderColumn(rightColumn)}
     createLockedCardReaderMode(cardName, contentData) {
         const margin = this.getReaderModeMargin();
 
-        // Use larger card margins in reader mode on mobile, slightly larger on desktop
-        const isMobile = window.innerWidth < 768;
-        const marginMultiplier = isMobile ? 1.4 : 1.1;
-        const readerModeCardMargin = Math.min(25, (this.settings.marginSize || DEFAULT_MARGIN_PERCENT) * marginMultiplier);
-
         // Create a simple locked card display
         const lockedContent = `
             <div class="locked-card-content">
@@ -4019,8 +4027,6 @@ ${renderColumn(rightColumn)}
             pageNumber: null,
             content: lockedContent,
             sourceFile: cardName,
-            marginTB: readerModeCardMargin,
-            marginLR: readerModeCardMargin,
             isReaderMode: true
         });
 

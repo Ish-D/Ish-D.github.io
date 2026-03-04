@@ -6,15 +6,11 @@
  * new controls and prepares for future interactive visualizations.
  */
 
+import { Z_INDEX_BASE, DEFAULT_MARGIN_PERCENT } from './constants.js';
+
 // ============================================
 // CONSTANTS
 // ============================================
-
-/**
- * Default margin size as a percentage of card dimensions.
- * Used as the default for the margin slider and fallback values.
- */
-export const DEFAULT_MARGIN_PERCENT = 22;
 
 // ============================================
 // SETTINGS CONFIGURATION
@@ -45,7 +41,7 @@ export const SettingsConfig = {
     },
 
     fontSize: {
-        default: 19,
+        default: 20,
         type: 'number',
         storage: 'settings-fontSize',
         apply(value, context) {
@@ -257,7 +253,7 @@ export const ActionsConfig = {
                 // Show error state briefly
                 [nameInput, messageInput].forEach(input => {
                     if (!input.value.trim()) {
-                        input.style.borderColor = '#c41e3a';
+                        input.style.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--color-error').trim();
                         setTimeout(() => input.style.borderColor = '', 2000);
                     }
                 });
@@ -573,6 +569,7 @@ export class ControlsManager {
             // Core settings API
             getSetting: (key) => paperCanvas.getSetting(key),
             setSetting: (key, value) => paperCanvas.setSetting(key, value),
+            settings: paperCanvas.settings,
 
             // Read-only data access
             cards: paperCanvas.cards,
@@ -607,7 +604,7 @@ export class ControlsManager {
                 paperCanvas.zoom = 1;
                 paperCanvas.rotation = 0;
                 paperCanvas.pageCounter = 0;
-                paperCanvas.zIndexCounter = 1000;
+                paperCanvas.zIndexCounter = Z_INDEX_BASE;
                 paperCanvas.updateCanvasTransform?.();
             }
         };

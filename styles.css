@@ -82,7 +82,7 @@ body {
 }
 
 .connection-line {
-    stroke: #c41e3a;
+    stroke: var(--color-error);
     stroke-width: 2;
     stroke-linecap: round;
     fill: none;
@@ -1765,10 +1765,6 @@ sup.jump-link {
    Corner Fold Effect
    ============================================ */
 
-:root {
-    --fold-size: 40px;
-}
-
 /* Base fold element */
 .card-corner-fold {
     position: absolute;
@@ -2186,7 +2182,7 @@ sup.jump-link {
 }
 
 .editor-filename.error {
-    border-color: #c41e3a;
+    border-color: var(--color-error);
     animation: shake 0.3s ease;
 }
 
@@ -2583,11 +2579,11 @@ sup.jump-link {
 }
 
 .password-error {
-    color: #c41e3a;
+    color: var(--color-error);
     font-size: 12px;
     margin-bottom: 12px;
     padding: 8px;
-    background: rgba(196, 30, 58, 0.1);
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
     border-radius: 4px;
 }
 
@@ -2670,7 +2666,7 @@ sup.jump-link {
 
 .locked-error {
     margin-top: 8px;
-    color: #c41e3a;
+    color: var(--color-error);
     font-size: 13px;
     min-height: 20px;
     opacity: 0;
@@ -2713,13 +2709,13 @@ sup.jump-link {
 }
 
 .editor-private-toggle input[type="checkbox"]:checked + .private-label {
-    color: #c41e3a;
+    color: var(--color-error);
     font-weight: bold;
 }
 
 .editor-private-toggle:has(input:checked) {
-    border-color: #c41e3a;
-    background: rgba(196, 30, 58, 0.1);
+    border-color: var(--color-error);
+    background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
 
 /* ============================================

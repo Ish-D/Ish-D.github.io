@@ -1,4 +1,5 @@
-import { DEFAULT_MARGIN_PERCENT } from './Controls.js';
+import { DEFAULT_MARGIN_PERCENT } from './constants.js';
+import { CARD_DEFAULT_WIDTH, CARD_DEFAULT_HEIGHT, Z_INDEX_CARD_CAP } from './constants.js';
 
 /**
  * Card class - Handles creation and interaction of paper cards
@@ -12,8 +13,8 @@ export class Card {
         this.id = options.id || `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         this.x = options.x || 100;
         this.y = options.y || 100;
-        this.width = options.width || 280;
-        this.height = options.height || 360;
+        this.width = options.width || CARD_DEFAULT_WIDTH;
+        this.height = options.height || CARD_DEFAULT_HEIGHT;
         this.rotation = options.rotation || 0;
         this.scale = options.scale || 1;
         this.pageNumber = options.pageNumber || '00';
@@ -128,7 +129,12 @@ export class Card {
         // Apply margin sizes (default or custom if specified)
         const marginLR = this.marginLR !== null ? this.marginLR : DEFAULT_MARGIN_PERCENT;
 
-        const lrSize = `${(marginLR / 100) * this.width}px`;
+        // Apply the same scaling formula used by updateMarginSize() so the
+        // initial render matches what the slider produces at the same value.
+        const minWidth = 500, fullWidth = 1500, minPercent = 1;
+        const t = Math.min(1, Math.max(0, (this.width - minWidth) / (fullWidth - minWidth)));
+        const effectiveLR = minPercent + (marginLR - minPercent) * t;
+        const lrSize = `${(effectiveLR / 100) * this.width}px`;
 
         container.style.gridTemplateColumns = `${lrSize} 1fr ${lrSize}`;
         container.style.gridTemplateRows = `1fr`;
@@ -1437,10 +1443,6 @@ export class Card {
         if (!content || this.inlineProxies.size === 0) return;
 
         const contentWidth = content.clientWidth;
-        const basePadding = parseInt(
-            getComputedStyle(document.documentElement)
-                .getPropertyValue('--card-padding-horizontal')
-        ) || 16;
 
         // Base proxy width as a fraction of content width
         const minW = 300, maxW = 1500;
@@ -1449,43 +1451,20 @@ export class Card {
         const pct = pctAtMin + (pctAtMax - pctAtMin) * t;
         const baseProxyWidth = Math.round(contentWidth * pct);
 
-        // Determine margin widths for each active inline side
-        const sides = { left: false, right: false };
-        for (const [, proxy] of this.inlineProxies) {
-            sides[proxy.dataset.marginSide] = true;
-        }
-
-        // Expand content padding on inline sides to allow full straddling
+        // Reset any previously expanded padding
         for (const side of ['left', 'right']) {
-            const marginEl = this.element.querySelector(`.card-margin-${side}`);
-            const marginWidth = marginEl ? marginEl.offsetWidth : 0;
             const paddingProp = side === 'left' ? 'paddingLeft' : 'paddingRight';
-
-            if (sides[side] && this.marginInlineMode[side]) {
-                // Expand padding to encompass the margin column width
-                content.style[paddingProp] = `${basePadding + marginWidth}px`;
-            } else {
-                content.style[paddingProp] = '';
-            }
+            content.style[paddingProp] = '';
         }
 
+        // The grid column has already been shrunk by updateGridForInlineMode(),
+        // so the content area is wider and the proxy just floats naturally in it.
         for (const [, proxy] of this.inlineProxies) {
             if (proxy.classList.contains('margin-inline-vertical')) continue;
 
-            const side = proxy.dataset.marginSide;
-            const marginEl = this.element.querySelector(`.card-margin-${side}`);
-            const marginWidth = marginEl ? marginEl.offsetWidth : 0;
-
-            // Proxy width = base + margin column width (it straddles both areas)
-            const totalWidth = baseProxyWidth + marginWidth;
-            proxy.style.width = `${totalWidth}px`;
-
-            // Pull into the expanded padding to visually overlap the margin column
-            if (side === 'left') {
-                proxy.style.marginLeft = `${-(basePadding + marginWidth)}px`;
-            } else {
-                proxy.style.marginRight = `${-(basePadding + marginWidth)}px`;
-            }
+            proxy.style.width = `${baseProxyWidth}px`;
+            proxy.style.marginLeft = '';
+            proxy.style.marginRight = '';
         }
     }
 
@@ -1811,8 +1790,10 @@ export class Card {
             const marginEl = this.element.querySelector(`.card-margin-${side}`);
             if (marginEl) {
                 const marginWidth = marginEl.offsetWidth || 100;
-                const innerInset = Math.round(marginWidth * 0.10); // toward content
-                const outerInset = Math.round(marginWidth * 0.25); // toward card edge
+                const innerInset = Math.round(marginWidth * 0.02); // toward content (close to page)
+                // Outer inset scales from 0% at 125px to 60% at 250px+
+                const outerPct = Math.max(0, Math.min(0.60, (marginWidth - 125) / (250 - 125) * 0.60));
+                const outerInset = Math.round(marginWidth * outerPct);
                 const container = marginEl.querySelector('.margin-items-container');
                 if (container) {
                     if (side === 'left') {
@@ -2152,7 +2133,7 @@ export class Card {
         });
 
         // Cap regular cards at 9999 to keep preview cards (10000+) always on top
-        this.zIndex = Math.min(maxZ + 1, 9999);
+        this.zIndex = Math.min(maxZ + 1, Z_INDEX_CARD_CAP);
         this.element.style.zIndex = this.zIndex;
     }
 
@@ -2660,7 +2641,7 @@ export class Card {
 
     /**
      * Get the current margin size as a percentage (average of all margins)
-     * @returns {number} Margin percentage (0-25 range)
+     * @returns {number} Margin percentage (0-45 range)
      */
     getMarginSizePercent() {
         const container = this.element.querySelector('.card-container');
@@ -2673,7 +2654,7 @@ export class Card {
             const leftSize = parseFloat(cols[0]) || 0;
             // Calculate percentage based on card width
             const percent = (leftSize / this.width) * 100;
-            return Math.round(Math.min(25, Math.max(0, percent)));
+            return Math.round(Math.min(45, Math.max(0, percent)));
         }
 
         return 10; // Default

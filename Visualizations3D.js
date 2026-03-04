@@ -71,6 +71,21 @@ export function loadThreeJS() {
 }
 
 // ============================================
+// VISUALIZATION CONSTANTS
+// ============================================
+
+const VIZ_DEFAULT_WIDTH = 400;
+const VIZ_DEFAULT_HEIGHT = 300;
+
+const VIZ_SIZE_PRESETS = {
+    tiny: { width: 80, height: 60 },
+    small: { width: 150, height: 120 },
+    medium: { width: 250, height: 200 },
+    large: { width: 350, height: 280 },
+    full: { width: VIZ_DEFAULT_WIDTH, height: VIZ_DEFAULT_HEIGHT }
+};
+
+// ============================================
 // WEBGL CONTEXT POOL
 // ============================================
 
@@ -401,32 +416,24 @@ export class Base3DViz {
         // If dimensions are 0 (common for inline elements not yet laid out),
         // try to get dimensions from size preset or explicit data attributes
         if (!this.width || !this.height) {
-            const sizePresets = {
-                tiny: { width: 80, height: 60 },
-                small: { width: 150, height: 120 },
-                medium: { width: 250, height: 200 },
-                large: { width: 350, height: 280 },
-                full: { width: 400, height: 300 }
-            };
-
             const sizePreset = this.container.dataset.vizSize;
             const explicitWidth = parseInt(this.container.dataset.vizWidth);
             const explicitHeight = parseInt(this.container.dataset.vizHeight);
 
             if (explicitWidth && !isNaN(explicitWidth)) {
                 this.width = explicitWidth;
-            } else if (sizePreset && sizePresets[sizePreset]) {
-                this.width = sizePresets[sizePreset].width;
+            } else if (sizePreset && VIZ_SIZE_PRESETS[sizePreset]) {
+                this.width = VIZ_SIZE_PRESETS[sizePreset].width;
             } else {
-                this.width = 400;
+                this.width = VIZ_DEFAULT_WIDTH;
             }
 
             if (explicitHeight && !isNaN(explicitHeight)) {
                 this.height = explicitHeight;
-            } else if (sizePreset && sizePresets[sizePreset]) {
-                this.height = sizePresets[sizePreset].height;
+            } else if (sizePreset && VIZ_SIZE_PRESETS[sizePreset]) {
+                this.height = VIZ_SIZE_PRESETS[sizePreset].height;
             } else {
-                this.height = 300;
+                this.height = VIZ_DEFAULT_HEIGHT;
             }
         }
 
@@ -505,20 +512,12 @@ export class Base3DViz {
 
         // Fallback to size presets or defaults for inline elements
         if (!newWidth || !newHeight) {
-            const sizePresets = {
-                tiny: { width: 80, height: 60 },
-                small: { width: 150, height: 120 },
-                medium: { width: 250, height: 200 },
-                large: { width: 350, height: 280 },
-                full: { width: 400, height: 300 }
-            };
-
             const sizePreset = this.container.dataset.vizSize;
             if (!newWidth) {
-                newWidth = (sizePreset && sizePresets[sizePreset]) ? sizePresets[sizePreset].width : 400;
+                newWidth = (sizePreset && VIZ_SIZE_PRESETS[sizePreset]) ? VIZ_SIZE_PRESETS[sizePreset].width : VIZ_DEFAULT_WIDTH;
             }
             if (!newHeight) {
-                newHeight = (sizePreset && sizePresets[sizePreset]) ? sizePresets[sizePreset].height : 300;
+                newHeight = (sizePreset && VIZ_SIZE_PRESETS[sizePreset]) ? VIZ_SIZE_PRESETS[sizePreset].height : VIZ_DEFAULT_HEIGHT;
             }
         }
 

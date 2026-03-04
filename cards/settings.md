@@ -16,7 +16,7 @@ height: 640
 
 [[slider(bind: lineHeight, min: 1.0, max: 1.6, step: 0.1, label: Line Height)]]
 
-[[slider(bind: marginSize, min: 0, max: 25, step: 1, label: Card Margins, suffix: %)]]
+[[slider(bind: marginSize, min: 0, max: 45, step: 1, label: Card Margins, suffix: %)]]
 
 ## Card Display
 

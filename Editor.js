@@ -5,6 +5,8 @@
  * Edits cards directly on the canvas in real-time.
  */
 
+import { CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, Z_INDEX_CARD_CAP } from './constants.js';
+
 /**
  * FileSystemManager - Handles file system access and persistence
  */
@@ -987,8 +989,8 @@ export class EditorCard {
         }
 
         const template = `---
-width: 320
-height: 400
+width: ${CARD_TEMPLATE_WIDTH}
+height: ${CARD_TEMPLATE_HEIGHT}
 tags:
 ---
 
@@ -1009,8 +1011,8 @@ Your content here...
         const newCard = await this.canvas.createCard({
             x: editorRight,
             y: editorY,
-            width: metadata.width || 320,
-            height: metadata.height || 400,
+            width: metadata.width || CARD_TEMPLATE_WIDTH,
+            height: metadata.height || CARD_TEMPLATE_HEIGHT,
             content: parsed.content,
             margins: parsed.margins,
             sourceFile: null, // No file yet
@@ -1356,7 +1358,7 @@ Your content here...
         });
 
         // Cap at 9999 to keep preview cards (10000+) always on top
-        this.zIndex = Math.min(maxZ + 1, 9999);
+        this.zIndex = Math.min(maxZ + 1, Z_INDEX_CARD_CAP);
         this.element.style.zIndex = this.zIndex;
     }
 
