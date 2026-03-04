@@ -3884,22 +3884,28 @@ ${renderColumn(rightColumn)}
     }
 
     /**
-     * Exit reader mode, restoring normal canvas behavior
+     * Clean up reader mode state without navigating.
+     * Used by hash/popstate handlers that will navigate separately.
      */
-    exitReaderMode() {
+    cleanupReaderMode() {
         this.isReaderMode = false;
         this.unlockCanvas();
         this.canvas.classList.remove('reader-mode');
         document.body.classList.remove('reader-mode-active');
-
-        const currentCard = this.readerModeCurrentCard?.sourceFile;
         this.clearAllCards();
         this.readerModeCurrentCard = null;
 
-        // Update settings to reflect we're not in reader mode
         this.settings.readerMode = false;
         localStorage.setItem('settings-readerMode', 'false');
         this.syncAllSettingsCards();
+    }
+
+    /**
+     * Exit reader mode, restoring normal canvas behavior
+     */
+    exitReaderMode() {
+        const currentCard = this.readerModeCurrentCard?.sourceFile;
+        this.cleanupReaderMode();
 
         if (currentCard) {
             window.history.replaceState(null, '', `#/${currentCard}`);
@@ -4095,15 +4101,17 @@ ${renderColumn(rightColumn)}
     handlePopState(event) {
         const state = event.state;
 
+        // If leaving reader mode via back/forward, clean up without forced navigation
+        if (this.isReaderMode && !state?.readerMode) {
+            this.cleanupReaderMode();
+        }
+
         if (state?.readerMode) {
             // Navigate to the specified card in reader mode
             this.enterReaderMode(state.cardName, false);
             if (state.headingId) {
                 this.scrollToHeadingInReaderMode(state.headingId);
             }
-        } else if (this.isReaderMode) {
-            // Exiting reader mode via back button
-            this.exitReaderMode();
         } else {
             // Normal mode navigation
             const urlInfo = this.getCardNameFromURL();
@@ -4130,12 +4138,15 @@ ${renderColumn(rightColumn)}
     handleHashChange() {
         const urlInfo = this.getCardNameFromURL();
 
+        // If leaving reader mode, clean up without navigating back to old card
+        if (this.isReaderMode && !urlInfo?.readerMode) {
+            this.cleanupReaderMode();
+        }
+
         if (urlInfo?.readerMode) {
             if (!this.isReaderMode || this.readerModeCurrentCard?.sourceFile !== urlInfo.cardName) {
                 this.enterReaderMode(urlInfo.cardName, false);
             }
-        } else if (this.isReaderMode) {
-            this.exitReaderMode();
         } else if (urlInfo) {
             this.clearAllCards();
             this.loadCardFromFile(urlInfo.cardName, { fillViewport: true }).then(card => {
