@@ -2033,14 +2033,15 @@ sup.jump-link {
    LaTeX Math Styling
    ============================================ */
 
+/* Override KaTeX default 1.21em so math matches surrounding text */
+.katex {
+    font-size: 1em;
+}
+
 /* Display math containers */
 .katex-display-container {
     margin: 16px 0;
     text-align: center;
-}
-
-.katex-display-container .katex {
-    font-size: 1.1em;
 }
 
 .katex-math {
