@@ -229,6 +229,9 @@ class PaperCanvas {
         // Bind browser history navigation
         window.addEventListener('popstate', (e) => this.handlePopState(e));
 
+        // Bind hash change for direct URL edits (address bar changes)
+        window.addEventListener('hashchange', () => this.handleHashChange());
+
         // Bind swipe gestures for reader mode
         this.bindReaderModeSwipes();
 
@@ -3863,6 +3866,11 @@ ${renderColumn(rightColumn)}
         this.canvas.classList.add('reader-mode');
         document.body.classList.add('reader-mode-active');
 
+        // Sync settings to reflect reader mode is active
+        this.settings.readerMode = true;
+        localStorage.setItem('settings-readerMode', 'true');
+        this.syncAllSettingsCards();
+
         const card = await this.loadCardInReaderMode(cardName);
         if (card) {
             this.readerModeCurrentCard = card;
@@ -4112,6 +4120,32 @@ ${renderColumn(rightColumn)}
                 this.clearAllCards();
                 this.loadMenuCard();
             }
+        }
+    }
+
+    /**
+     * Handle hash changes from direct URL edits in the address bar.
+     * Unlike popstate, hashchange fires when the user types a new hash URL.
+     */
+    handleHashChange() {
+        const urlInfo = this.getCardNameFromURL();
+
+        if (urlInfo?.readerMode) {
+            if (!this.isReaderMode || this.readerModeCurrentCard?.sourceFile !== urlInfo.cardName) {
+                this.enterReaderMode(urlInfo.cardName, false);
+            }
+        } else if (this.isReaderMode) {
+            this.exitReaderMode();
+        } else if (urlInfo) {
+            this.clearAllCards();
+            this.loadCardFromFile(urlInfo.cardName, { fillViewport: true }).then(card => {
+                if (card && urlInfo.headingId) {
+                    this.scrollToHeadingInCard(card, urlInfo.headingId);
+                }
+            });
+        } else {
+            this.clearAllCards();
+            this.loadMenuCard();
         }
     }
 
