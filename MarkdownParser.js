@@ -1303,6 +1303,12 @@ export class MarkdownParser {
         const onValue = params.named.on || 'true';
         const offValue = params.named.off || 'false';
         const label = params.named.label || '';
+        const inline = params.named.inline === 'true';
+
+        if (inline) {
+            const labelHtml = label ? `<span class="settings-label">${label}</span>` : '';
+            return `<span class="settings-row-inline">${labelHtml}<span class="settings-toggle" data-bind="${bind}" data-on="${onValue}" data-off="${offValue}"></span></span>`;
+        }
 
         return `<div class="settings-row">
             <span class="settings-label">${label}</span>
@@ -1321,6 +1327,12 @@ export class MarkdownParser {
         const step = params.named.step || '1';
         const label = params.named.label || '';
         const suffix = params.named.suffix || '';
+        const inline = params.named.inline === 'true';
+
+        if (inline) {
+            const labelHtml = label ? `<span class="settings-label">${label}</span>` : '';
+            return `<span class="settings-row-inline">${labelHtml}<input type="range" class="settings-slider" data-bind="${bind}" min="${min}" max="${max}" step="${step}" data-suffix="${suffix}"><span class="settings-value" data-value-for="${bind}"></span></span>`;
+        }
 
         return `<div class="settings-row">
             <span class="settings-label">${label}</span>
@@ -1338,6 +1350,7 @@ export class MarkdownParser {
         const action = params.named.action || '';
         const label = params.named.label || 'Button';
         const style = params.named.style || 'bordered';
+        const inline = params.named.inline === 'true';
 
         let classes = 'btn settings-btn-action';
 
@@ -1346,6 +1359,10 @@ export class MarkdownParser {
         } else {
             // Default to bordered
             classes += ' btn-bordered';
+        }
+
+        if (inline) {
+            classes += ' btn-inline';
         }
 
         return `<button class="${classes}" data-action="${action}">${label}</button>`;
@@ -1359,7 +1376,9 @@ export class MarkdownParser {
         const name = params.named.name || 'field';
         const placeholder = params.named.placeholder || '';
         const type = params.named.type || 'text';
-        return `<input type="${type}" name="${name}" class="form-input" placeholder="${placeholder}">`;
+        const inline = params.named.inline === 'true';
+        const inlineClass = inline ? ' form-input-inline' : '';
+        return `<input type="${type}" name="${name}" class="form-input${inlineClass}" placeholder="${placeholder}">`;
     }
 
     /**

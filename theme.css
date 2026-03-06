@@ -311,3 +311,28 @@
     min-width: 36px;
     text-align: right;
 }
+
+/* Inline interactive elements (for use within text flow) */
+.settings-row-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    vertical-align: middle;
+}
+
+.settings-row-inline .settings-label {
+    font-size: inherit;
+}
+
+.btn-inline {
+    display: inline;
+    vertical-align: baseline;
+}
+
+.form-input-inline {
+    display: inline;
+    width: auto;
+    margin-bottom: 0;
+    padding: 2px 6px;
+    vertical-align: baseline;
+}

@@ -1052,6 +1052,7 @@ sup.jump-link {
     padding-left: var(--blockquote-padding);
     margin: var(--blockquote-margin) 0;
     font-style: italic;
+    overflow: hidden;
 }
 
 .card-content hr {
@@ -1087,6 +1088,7 @@ sup.jump-link {
     background: var(--color-card-background);
     font-style: italic;
     position: relative;
+    overflow: hidden;
 }
 
 .quote-block .quote-content {
