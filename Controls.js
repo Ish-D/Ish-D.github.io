@@ -147,13 +147,47 @@ export const SettingsConfig = {
         storage: 'settings-readerMode',
         onSet(value, context) {
             if (value) {
-                // Get current card to enter reader mode with
-                const currentCard = context.cards?.size > 0
-                    ? Array.from(context.cards.values())[0]?.sourceFile
-                    : 'menu';
-                context.enterReaderMode?.(currentCard || 'menu');
+                // Collect all canvas cards with their positions for split mode transition
+                const cardInfos = [];
+                if (context.cards?.size > 0) {
+                    context.cards.forEach(card => {
+                        const name = card.loadName || card.sourceFile;
+                        if (name) {
+                            const rect = card.element.getBoundingClientRect();
+                            cardInfos.push({
+                                cardName: name,
+                                x: rect.left,
+                                y: rect.top,
+                                width: rect.width,
+                                height: rect.height
+                            });
+                        }
+                    });
+                }
+                // Also collect editor cards
+                if (context.editorCards?.size > 0) {
+                    context.editorCards.forEach(editor => {
+                        const rect = editor.element.getBoundingClientRect();
+                        cardInfos.push({
+                            cardName: '__editor__',
+                            isEditor: true,
+                            filename: editor.filename || '',
+                            x: rect.left,
+                            y: rect.top,
+                            width: rect.width,
+                            height: rect.height
+                        });
+                    });
+                }
+                if (cardInfos.length > 0) {
+                    const firstCard = cardInfos.find(c => !c.isEditor);
+                    const initialName = firstCard ? firstCard.cardName : 'menu';
+                    context.enterSplitMode?.(initialName, true, cardInfos);
+                } else {
+                    context.enterSplitMode?.('menu');
+                }
             } else {
-                context.exitReaderMode?.();
+                context.exitSplitMode?.();
             }
         }
     }
@@ -573,6 +607,7 @@ export class ControlsManager {
 
             // Read-only data access
             cards: paperCanvas.cards,
+            editorCards: paperCanvas.editorCards,
             canvas: paperCanvas.canvas,
             connections: paperCanvas.connections,
             connectionsSvg: paperCanvas.connectionsSvg,
@@ -592,8 +627,8 @@ export class ControlsManager {
             updateConnectionsLayer: () => paperCanvas.updateConnectionsLayer?.(),
             updateAllCardMargins: (v) => paperCanvas.updateAllCardMargins?.(v),
             clearPreviewCard: () => paperCanvas.clearPreviewCard?.(),
-            enterReaderMode: (card) => paperCanvas.enterReaderMode?.(card),
-            exitReaderMode: () => paperCanvas.exitReaderMode?.(),
+            enterSplitMode: (card, push, cardInfos) => paperCanvas.enterSplitMode?.(card, push, cardInfos),
+            exitSplitMode: () => paperCanvas.exitSplitMode?.(),
             removeConnectionsForCard: (id) => paperCanvas.removeConnectionsForCard?.(id),
             syncAllSettingsCards: () => paperCanvas.syncAllSettingsCards?.(),
             loadMenuCard: () => paperCanvas.loadMenuCard?.(),

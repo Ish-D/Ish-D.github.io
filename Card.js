@@ -64,6 +64,7 @@ export class Card {
         // Source file tracking (for live-reload)
         this.sourceFile = options.sourceFile || null;
         this.isDynamic = options.isDynamic || false;
+        this.loadName = options.loadName || options.sourceFile || null;
 
         // Reader mode flag
         this.isReaderMode = options.isReaderMode || false;
