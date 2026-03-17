@@ -3023,6 +3023,223 @@ body.reader-mode-active .edit-btn:hover {
 }
 
 /* ============================================
+   Split Screen Mode
+   ============================================ */
+
+body.split-mode-active {
+    overflow: hidden;
+}
+
+#split-mode-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 100;
+    background: var(--color-background);
+    display: flex;
+}
+
+/* Flex containers for split layout */
+.split-container {
+    display: flex;
+    width: 100%;
+    height: 100%;
+}
+
+.split-vertical {
+    flex-direction: row;
+}
+
+.split-horizontal {
+    flex-direction: column;
+}
+
+/* Individual panes */
+.split-pane {
+    position: relative;
+    overflow: hidden;
+    flex: 1 1 50%;
+    min-width: 120px;
+    min-height: 100px;
+    border: 1px solid var(--color-border);
+}
+
+/* Cards inside split panes - override reader mode fixed positioning */
+.card.card-split-mode {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+    border-radius: 0;
+    z-index: 1;
+}
+
+/* Editor cards in split panes */
+.editor-card.card-split-mode {
+    min-width: 0 !important;
+    min-height: 0 !important;
+}
+
+/* Pane controls container (drag handle + close button) */
+.split-pane-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 200;
+    display: flex;
+    gap: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.split-pane:hover > .split-pane-controls {
+    opacity: 1;
+}
+
+.split-pane-close,
+.split-pane-drag {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    font-size: 18px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.split-pane-close:hover,
+.split-pane-drag:hover {
+    background: var(--color-background);
+}
+
+.split-pane-drag {
+    cursor: grab;
+    font-size: 14px;
+}
+
+.split-pane-drag:active {
+    cursor: grabbing;
+}
+
+/* Visual feedback during drag */
+.split-pane-dragging {
+    opacity: 0.5;
+}
+
+.split-pane-drop-target {
+    outline: 2px solid var(--color-link);
+    outline-offset: -2px;
+}
+.split-divider {
+    flex-shrink: 0;
+    background: var(--color-border);
+    z-index: 10;
+    position: relative;
+    transition: background 0.15s ease;
+}
+
+.split-divider-vertical {
+    width: 1px;
+    cursor: col-resize;
+}
+
+.split-divider-horizontal {
+    height: 1px;
+    cursor: row-resize;
+}
+
+/* Wider invisible hit area for easy dragging */
+.split-divider::after {
+    content: '';
+    position: absolute;
+}
+
+.split-divider-vertical::after {
+    top: 0;
+    bottom: 0;
+    left: -4px;
+    right: -4px;
+}
+
+.split-divider-horizontal::after {
+    left: 0;
+    right: 0;
+    top: -4px;
+    bottom: -4px;
+}
+
+.split-divider:hover,
+.split-divider.active {
+    background: var(--color-link);
+}
+
+/* Hide default card chrome in split mode */
+.card.card-split-mode .card-top-handle {
+    display: none !important;
+}
+
+/* Empty pane placeholder */
+.split-pane-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--color-text-secondary);
+    font-family: var(--font-serif);
+    font-style: italic;
+    padding: 32px;
+}
+
+/* Settings/edit buttons in split mode */
+body.split-mode-active .settings-btn,
+body.split-mode-active .edit-btn {
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
+    z-index: 10001;
+}
+
+body.split-mode-active .settings-btn:hover,
+body.split-mode-active .edit-btn:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Split mode link styling */
+.card.card-split-mode .card-link {
+    color: var(--color-link);
+    border-bottom: 1px solid var(--color-border);
+    padding-bottom: 1px;
+    transition: border-color 0.2s ease;
+}
+
+.card.card-split-mode .card-link:hover {
+    border-bottom-color: var(--color-link);
+}
+
+/* Responsive: on very narrow screens, force column direction */
+@media (max-width: 600px) {
+    .split-vertical {
+        flex-direction: column;
+    }
+    .split-divider-vertical {
+        width: 100%;
+        height: 6px;
+        cursor: row-resize;
+    }
+}
+
+/* ============================================
    Settings Overlay (Reader Mode)
    ============================================ */
 

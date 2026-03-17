@@ -3,7 +3,7 @@ import { MarkdownParser } from './MarkdownParser.js';
 import { CardCrypto } from './Crypto.js';
 import { controlsManager, SettingsConfig } from './Controls.js';
 import { vizManager } from './Visualizations.js';
-import { Z_INDEX_BASE, Z_INDEX_CARD_CAP, Z_INDEX_PREVIEW, CARD_DEFAULT_WIDTH, CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, DEFAULT_MARGIN_PERCENT, isMobile } from './constants.js';
+import { Z_INDEX_BASE, Z_INDEX_CARD_CAP, Z_INDEX_PREVIEW, CARD_DEFAULT_WIDTH, CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, DEFAULT_MARGIN_PERCENT, SPLIT_DIVIDER_SIZE, SPLIT_MIN_PANE_RATIO, isMobile } from './constants.js';
 
 // Editor is loaded dynamically only on localhost
 
@@ -162,6 +162,16 @@ class PaperCanvas {
         // Default card placement
         this.defaultOffset = { x: 100, y: 100 };
 
+        // Split mode state
+        this.isSplitMode = false;
+        this.splitRoot = null;
+        this.splitContainer = null;
+        this.splitModeInitialCard = null;
+        this.splitClickHandler = null;
+        this.splitDeleteHandler = null;
+        this.splitTagClickHandler = null;
+        this.splitEscapeHandler = null;
+
         // Live-reload file watcher
         this.fileWatcher = new FileWatcherClient(this);
 
@@ -252,6 +262,9 @@ class PaperCanvas {
                 if (urlInfo.headingId) {
                     this.scrollToHeadingInReaderMode(urlInfo.headingId);
                 }
+            } else if (urlInfo.splitMode) {
+                // Enter split mode directly from URL
+                await this.enterSplitMode(urlInfo.cardName, false);
             } else {
                 // Normal mode with specific card
                 // Reset canvas view
@@ -307,10 +320,16 @@ class PaperCanvas {
             if (pathCard.startsWith('r/')) {
                 const rest = pathCard.slice(2);
                 const [cardName, headingId] = this.parseCardAndHeading(rest);
-                return { cardName, readerMode: true, headingId };
+                return { cardName, readerMode: true, splitMode: false, headingId };
+            }
+            // Check for split mode prefix in pathname
+            if (pathCard.startsWith('s/')) {
+                const rest = pathCard.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: false, splitMode: true, headingId };
             }
             const [cardName, headingId] = this.parseCardAndHeading(pathCard);
-            return { cardName, readerMode: false, headingId };
+            return { cardName, readerMode: false, splitMode: false, headingId };
         }
 
         // Check hash (works with any static server: /#journal or #journal)
@@ -321,10 +340,16 @@ class PaperCanvas {
             if (hashCard.startsWith('r/')) {
                 const rest = hashCard.slice(2);
                 const [cardName, headingId] = this.parseCardAndHeading(rest);
-                return { cardName, readerMode: true, headingId };
+                return { cardName, readerMode: true, splitMode: false, headingId };
+            }
+            // Check for split mode prefix in hash
+            if (hashCard.startsWith('s/')) {
+                const rest = hashCard.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: false, splitMode: true, headingId };
             }
             const [cardName, headingId] = this.parseCardAndHeading(hashCard);
-            return { cardName, readerMode: false, headingId };
+            return { cardName, readerMode: false, splitMode: false, headingId };
         }
 
         // Check query parameter (?page=journal)
@@ -335,10 +360,15 @@ class PaperCanvas {
             if (decoded.startsWith('r/')) {
                 const rest = decoded.slice(2);
                 const [cardName, headingId] = this.parseCardAndHeading(rest);
-                return { cardName, readerMode: true, headingId };
+                return { cardName, readerMode: true, splitMode: false, headingId };
+            }
+            if (decoded.startsWith('s/')) {
+                const rest = decoded.slice(2);
+                const [cardName, headingId] = this.parseCardAndHeading(rest);
+                return { cardName, readerMode: false, splitMode: true, headingId };
             }
             const [cardName, headingId] = this.parseCardAndHeading(decoded);
-            return { cardName, readerMode: false, headingId };
+            return { cardName, readerMode: false, splitMode: false, headingId };
         }
 
         return null;
@@ -564,6 +594,17 @@ class PaperCanvas {
                 return;
             }
 
+            // Split mode: close the pane containing this card
+            if (this.isSplitMode) {
+                e.preventDefault();
+                const pane = card?.element?.closest('.split-pane');
+                if (pane) {
+                    const leafNode = this.findSplitLeafByElement(pane);
+                    if (leafNode) this.closeSplitPane(leafNode);
+                }
+                return;
+            }
+
             // Cleanup file watcher if no other cards display this file
             if (card && card.sourceFile && !card.isDynamic) {
                 const sourceFile = card.sourceFile;
@@ -679,6 +720,8 @@ class PaperCanvas {
 
         // Show preview for a specific link after delay
         this.showPreviewAfterDelay = async (cardLink, mouseEvent) => {
+            // Disable previews in reader mode and split mode
+            if (this.isReaderMode || this.isSplitMode) return;
             const cardName = cardLink.dataset.card;
             const timings = this.getPreviewTimings();
 
@@ -2590,6 +2633,13 @@ ${renderColumn(rightColumn)}
     }
 
     async openSettingsCard() {
+        // In split mode, open settings as a new pane
+        if (this.isSplitMode) {
+            const leaf = this.findLastSplitLeaf(this.splitRoot);
+            if (leaf) await this.splitPane(leaf, 'settings');
+            return;
+        }
+
         // In reader mode, open settings as a centered overlay
         if (this.isReaderMode) {
             await this.openSettingsOverlay();
@@ -2782,6 +2832,21 @@ ${renderColumn(rightColumn)}
      * @param {string} filename - Optional filename to open
      */
     async openEditorCard(filename = null) {
+        // In split mode, embed the editor in a new pane
+        if (this.isSplitMode) {
+            if (!this.isLocal || !this.EditorCard) {
+                console.warn('Editor is only available on localhost');
+                return null;
+            }
+            if (!this.fsManager || !this.fsManager.isSupported()) {
+                alert('Editor requires File System Access API. Please use Chrome or Edge.');
+                return null;
+            }
+            const leaf = this.findLastSplitLeaf(this.splitRoot);
+            if (leaf) await this.splitPaneWithEditor(leaf, filename);
+            return null;
+        }
+
         // Editor only available locally
         if (!this.isLocal || !this.EditorCard) {
             console.warn('Editor is only available on localhost');
@@ -3050,8 +3115,8 @@ ${renderColumn(rightColumn)}
      * Schedule a debounced save of canvas state
      */
     scheduleSave() {
-        // Don't save during restoration
-        if (this.isRestoring) return;
+        // Don't save during restoration or split mode
+        if (this.isRestoring || this.isSplitMode) return;
 
         if (this.saveDebounceTimer) {
             clearTimeout(this.saveDebounceTimer);
@@ -4095,6 +4160,845 @@ ${renderColumn(rightColumn)}
         }
     }
 
+    // ========================================
+    // Split Screen Mode
+    // ========================================
+
+    /**
+     * Enter split screen mode with a specific card
+     */
+    async enterSplitMode(cardName, pushHistory = true) {
+        // Default to menu if no card specified (e.g. #/s/ with no name)
+        if (!cardName) cardName = 'menu';
+
+        this.isSplitMode = true;
+        this.splitModeInitialCard = cardName;
+        this.lockCanvas();
+        this.clearAllCards();
+        this.canvas.classList.add('split-mode');
+        document.body.classList.add('split-mode-active');
+
+        // Create fixed overlay container
+        this.splitContainer = document.createElement('div');
+        this.splitContainer.id = 'split-mode-container';
+        document.body.appendChild(this.splitContainer);
+
+        // Create initial leaf with the first card
+        this.splitRoot = await this.createSplitLeaf(cardName);
+        this.splitContainer.appendChild(this.splitRoot.element);
+
+        // Bind click handler on split container for link interception
+        this.splitClickHandler = async (e) => {
+            const cardLink = e.target.closest('.card-link');
+            if (!cardLink) return;
+
+            const targetCard = cardLink.dataset.card;
+            const embedUrl = cardLink.dataset.url;
+
+            if (targetCard && !embedUrl) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Register dynamic content providers for tag pages
+                if (targetCard.startsWith('tag-')) {
+                    const tagName = targetCard.slice(4);
+                    this.registerTagPage(tagName, null);
+                }
+
+                const pane = cardLink.closest('.split-pane');
+                if (pane) {
+                    const leafNode = this.findSplitLeafByElement(pane);
+                    if (leafNode) {
+                        await this.splitPane(leafNode, targetCard);
+                    }
+                }
+            }
+        };
+        this.splitContainer.addEventListener('click', this.splitClickHandler);
+
+        // Handle tag-click events from split pane cards
+        this.splitTagClickHandler = async (e) => {
+            const { tagName, card } = e.detail;
+            const tagCardName = this.registerTagPage(tagName, card);
+            const pane = card?.element?.closest('.split-pane');
+            if (pane) {
+                const leafNode = this.findSplitLeafByElement(pane);
+                if (leafNode) {
+                    await this.splitPane(leafNode, tagCardName);
+                }
+            }
+        };
+        this.splitContainer.addEventListener('tag-click', this.splitTagClickHandler);
+
+        // Handle card-delete events from split pane cards (they bubble outside canvas)
+        this.splitDeleteHandler = (e) => {
+            const cardId = e.detail.cardId;
+            const card = this.cards.get(cardId);
+            if (card) {
+                e.preventDefault();
+                const pane = card.element.closest('.split-pane');
+                if (pane) {
+                    const leafNode = this.findSplitLeafByElement(pane);
+                    if (leafNode) this.closeSplitPane(leafNode);
+                }
+            }
+        };
+        this.splitContainer.addEventListener('card-delete', this.splitDeleteHandler);
+
+        // Handle jump link clicks (intra-card anchor navigation)
+        this.splitJumpHandler = (e) => {
+            const jumpLink = e.target.closest('.jump-link');
+            if (jumpLink) {
+                e.preventDefault();
+                const targetId = jumpLink.dataset.jumpTarget;
+                const sourceCard = jumpLink.closest('.card');
+                if (sourceCard && targetId) {
+                    this.jumpToAnchor(sourceCard, targetId);
+                }
+            }
+        };
+        this.splitContainer.addEventListener('click', this.splitJumpHandler);
+
+        // Handle TOC link clicks (scroll to heading within the card)
+        this.splitTocHandler = (e) => {
+            const tocLink = e.target.closest('[data-toc-target]');
+            if (tocLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const targetId = tocLink.dataset.tocTarget;
+                const cardElement = tocLink.closest('.card');
+                if (cardElement && targetId) {
+                    const contentContainer = cardElement.querySelector('.card-content');
+                    const targetElement = cardElement.querySelector(`#${CSS.escape(targetId)}`);
+                    if (contentContainer && targetElement) {
+                        const containerRect = contentContainer.getBoundingClientRect();
+                        const targetRect = targetElement.getBoundingClientRect();
+                        const scrollOffset = targetRect.top - containerRect.top + contentContainer.scrollTop;
+                        contentContainer.scrollTo({
+                            top: scrollOffset - 10,
+                            behavior: 'smooth'
+                        });
+                    }
+                }
+            }
+        };
+        this.splitContainer.addEventListener('click', this.splitTocHandler);
+
+        // Handle heading link clicks (copy URL to clipboard)
+        this.splitHeadingLinkHandler = (e) => {
+            const headingLink = e.target.closest('.heading-link');
+            if (headingLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const headingId = headingLink.dataset.headingId;
+                const cardElement = headingLink.closest('.card');
+                if (cardElement && headingId) {
+                    const cardId = cardElement.dataset.cardId;
+                    const card = this.cards.get(cardId);
+                    if (card && card.sourceFile) {
+                        const url = `${window.location.origin}${window.location.pathname}#/s/${card.sourceFile}/${headingId}`;
+                        navigator.clipboard.writeText(url).catch(err => {
+                            console.error('Failed to copy link:', err);
+                        });
+                    }
+                }
+            }
+        };
+        this.splitContainer.addEventListener('click', this.splitHeadingLinkHandler);
+
+        // Escape key to exit
+        this.splitEscapeHandler = (e) => {
+            if (e.key === 'Escape' && this.isSplitMode) {
+                this.exitSplitMode();
+            }
+        };
+        document.addEventListener('keydown', this.splitEscapeHandler);
+
+        // URL
+        const url = `#/s/${cardName}`;
+        if (pushHistory) {
+            window.history.pushState({ splitMode: true, cardName }, '', url);
+        } else {
+            window.history.replaceState({ splitMode: true, cardName }, '', url);
+        }
+    }
+
+    /**
+     * Clean up split mode state without navigating
+     */
+    cleanupSplitMode() {
+        this.isSplitMode = false;
+        this.unlockCanvas();
+        this.canvas.classList.remove('split-mode');
+        document.body.classList.remove('split-mode-active');
+
+        // Remove event listeners
+        if (this.splitContainer && this.splitClickHandler) {
+            this.splitContainer.removeEventListener('click', this.splitClickHandler);
+            this.splitClickHandler = null;
+        }
+        if (this.splitContainer && this.splitTagClickHandler) {
+            this.splitContainer.removeEventListener('tag-click', this.splitTagClickHandler);
+            this.splitTagClickHandler = null;
+        }
+        if (this.splitContainer && this.splitDeleteHandler) {
+            this.splitContainer.removeEventListener('card-delete', this.splitDeleteHandler);
+            this.splitDeleteHandler = null;
+        }
+        if (this.splitContainer && this.splitJumpHandler) {
+            this.splitContainer.removeEventListener('click', this.splitJumpHandler);
+            this.splitJumpHandler = null;
+        }
+        if (this.splitContainer && this.splitTocHandler) {
+            this.splitContainer.removeEventListener('click', this.splitTocHandler);
+            this.splitTocHandler = null;
+        }
+        if (this.splitContainer && this.splitHeadingLinkHandler) {
+            this.splitContainer.removeEventListener('click', this.splitHeadingLinkHandler);
+            this.splitHeadingLinkHandler = null;
+        }
+        if (this.splitEscapeHandler) {
+            document.removeEventListener('keydown', this.splitEscapeHandler);
+            this.splitEscapeHandler = null;
+        }
+
+        // Destroy all cards in the tree
+        this.destroySplitTree(this.splitRoot);
+        this.splitRoot = null;
+        this.splitModeInitialCard = null;
+
+        // Remove the container
+        if (this.splitContainer) {
+            this.splitContainer.remove();
+            this.splitContainer = null;
+        }
+    }
+
+    /**
+     * Exit split mode, restoring normal canvas behavior
+     */
+    exitSplitMode() {
+        const currentCard = this.splitModeInitialCard;
+        this.cleanupSplitMode();
+
+        if (currentCard) {
+            window.history.replaceState(null, '', `#/${currentCard}`);
+            this.loadCardFromFile(currentCard, { fillViewport: true });
+        } else {
+            this.loadMenuCard();
+        }
+    }
+
+    /**
+     * Create a leaf node for the split tree
+     */
+    async createSplitLeaf(cardName) {
+        const pane = document.createElement('div');
+        pane.className = 'split-pane';
+        pane.dataset.cardName = cardName;
+
+        const contentData = await this.getCardContent(cardName);
+        if (!contentData) {
+            pane.innerHTML = `<div class="split-pane-empty">Card "${cardName}" not found</div>`;
+            const node = { type: 'leaf', cardName, card: null, element: pane, parent: null };
+            this.addSplitPaneControls(pane, node);
+            return node;
+        }
+
+        // Handle encrypted content
+        if (contentData.isEncrypted) {
+            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
+            if (decryptedBody) {
+                contentData.content = this.reconstructDecryptedMarkdown(
+                    contentData.encryptedData.originalFrontmatter, decryptedBody
+                );
+                contentData.isEncrypted = false;
+            }
+        }
+
+        const parsed = this.parser.parse(contentData.content);
+        if (!parsed) {
+            pane.innerHTML = `<div class="split-pane-empty">Failed to parse "${cardName}"</div>`;
+            const node = { type: 'leaf', cardName, card: null, element: pane, parent: null };
+            this.addSplitPaneControls(pane, node);
+            return node;
+        }
+
+        // Create Card instance directly (not via addCard which appends to canvasContent)
+        // Initial dimensions are placeholders; ResizeObserver below will set correct values
+        const card = new Card({
+            x: 0, y: 0,
+            width: window.innerWidth, height: window.innerHeight,
+            rotation: 0,
+            pageNumber: null,
+            content: parsed.content,
+            margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
+            sourceFile: contentData.sourceFile,
+            progressBar: parsed.metadata.progressBar === 'true',
+            wordCount: parsed.metadata.wordCount === 'true',
+            readTime: parsed.metadata.readTime === 'true',
+            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
+            tags: (() => {
+                const tagsStr = parsed.metadata.tags || '';
+                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+                const subtags = [];
+                let match;
+                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                    const subtag = match[1].trim();
+                    if (!subtags.includes(subtag)) subtags.push(subtag);
+                }
+                return subtags;
+            })(),
+            isDynamic: contentData.isDynamic || false,
+            isReaderMode: true
+        });
+
+        card.element.classList.add('card-split-mode');
+        this.cards.set(card.id, card);
+        pane.appendChild(card.element);
+
+        // Apply settings
+        if (this.settings) {
+            if (!this.settings.cardShadow) {
+                card.element.style.filter = 'none';
+            }
+        }
+
+        // Observe pane size and update card dimensions + margins accordingly
+        const observer = new ResizeObserver((entries) => {
+            for (const entry of entries) {
+                const { width, height } = entry.contentRect;
+                if (width > 0 && height > 0) {
+                    card.width = width;
+                    card.height = height;
+                    // Recalculate margins based on actual pane dimensions
+                    if (card.marginTB === null && card.marginLR === null && this.settings?.marginSize !== undefined) {
+                        const marginMultiplier = isMobile() ? 1.4 : 1.1;
+                        const readerMargin = Math.min(45, this.settings.marginSize * marginMultiplier);
+                        card.updateMarginSize(readerMargin);
+                    }
+                }
+            }
+        });
+        observer.observe(pane);
+
+        // Bind interactive elements
+        this.bindInteractiveElements(card.element);
+
+        // Register for live-reload
+        if (!contentData.isDynamic && contentData.sourceFile) {
+            this.fileWatcher.watch(contentData.sourceFile);
+        }
+
+        const node = { type: 'leaf', cardName, card, element: pane, parent: null, resizeObserver: observer };
+        this.addSplitPaneControls(pane, node);
+        return node;
+    }
+
+    /**
+     * Add control buttons (drag handle + close) to a split pane
+     */
+    addSplitPaneControls(pane, node) {
+        const controls = document.createElement('div');
+        controls.className = 'split-pane-controls';
+
+        // Drag handle for swapping panes
+        const dragBtn = document.createElement('button');
+        dragBtn.className = 'split-pane-drag';
+        dragBtn.innerHTML = '⠿';
+        dragBtn.title = 'Drag to swap with another pane';
+        dragBtn.draggable = true;
+
+        dragBtn.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            this._dragSourceNode = node;
+            pane.classList.add('split-pane-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            // Needed for Firefox
+            e.dataTransfer.setData('text/plain', '');
+        });
+
+        dragBtn.addEventListener('dragend', (e) => {
+            e.stopPropagation();
+            pane.classList.remove('split-pane-dragging');
+            this._dragSourceNode = null;
+            // Clean up all drop targets
+            this.splitContainer.querySelectorAll('.split-pane-drop-target').forEach(el => {
+                el.classList.remove('split-pane-drop-target');
+            });
+        });
+
+        // Drop target events on the pane itself
+        pane.addEventListener('dragover', (e) => {
+            if (!this._dragSourceNode || this._dragSourceNode === node) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            pane.classList.add('split-pane-drop-target');
+        });
+
+        pane.addEventListener('dragleave', (e) => {
+            // Only remove if actually leaving this pane (not entering a child)
+            if (!pane.contains(e.relatedTarget)) {
+                pane.classList.remove('split-pane-drop-target');
+            }
+        });
+
+        pane.addEventListener('drop', (e) => {
+            e.preventDefault();
+            pane.classList.remove('split-pane-drop-target');
+            if (!this._dragSourceNode || this._dragSourceNode === node) return;
+            this.swapSplitPanes(this._dragSourceNode, node);
+            this._dragSourceNode = null;
+        });
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'split-pane-close';
+        closeBtn.innerHTML = '&times;';
+        closeBtn.title = 'Close pane';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.closeSplitPane(node);
+        });
+
+        controls.appendChild(dragBtn);
+        controls.appendChild(closeBtn);
+        pane.appendChild(controls);
+    }
+
+    /**
+     * Swap the contents of two split pane leaf nodes
+     */
+    swapSplitPanes(nodeA, nodeB) {
+        if (!nodeA || !nodeB || nodeA === nodeB) return;
+        if (nodeA.type !== 'leaf' || nodeB.type !== 'leaf') return;
+
+        const paneA = nodeA.element;
+        const paneB = nodeB.element;
+
+        // Swap card/editor references
+        const tempCard = nodeA.card;
+        const tempEditor = nodeA.editor;
+        const tempCardName = nodeA.cardName;
+        const tempObserver = nodeA.resizeObserver;
+
+        nodeA.card = nodeB.card;
+        nodeA.editor = nodeB.editor;
+        nodeA.cardName = nodeB.cardName;
+        nodeA.resizeObserver = nodeB.resizeObserver;
+
+        nodeB.card = tempCard;
+        nodeB.editor = tempEditor;
+        nodeB.cardName = tempCardName;
+        nodeB.resizeObserver = tempObserver;
+
+        // Swap the card/editor DOM elements between panes
+        // Collect content children (not the controls div)
+        const contentA = [];
+        const contentB = [];
+        for (const child of [...paneA.children]) {
+            if (!child.classList.contains('split-pane-controls')) {
+                contentA.push(child);
+            }
+        }
+        for (const child of [...paneB.children]) {
+            if (!child.classList.contains('split-pane-controls')) {
+                contentB.push(child);
+            }
+        }
+
+        // Move B's content to A, A's content to B
+        contentA.forEach(el => paneB.insertBefore(el, paneB.querySelector('.split-pane-controls')));
+        contentB.forEach(el => paneA.insertBefore(el, paneA.querySelector('.split-pane-controls')));
+
+        // Re-observe the correct panes
+        if (nodeA.resizeObserver) {
+            nodeA.resizeObserver.disconnect();
+            nodeA.resizeObserver.observe(paneA);
+        }
+        if (nodeB.resizeObserver) {
+            nodeB.resizeObserver.disconnect();
+            nodeB.resizeObserver.observe(paneB);
+        }
+    }
+
+    /**
+     * Split a leaf pane to show a new card alongside it
+     */
+    async splitPane(leafNode, newCardName) {
+        const paneElement = leafNode.element;
+        const rect = paneElement.getBoundingClientRect();
+
+        // Determine split direction based on pane aspect ratio
+        const direction = rect.width >= rect.height ? 'vertical' : 'horizontal';
+
+        // Create new leaf for the linked card
+        const newLeaf = await this.createSplitLeaf(newCardName);
+
+        // Create the branch container
+        const container = document.createElement('div');
+        container.className = 'split-container';
+        container.classList.add(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
+
+        // Create divider
+        const divider = document.createElement('div');
+        divider.className = 'split-divider';
+        divider.classList.add(direction === 'vertical' ? 'split-divider-vertical' : 'split-divider-horizontal');
+
+        // Swap in the DOM: replace leaf element with container, then put leaf inside container
+        const domParent = paneElement.parentElement;
+        domParent.replaceChild(container, paneElement);
+
+        // Assemble container: [existing pane] [divider] [new pane]
+        container.appendChild(paneElement);
+        container.appendChild(divider);
+        container.appendChild(newLeaf.element);
+
+        // Create branch node
+        const branchNode = {
+            type: direction,
+            first: leafNode,
+            second: newLeaf,
+            splitRatio: 0.5,
+            divider,
+            element: container,
+            parent: leafNode.parent
+        };
+
+        // Update parent references
+        leafNode.parent = branchNode;
+        newLeaf.parent = branchNode;
+
+        // Replace in tree
+        if (this.splitRoot === leafNode) {
+            this.splitRoot = branchNode;
+        } else {
+            const grandparent = branchNode.parent;
+            if (grandparent.first === leafNode) {
+                grandparent.first = branchNode;
+            } else {
+                grandparent.second = branchNode;
+            }
+        }
+
+        // Apply layout
+        this.applySplitRatio(branchNode);
+
+        // Bind divider drag
+        this.bindDividerDrag(branchNode);
+    }
+
+    /**
+     * Split a pane and put an EditorCard in the new pane
+     */
+    async splitPaneWithEditor(leafNode, filename = null) {
+        const newLeaf = this.createSplitEditorLeaf(filename);
+
+        const paneElement = leafNode.element;
+        const rect = paneElement.getBoundingClientRect();
+        const direction = rect.width >= rect.height ? 'vertical' : 'horizontal';
+
+        const container = document.createElement('div');
+        container.className = 'split-container';
+        container.classList.add(direction === 'vertical' ? 'split-vertical' : 'split-horizontal');
+
+        const divider = document.createElement('div');
+        divider.className = 'split-divider';
+        divider.classList.add(direction === 'vertical' ? 'split-divider-vertical' : 'split-divider-horizontal');
+
+        const domParent = paneElement.parentElement;
+        domParent.replaceChild(container, paneElement);
+
+        container.appendChild(paneElement);
+        container.appendChild(divider);
+        container.appendChild(newLeaf.element);
+
+        const branchNode = {
+            type: direction,
+            first: leafNode,
+            second: newLeaf,
+            splitRatio: 0.5,
+            divider,
+            element: container,
+            parent: leafNode.parent
+        };
+
+        leafNode.parent = branchNode;
+        newLeaf.parent = branchNode;
+
+        if (this.splitRoot === leafNode) {
+            this.splitRoot = branchNode;
+        } else {
+            const grandparent = branchNode.parent;
+            if (grandparent.first === leafNode) {
+                grandparent.first = branchNode;
+            } else {
+                grandparent.second = branchNode;
+            }
+        }
+
+        this.applySplitRatio(branchNode);
+        this.bindDividerDrag(branchNode);
+
+        // Load file after it's in the DOM
+        if (filename && newLeaf.editor) {
+            await newLeaf.editor.loadFile(filename);
+        }
+    }
+
+    /**
+     * Create a split leaf containing an EditorCard
+     */
+    createSplitEditorLeaf(filename = null) {
+        const pane = document.createElement('div');
+        pane.className = 'split-pane';
+        pane.dataset.cardName = 'editor';
+
+        const editor = new this.EditorCard({
+            x: 0, y: 0,
+            width: window.innerWidth, height: window.innerHeight,
+            rotation: 0,
+            parser: this.parser,
+            fsManager: this.fsManager,
+            canvas: this,
+            zIndex: 1,
+            filename: filename || ''
+        });
+
+        editor.element.classList.add('card-split-mode');
+        this.editorCards.set(editor.id, editor);
+        pane.appendChild(editor.element);
+
+        const node = { type: 'leaf', cardName: 'editor', card: null, editor, element: pane, parent: null, resizeObserver: null };
+        this.addSplitPaneControls(pane, node);
+        return node;
+    }
+
+    /**
+     * Close a split pane, promoting its sibling
+     */
+    closeSplitPane(leafNode) {
+        // If this is the only pane, replace it with the menu
+        if (leafNode === this.splitRoot) {
+            // Clean up the old leaf
+            if (leafNode.resizeObserver) leafNode.resizeObserver.disconnect();
+            if (leafNode.editor) {
+                leafNode.editor.stopAutosave();
+                if (leafNode.editor.updateDebounceTimer) {
+                    clearTimeout(leafNode.editor.updateDebounceTimer);
+                }
+                this.editorCards.delete(leafNode.editor.id);
+                leafNode.editor.element.remove();
+            }
+            if (leafNode.card) {
+                this.removeConnectionsForCard(leafNode.card.id);
+                this.cards.delete(leafNode.card.id);
+                leafNode.card.element.remove();
+            }
+            // Load menu in its place
+            this.createSplitLeaf('menu').then(menuLeaf => {
+                this.splitRoot = menuLeaf;
+                this.splitModeInitialCard = 'menu';
+                this.splitContainer.innerHTML = '';
+                this.splitContainer.appendChild(menuLeaf.element);
+                window.history.replaceState({ splitMode: true, cardName: 'menu' }, '', '#/s/menu');
+            });
+            return;
+        }
+
+        const parent = leafNode.parent;
+        const sibling = (parent.first === leafNode) ? parent.second : parent.first;
+
+        // Remove the card from cards map
+        if (leafNode.resizeObserver) {
+            leafNode.resizeObserver.disconnect();
+        }
+        if (leafNode.editor) {
+            leafNode.editor.stopAutosave();
+            if (leafNode.editor.updateDebounceTimer) {
+                clearTimeout(leafNode.editor.updateDebounceTimer);
+            }
+            this.editorCards.delete(leafNode.editor.id);
+            leafNode.editor.element.remove();
+        }
+        if (leafNode.card) {
+            const sourceFile = leafNode.card.sourceFile;
+            this.removeConnectionsForCard(leafNode.card.id);
+            this.cards.delete(leafNode.card.id);
+            leafNode.card.element.remove();
+
+            // Unwatch file if no other card uses it
+            if (sourceFile && !leafNode.card.isDynamic) {
+                let stillUsed = false;
+                this.cards.forEach(c => {
+                    if (c.sourceFile === sourceFile) stillUsed = true;
+                });
+                if (!stillUsed) this.fileWatcher.unwatch(sourceFile);
+            }
+        }
+
+        // Promote sibling to take parent's place
+        sibling.parent = parent.parent;
+
+        if (parent === this.splitRoot) {
+            this.splitRoot = sibling;
+            // Clear inline flex style so sibling fills the container
+            sibling.element.style.flex = '';
+            this.splitContainer.innerHTML = '';
+            this.splitContainer.appendChild(sibling.element);
+        } else {
+            const grandparent = parent.parent;
+            if (grandparent.first === parent) {
+                grandparent.first = sibling;
+            } else {
+                grandparent.second = sibling;
+            }
+            grandparent.element.replaceChild(sibling.element, parent.element);
+            // Reapply grandparent's ratio to correctly size the promoted sibling
+            this.applySplitRatio(grandparent);
+        }
+
+        // Clean up parent references
+        parent.divider = null;
+        parent.element = null;
+    }
+
+    /**
+     * Recursively destroy all cards in a split tree
+     */
+    destroySplitTree(node) {
+        if (!node) return;
+        if (node.type === 'leaf') {
+            if (node.resizeObserver) node.resizeObserver.disconnect();
+            if (node.editor) {
+                node.editor.stopAutosave();
+                if (node.editor.updateDebounceTimer) {
+                    clearTimeout(node.editor.updateDebounceTimer);
+                }
+                this.editorCards.delete(node.editor.id);
+                node.editor.element.remove();
+            }
+            if (node.card) {
+                this.removeConnectionsForCard(node.card.id);
+                this.cards.delete(node.card.id);
+                node.card.element.remove();
+            }
+        } else {
+            this.destroySplitTree(node.first);
+            this.destroySplitTree(node.second);
+        }
+    }
+
+    /**
+     * Apply split ratio to a branch node's children via flex
+     */
+    applySplitRatio(branchNode) {
+        const ratio = branchNode.splitRatio;
+        const divSize = SPLIT_DIVIDER_SIZE;
+        branchNode.first.element.style.flex = `0 0 calc(${ratio * 100}% - ${divSize / 2}px)`;
+        branchNode.second.element.style.flex = `0 0 calc(${(1 - ratio) * 100}% - ${divSize / 2}px)`;
+    }
+
+    /**
+     * Bind mouse/touch drag events on a split divider for resizing
+     */
+    bindDividerDrag(branchNode) {
+        const divider = branchNode.divider;
+        const isVertical = branchNode.type === 'vertical';
+
+        let startPos = 0;
+        let startRatio = 0;
+        let containerSize = 0;
+
+        const onMouseDown = (e) => {
+            e.preventDefault();
+            startPos = isVertical ? e.clientX : e.clientY;
+            startRatio = branchNode.splitRatio;
+            containerSize = isVertical
+                ? branchNode.element.getBoundingClientRect().width
+                : branchNode.element.getBoundingClientRect().height;
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = isVertical ? 'col-resize' : 'row-resize';
+            document.body.style.userSelect = 'none';
+            divider.classList.add('active');
+        };
+
+        const onMouseMove = (e) => {
+            const currentPos = isVertical ? e.clientX : e.clientY;
+            const delta = (currentPos - startPos) / containerSize;
+            branchNode.splitRatio = Math.max(SPLIT_MIN_PANE_RATIO, Math.min(1 - SPLIT_MIN_PANE_RATIO, startRatio + delta));
+            this.applySplitRatio(branchNode);
+        };
+
+        const onMouseUp = () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            divider.classList.remove('active');
+        };
+
+        divider.addEventListener('mousedown', onMouseDown);
+
+        // Touch support
+        divider.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            startPos = isVertical ? touch.clientX : touch.clientY;
+            startRatio = branchNode.splitRatio;
+            containerSize = isVertical
+                ? branchNode.element.getBoundingClientRect().width
+                : branchNode.element.getBoundingClientRect().height;
+            divider.classList.add('active');
+        }, { passive: true });
+
+        divider.addEventListener('touchmove', (e) => {
+            const touch = e.touches[0];
+            const currentPos = isVertical ? touch.clientX : touch.clientY;
+            const delta = (currentPos - startPos) / containerSize;
+            branchNode.splitRatio = Math.max(SPLIT_MIN_PANE_RATIO, Math.min(1 - SPLIT_MIN_PANE_RATIO, startRatio + delta));
+            this.applySplitRatio(branchNode);
+        }, { passive: true });
+
+        divider.addEventListener('touchend', () => {
+            divider.classList.remove('active');
+        }, { passive: true });
+    }
+
+    /**
+     * Find a split tree leaf node by its DOM element
+     */
+    findSplitLeafByElement(paneElement) {
+        const search = (node) => {
+            if (!node) return null;
+            if (node.type === 'leaf' && node.element === paneElement) return node;
+            if (node.type !== 'leaf') {
+                return search(node.first) || search(node.second);
+            }
+            return null;
+        };
+        return search(this.splitRoot);
+    }
+
+    /**
+     * Find the last (deepest-right) leaf in the split tree
+     */
+    findLastSplitLeaf(node) {
+        if (!node) return null;
+        if (node.type === 'leaf') return node;
+        return this.findLastSplitLeaf(node.second) || this.findLastSplitLeaf(node.first);
+    }
+
+    /**
+     * Find the first leaf in the split tree
+     */
+    findFirstSplitLeaf(node) {
+        if (!node) return null;
+        if (node.type === 'leaf') return node;
+        return this.findFirstSplitLeaf(node.first) || this.findFirstSplitLeaf(node.second);
+    }
+
     /**
      * Handle browser back/forward navigation
      */
@@ -4106,12 +5010,19 @@ ${renderColumn(rightColumn)}
             this.cleanupReaderMode();
         }
 
+        // If leaving split mode via back/forward, clean up
+        if (this.isSplitMode && !state?.splitMode) {
+            this.cleanupSplitMode();
+        }
+
         if (state?.readerMode) {
             // Navigate to the specified card in reader mode
             this.enterReaderMode(state.cardName, false);
             if (state.headingId) {
                 this.scrollToHeadingInReaderMode(state.headingId);
             }
+        } else if (state?.splitMode) {
+            this.enterSplitMode(state.cardName, false);
         } else {
             // Normal mode navigation
             const urlInfo = this.getCardNameFromURL();
@@ -4143,9 +5054,18 @@ ${renderColumn(rightColumn)}
             this.cleanupReaderMode();
         }
 
+        // If leaving split mode, clean up
+        if (this.isSplitMode && !urlInfo?.splitMode) {
+            this.cleanupSplitMode();
+        }
+
         if (urlInfo?.readerMode) {
             if (!this.isReaderMode || this.readerModeCurrentCard?.sourceFile !== urlInfo.cardName) {
                 this.enterReaderMode(urlInfo.cardName, false);
+            }
+        } else if (urlInfo?.splitMode) {
+            if (!this.isSplitMode || this.splitModeInitialCard !== urlInfo.cardName) {
+                this.enterSplitMode(urlInfo.cardName, false);
             }
         } else if (urlInfo) {
             this.clearAllCards();
@@ -4164,6 +5084,9 @@ ${renderColumn(rightColumn)}
      * Handle viewport resize - especially important for reader mode
      */
     handleResize() {
+        // Split mode: flexbox handles resize automatically
+        if (this.isSplitMode) return;
+
         if (this.isReaderMode && this.readerModeCurrentCard) {
             const margin = this.getReaderModeMargin();
             const card = this.readerModeCurrentCard;

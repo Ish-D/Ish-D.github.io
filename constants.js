@@ -24,3 +24,7 @@ export const CARD_TEMPLATE_HEIGHT = 400;
 
 // Default margin size as a percentage of card dimensions
 export const DEFAULT_MARGIN_PERCENT = isMobile() ? 1 : 28;
+
+// Split mode constants
+export const SPLIT_DIVIDER_SIZE = 1;       // Divider thickness in px
+export const SPLIT_MIN_PANE_RATIO = 0.1;   // Min 10% when dragging dividers
