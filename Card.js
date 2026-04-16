@@ -2267,6 +2267,38 @@ export class Card {
         this.content = newContent;
         contentEl.innerHTML = newContent;
 
+        // Fill [[tags]] placeholders
+        if (this.tags.length > 0) {
+            const tagPlaceholders = contentEl.querySelectorAll('[data-tags-placeholder="true"]');
+            tagPlaceholders.forEach(placeholder => {
+                const cleanTags = this.tags
+                    .map(tag => tag.replace(/\s+/g, ' ').trim())
+                    .filter(tag => tag.length > 0);
+                const tagsHTML = cleanTags
+                    .map((tag, index) => {
+                        const comma = index < cleanTags.length - 1 ? ', ' : '';
+                        return `<span class="card-tag" data-tag="${tag}">${tag}${comma}</span>`;
+                    })
+                    .join('');
+                placeholder.innerHTML = tagsHTML;
+                placeholder.classList.add('card-tags-inline');
+            });
+        }
+
+        // Fill [[date]] placeholders
+        if (this.date) {
+            const datePlaceholders = contentEl.querySelectorAll('[data-date-placeholder="true"]');
+            datePlaceholders.forEach(placeholder => {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June',
+                                'July', 'August', 'September', 'October', 'November', 'December'];
+                const month = months[this.date.getMonth()];
+                const day = this.date.getDate();
+                const year = this.date.getFullYear();
+                placeholder.textContent = `${month} ${day}, ${year}`;
+                placeholder.classList.add('card-date-inline');
+            });
+        }
+
         // Update margins if provided
         if (newMargins) {
             this.margins = newMargins;

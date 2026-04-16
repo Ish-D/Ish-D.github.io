@@ -12,6 +12,7 @@ date: 01-30-2026
 # Why Make a Page this Weird?
 [[tags]]
 [[date]]    
+[[summary]]{A glimpse into the inspiration behind this website and my goals for it. }
 [[toc]]
 ---
 ## Purpose

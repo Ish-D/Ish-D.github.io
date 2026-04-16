@@ -4612,6 +4612,15 @@ ${renderColumn(rightColumn)}
                 }
                 return subtags;
             })(),
+            date: (() => {
+                const dateStr = parsed.metadata.date || '';
+                const dateMatch = dateStr.match(/(\d{2})-(\d{2})-(\d{4})/);
+                if (dateMatch) {
+                    const [, month, day, year] = dateMatch;
+                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                }
+                return null;
+            })(),
             isDynamic: contentData.isDynamic || false,
             isReaderMode: true
         });

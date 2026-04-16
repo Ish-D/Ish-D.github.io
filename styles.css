@@ -786,7 +786,7 @@ body {
     background: var(--color-card-background);
     border: 1px solid var(--color-border);
     padding: 8px 10px 8px 4px;
-    margin: 0 24px 14px 0;
+    margin: var(--paragraph-margin) 24px 14px 0;
     max-width: 340px;
     font-size: calc(var(--font-size-base) - 2px);
     font-family: var(--font-family-sans);
@@ -1221,6 +1221,13 @@ sup.jump-link {
 /* Styled inline span - inherits context but allows overrides */
 .styled-inline {
     /* No base styles needed - all styling comes from inline */
+}
+
+/* Summary - smaller text, centered */
+.summary-inline {
+    display: block;
+    font-size: 0.75em;
+    text-align: center;
 }
 
 /* Center block - centers content both horizontally and vertically */

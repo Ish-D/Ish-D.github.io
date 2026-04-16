@@ -108,6 +108,7 @@
  * [[note(side, params)]]{anchor text}{margin content} - Inline margin note anchored to specific word
  * [[cite(url)]]                  - Citation with auto-numbered superscript
  * [[cite(url, title)]]           - Citation with custom title
+ * [[summary]]{text}              - Summary text (smaller, bold)
  * [[tab]]                         - Inline tab/indent (em-space indent for paragraphs)
  * [[break]]                       - Small vertical break (less gap than a heading)
  * [[bigbreak]]                    - Large vertical break (section-level gap)
@@ -195,6 +196,11 @@ export class MarkdownParser {
         // Shorthand link: [[Card]] or [[Card|display]]
         // Must not match [[type(...)]] patterns
         return /\[\[([^\]|()\n]+)(?:\|([^\]]+))?\]\]/g;
+    }
+
+    getSummaryPattern() {
+        // Summary: [[summary]]{text}
+        return /\[\[summary\]\]\{([^}]*)\}/g;
     }
 
     getAnchorPattern() {
@@ -544,6 +550,7 @@ export class MarkdownParser {
         return text
             .replace(/\[\[anchor\([^)]+\)\]\]\{([^}]*)\}/g, '$1')  // [[anchor(id)]]{text} -> text
             .replace(/\[\[jump\([^)]+\)\]\](?:\{([^}]*)\})?/g, (m, t) => t || '')  // [[jump(id)]]{text} -> text
+            .replace(/\[\[summary\]\]\{([^}]*)\}/g, '$1')  // [[summary]]{text} -> text
             .replace(/\[\[style\([^)]+\)\]\]\{([^}]*)\}/g, '$1')  // [[style(css)]]{text} -> text
             .replace(/\[\[[^\]]+\]\]/g, '')  // Remove any remaining [[...]]
             .replace(/\*\*([^*]+)\*\*/g, '$1')  // Remove bold
@@ -1611,6 +1618,11 @@ export class MarkdownParser {
             }
         });
 
+        // Summary: [[summary]]{text} - must run before shorthand links
+        html = html.replace(this.getSummaryPattern(), (match, text) => {
+            return `<span class="summary-inline">${text}</span>`;
+        });
+
         // Shorthand link syntax: [[Card]] or [[Card|display]] or [[url]] or [[url|display]]
         html = html.replace(this.getShortLinkPattern(), (match, target, display) => {
             const displayText = display ? display.trim() : target.trim();
@@ -1820,6 +1832,11 @@ export class MarkdownParser {
             } else {
                 return `<strong class="card-link" data-card="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
             }
+        });
+
+        // Summary: [[summary]]{text} - must run before shorthand links
+        html = html.replace(this.getSummaryPattern(), (match, text) => {
+            return `<span class="summary-inline">${text}</span>`;
         });
 
         // Shorthand link syntax
