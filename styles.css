@@ -3737,6 +3737,81 @@ body.split-mode-active .edit-btn:hover {
     min-height: 300px;
 }
 
+.viz-container[data-viz-type="neuron-approx"],
+.viz-container[data-viz-type="gradient-descent"] {
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+}
+
+.viz-container[data-viz-type="neuron-approx"] .viz-3d-canvas,
+.viz-container[data-viz-type="gradient-descent"] .viz-3d-canvas {
+    flex: 1;
+    min-height: 150px;
+}
+
+.viz-container[data-viz-type="neuron-approx"] .viz-slider-label,
+.viz-container[data-viz-type="gradient-descent"] .viz-slider-label {
+    width: auto;
+    white-space: nowrap;
+}
+
+.viz-reset-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-serif);
+    font-style: italic;
+    font-size: 11px;
+    padding: 1px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    margin-left: 4px;
+}
+
+.viz-reset-btn:hover {
+    color: var(--color-text-primary);
+    border-color: var(--color-text-secondary);
+}
+
+.viz-fn-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    margin-bottom: 6px;
+    min-height: 24px;
+}
+
+.viz-fn-display {
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.viz-fn-display:hover {
+    opacity: 1;
+}
+
+.viz-fn-input {
+    display: none;
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-family-serif);
+    font-size: 13px;
+    font-style: italic;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text-primary);
+    outline: none;
+    text-align: center;
+}
+
+.viz-fn-input:focus {
+    border: none;
+}
+
 /* Default height when no size specified */
 .viz-container[data-viz-type="polynomial3d"]:not([data-viz-size]):not([style*="height"]) {
     height: 380px;

@@ -1398,6 +1398,8 @@ class PaperCanvas {
             card.setContent(parsed);
             // Re-bind interactive elements after content update
             this.bindInteractiveElements(card.element);
+            // Re-run companion script on new DOM
+            this.loadCardScript(fileName, card.element);
         });
 
         console.log(`Live-reload: Updated ${cards.length} card(s) displaying "${fileName}"`);
@@ -2254,7 +2256,35 @@ ${renderColumn(rightColumn)}
             this.fileWatcher.watch(contentData.sourceFile);
         }
 
+        // Load companion script if one exists
+        await this.loadCardScript(cardName, card.element);
+
         return card;
+    }
+
+    /**
+     * Load an optional companion script for a card.
+     * If cards/{cardName}.js exists, dynamically import it and call its init() export.
+     */
+    async loadCardScript(cardName, cardElement) {
+        const scriptUrl = `./cards/${cardName}.js`;
+        try {
+            const head = await fetch(scriptUrl, { method: 'HEAD' });
+            if (!head.ok) return;
+        } catch { return; }
+
+        try {
+            const module = await import(scriptUrl);
+            if (typeof module.init === 'function') {
+                await module.init(cardElement, {
+                    vizManager,
+                    getSetting: (key) => this.getSetting(key),
+                    setSetting: (key, value) => this.setSetting(key, value),
+                });
+            }
+        } catch (e) {
+            console.error(`Card script error (${cardName}):`, e);
+        }
     }
 
     async openCard(cardName, parentCard = null, options = {}, clickEvent = null) {
@@ -4036,6 +4066,9 @@ ${renderColumn(rightColumn)}
         // Bind interactive elements
         this.bindInteractiveElements(card.element);
 
+        // Load companion script
+        await this.loadCardScript(cardName, card.element);
+
         // Register for live-reload
         if (!contentData.isDynamic && contentData.sourceFile) {
             this.fileWatcher.watch(contentData.sourceFile);
@@ -4656,6 +4689,9 @@ ${renderColumn(rightColumn)}
 
         // Bind interactive elements
         this.bindInteractiveElements(card.element);
+
+        // Load companion script
+        await this.loadCardScript(cardName, card.element);
 
         // Register for live-reload
         if (!contentData.isDynamic && contentData.sourceFile) {
