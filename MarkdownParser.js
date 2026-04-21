@@ -1523,6 +1523,104 @@ export class MarkdownParser {
         return metadata;
     }
 
+    /**
+     * Parse markdown tables into HTML tables.
+     * Detects blocks of lines starting with | and converts them.
+     * Supports alignment via :--- (left), :---: (center), ---: (right) in separator row.
+     */
+    parseTables(text) {
+        const lines = text.split('\n');
+        const result = [];
+        let i = 0;
+
+        while (i < lines.length) {
+            // A table needs at least a header row and a separator row
+            if (this.isTableRow(lines[i]) && i + 1 < lines.length && this.isTableSeparator(lines[i + 1])) {
+                const tableLines = [];
+                tableLines.push(lines[i]); // header
+                tableLines.push(lines[i + 1]); // separator
+
+                let j = i + 2;
+                while (j < lines.length && this.isTableRow(lines[j])) {
+                    tableLines.push(lines[j]);
+                    j++;
+                }
+
+                result.push(this.renderTable(tableLines));
+                i = j;
+            } else {
+                result.push(lines[i]);
+                i++;
+            }
+        }
+
+        return result.join('\n');
+    }
+
+    isTableRow(line) {
+        if (!line) return false;
+        const trimmed = line.trim();
+        return trimmed.startsWith('|') && trimmed.endsWith('|') && trimmed.length > 1;
+    }
+
+    isTableSeparator(line) {
+        if (!this.isTableRow(line)) return false;
+        const cells = this.parseTableCells(line);
+        return cells.length > 0 && cells.every(cell => /^:?-{1,}:?$/.test(cell.trim()));
+    }
+
+    parseTableCells(line) {
+        const trimmed = line.trim();
+        // Remove leading and trailing pipes, then split by |
+        const inner = trimmed.slice(1, -1);
+        return inner.split('|');
+    }
+
+    getTableAlignments(separatorLine) {
+        const cells = this.parseTableCells(separatorLine);
+        return cells.map(cell => {
+            const trimmed = cell.trim();
+            const left = trimmed.startsWith(':');
+            const right = trimmed.endsWith(':');
+            if (left && right) return 'center';
+            if (right) return 'right';
+            return 'left';
+        });
+    }
+
+    renderTable(tableLines) {
+        const alignments = this.getTableAlignments(tableLines[1]);
+        const headerCells = this.parseTableCells(tableLines[0]);
+
+        let html = '<div class="table-wrapper"><table>';
+
+        // Header
+        html += '<thead><tr>';
+        headerCells.forEach((cell, idx) => {
+            const align = alignments[idx] || 'left';
+            const alignAttr = align !== 'left' ? ` style="text-align: ${align}"` : '';
+            html += `<th${alignAttr}>${this.parseInlineMarkdown(cell.trim())}</th>`;
+        });
+        html += '</tr></thead>';
+
+        // Body rows
+        html += '<tbody>';
+        for (let r = 2; r < tableLines.length; r++) {
+            const cells = this.parseTableCells(tableLines[r]);
+            html += '<tr>';
+            cells.forEach((cell, idx) => {
+                const align = alignments[idx] || 'left';
+                const alignAttr = align !== 'left' ? ` style="text-align: ${align}"` : '';
+                html += `<td${alignAttr}>${this.parseInlineMarkdown(cell.trim())}</td>`;
+            });
+            html += '</tr>';
+        }
+        html += '</tbody>';
+
+        html += '</table></div>';
+        return html;
+    }
+
     parseMarkdown(markdown) {
         let html = markdown;
 
@@ -1724,6 +1822,9 @@ export class MarkdownParser {
 
         // Ordered lists
         html = html.replace(/^\s*\d+\.\s+(.*$)/gim, '<li>$1</li>');
+
+        // Tables - detect and convert markdown tables before paragraph splitting
+        html = this.parseTables(html);
 
         // Paragraphs
         html = html.split('\n\n').map(para => {
