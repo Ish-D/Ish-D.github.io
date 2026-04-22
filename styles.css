@@ -397,6 +397,7 @@ body {
 .card-margin-top.margin-empty,
 .card-margin-bottom.margin-empty {
     min-height: 0;
+    pointer-events: none;
 }
 
 /* ============================================
@@ -791,6 +792,8 @@ body {
     font-size: calc(var(--font-size-base) - 2px);
     font-family: var(--font-family-sans);
     float: left;
+    position: relative;
+    z-index: 1;
 }
 
 .toc-title {
@@ -810,6 +813,7 @@ body {
 
 .toc-h2 {
     margin: 2px 0;
+    cursor: pointer;
 }
 
 .toc-h2 > .toc-link {
@@ -826,6 +830,7 @@ body {
 
 .toc-h3 {
     margin: 1px 0;
+    cursor: pointer;
 }
 
 .toc-h3 > .toc-link {

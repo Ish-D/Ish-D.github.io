@@ -589,9 +589,9 @@ export class MarkdownParser {
                 h2Counter++;
                 h3Counter = 0;  // Reset H3 counter for each new H2
 
-                html += `<li class="toc-h2">`;
+                html += `<li class="toc-h2" data-toc-target="${header.id}">`;
                 html += `<span class="toc-number">${h2Counter}</span>`;
-                html += `<a data-toc-target="${header.id}" class="toc-link toc-link-h2">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
+                html += `<a class="toc-link toc-link-h2">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
                 // Don't close li yet - H3s may follow
 
             } else if (header.level === 3) {
@@ -604,9 +604,9 @@ export class MarkdownParser {
                 h3Counter++;
                 const number = h2Counter > 0 ? `${h2Counter}.${h3Counter}` : `${h3Counter}`;
 
-                html += `<li class="toc-h3">`;
+                html += `<li class="toc-h3" data-toc-target="${header.id}">`;
                 html += `<span class="toc-number">${number}</span>`;
-                html += `<a data-toc-target="${header.id}" class="toc-link toc-link-h3">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
+                html += `<a class="toc-link toc-link-h3">${this.escapeHtml(this.cleanHeaderText(header.text))}</a>`;
                 html += '</li>';
             }
         }
@@ -1837,6 +1837,7 @@ export class MarkdownParser {
                 para.startsWith('<pre') ||
                 para.startsWith('<li') ||
                 para.startsWith('<div') ||
+                para.startsWith('<nav') ||
                 para.startsWith('<hr') ||
                 para.startsWith('__CODE_') ||
                 para.startsWith('__MARGIN_ANCHOR_') ||
