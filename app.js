@@ -179,25 +179,10 @@ class PaperCanvas {
         this.fsManager = null;
         this.editorCards = new Map();
 
-        // State persistence
-        this.saveDebounceTimer = null;
-        this.SAVE_DEBOUNCE_MS = 1000; // 1 second debounce
-        this.isRestoring = false; // Flag to prevent saves during restoration
-
         this.init();
     }
 
     async init() {
-        // Check if this is a hard refresh (flag set before reload)
-        if (sessionStorage.getItem('paper-canvas-hard-refresh')) {
-            sessionStorage.removeItem('paper-canvas-hard-refresh');
-            localStorage.removeItem('paper-canvas-state');
-            // Also clear saved settings so they reset to defaults
-            Object.values(SettingsConfig).forEach(config => {
-                localStorage.removeItem(config.storage);
-            });
-        }
-
         this.bindCanvasEvents();
         this.initSettings();
         this.initConnectionsLayer();
@@ -206,35 +191,13 @@ class PaperCanvas {
         // Load drop cap metrics for per-letter spacing
         this.loadDropcapMetrics();
 
-        // Listen for hard refresh (Ctrl+Shift+R / Cmd+Shift+R) to clear saved state
-        window.addEventListener('keydown', (e) => {
-            const isHardRefresh = (e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r');
-            if (isHardRefresh) {
-                // Set flag that will persist through the refresh
-                sessionStorage.setItem('paper-canvas-hard-refresh', 'true');
-            }
-        });
-
-        // Save state immediately before page unload (refresh, close, navigate away)
-        // This ensures state is persisted even if the debounce timer hasn't fired
-        window.addEventListener('beforeunload', () => {
-            // Cancel any pending debounced save
-            if (this.saveDebounceTimer) {
-                clearTimeout(this.saveDebounceTimer);
-            }
-            // Save immediately (unless we're restoring)
-            if (!this.isRestoring) {
-                this.saveCanvasState();
-            }
-        });
-
         // Connect to live-reload WebSocket server
         this.fileWatcher.connect();
 
-        // Build comprehensive tag index from all files first
-        await this.buildGlobalTagIndex();
+        // Build tag index in background (don't block initial render)
+        this.tagIndexReady = this.buildGlobalTagIndex();
 
-        this.initContentProviders(); // Initialize the content provider system
+        this.initContentProviders();
 
         // Bind browser history navigation
         window.addEventListener('popstate', (e) => this.handlePopState(e));
@@ -249,14 +212,10 @@ class PaperCanvas {
         const urlInfo = this.getCardNameFromURL();
 
         if (urlInfo) {
-            // URL specifies a card - clear any saved state and load that card
-            localStorage.removeItem('paper-canvas-state');
-
             if (urlInfo.splitMode) {
                 // Enter split mode directly from URL
                 await this.enterSplitMode(urlInfo.cardName, false);
             } else {
-                // Normal mode with specific card
                 // Reset canvas view
                 this.panX = 0;
                 this.panY = 0;
@@ -267,25 +226,14 @@ class PaperCanvas {
                 // Load card filling most of the viewport
                 const card = await this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
                 if (!card) {
-                    // Card not found, fall back to menu
                     console.warn(`Card "${urlInfo.cardName}" not found, loading menu`);
                     await this.loadMenuCard();
                 } else if (urlInfo.headingId) {
-                    // Scroll to heading if specified
                     this.scrollToHeadingInCard(card, urlInfo.headingId);
                 }
             }
         } else {
-            // No URL card specified - try to restore saved state
-            const savedState = this.loadSavedState();
-
-            if (savedState && savedState.cards && savedState.cards.length > 0) {
-                // Restore saved canvas state
-                await this.restoreCanvasState(savedState);
-            } else {
-                // No saved state, load the menu
-                await this.loadMenuCard();
-            }
+            await this.loadMenuCard();
         }
     }
 
@@ -1414,7 +1362,7 @@ class PaperCanvas {
 
         // Default: load from markdown file
         try {
-            const cacheBuster = `?t=${Date.now()}`;
+            const cacheBuster = this.isLocal ? `?t=${Date.now()}` : '';
             const response = await fetch(`cards/${cardName}.md${cacheBuster}`);
             if (!response.ok) {
                 console.error(`Failed to load card: ${cardName}`);
@@ -1660,164 +1608,86 @@ class PaperCanvas {
 
     // Build comprehensive tag index from ALL card files at startup
     async buildGlobalTagIndex() {
-        // Load card list dynamically
-        // 1. Localhost: /api/cards endpoint (server scans directory)
-        // 2. Production: manifest.json (reliable for static hosting)
-        // 3. Fallback: GitHub API (rate-limited, less reliable)
-        let cardFiles = [];
+        let manifest = null;
 
-        if (this.isLocal) {
-            // Localhost: use server API
-            try {
-                const response = await fetch('/api/cards');
-                if (response.ok) {
-                    const data = await response.json();
-                    cardFiles = data.cards || [];
-                }
-            } catch (e) {}
-        }
-
-        // Production: use manifest.json (most reliable for static hosting)
-        if (cardFiles.length === 0) {
-            try {
-                const response = await fetch(`cards/manifest.json?t=${Date.now()}`);
-                if (response.ok) {
-                    const manifest = await response.json();
-                    cardFiles = manifest.cards || [];
-                }
-            } catch (e) {
-                console.warn('Failed to load manifest.json:', e);
+        // Load manifest (single request)
+        const cacheBuster = this.isLocal ? `?t=${Date.now()}` : '';
+        try {
+            const response = await fetch(`cards/manifest.json${cacheBuster}`);
+            if (response.ok) {
+                manifest = await response.json();
             }
+        } catch (e) {
+            console.warn('Failed to load manifest.json:', e);
         }
 
-        // Fallback: GitHub API (rate-limited, less reliable)
-        if (cardFiles.length === 0) {
-            const hostname = window.location.hostname;
-            if (hostname.endsWith('.github.io')) {
-                const username = hostname.replace('.github.io', '');
-                const repoName = `${username}.github.io`;
-                try {
-                    const response = await fetch(
-                        `https://api.github.com/repos/${username}/${repoName}/contents/cards`,
-                        { headers: { 'Accept': 'application/vnd.github.v3+json' } }
-                    );
-                    if (response.ok) {
-                        const files = await response.json();
-                        cardFiles = files
-                            .filter(f => f.name.endsWith('.md'))
-                            .map(f => f.name.replace('.md', ''))
-                            .sort();
-                    }
-                } catch (e) {
-                    console.warn('GitHub API request failed:', e);
-                }
-            }
-        }
-
-        if (cardFiles.length === 0) {
+        if (!manifest || !manifest.cards || manifest.cards.length === 0) {
             console.warn('No cards found');
             return;
         }
 
-        this.globalTagIndex = {}; // Individual tags (subtags)
-        this.mainTagIndex = {};   // Main tags
+        this.globalTagIndex = {};
+        this.mainTagIndex = {};
         this.fileTagCache.clear();
 
-        // Process each file
-        for (const cardName of cardFiles) {
-            try {
-                const response = await fetch(`cards/${cardName}.md?t=${Date.now()}`);
-                if (!response.ok) {
-                    console.warn(`Could not fetch ${cardName}.md`);
-                    continue;
-                }
+        // Use pre-built metadata from manifest (no individual file fetches needed)
+        const metadata = manifest.metadata || {};
 
-                const content = await response.text();
+        for (const cardName of manifest.cards) {
+            const meta = metadata[cardName];
+            if (!meta || !meta.tags || meta.encrypted) continue;
 
-                // Skip encrypted/private cards - they shouldn't appear in public indexes
-                if (content.includes('encrypted: true')) {
-                    continue;
-                }
-
-                // Parse frontmatter to extract tags
-                const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);
-                if (frontmatterMatch) {
-                    const frontmatter = frontmatterMatch[1];
-                    const tagsMatch = frontmatter.match(/tags:\s*(.+)/);
-
-                    // Parse display name from front matter (falls back to filename)
-                    const nameMatch = frontmatter.match(/name:\s*(.+)/);
-                    const displayName = nameMatch ? nameMatch[1].trim() : cardName;
-
-                    // Parse date from front matter (format: MM-DD-YYYY)
-                    const dateMatch = frontmatter.match(/date:\s*(\d{2}-\d{2}-\d{4})/);
-                    let dateValue = null;
-                    if (dateMatch) {
-                        const [month, day, year] = dateMatch[1].split('-').map(Number);
-                        dateValue = new Date(year, month - 1, day);
-                    }
-
-                    if (tagsMatch) {
-                        const tagsStr = tagsMatch[1].trim();
-
-                        // Parse new [subtag, mainTag] format
-                        const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
-                        const subtags = [];
-                        const mainTags = [];
-                        const subtagToMain = {};
-
-                        let match;
-                        while ((match = tagPairPattern.exec(tagsStr)) !== null) {
-                            const subtag = match[1].trim();
-                            const mainTag = match[2].trim();
-
-                            if (!subtags.includes(subtag)) subtags.push(subtag);
-                            if (!mainTags.includes(mainTag)) mainTags.push(mainTag);
-
-                            if (!subtagToMain[subtag]) subtagToMain[subtag] = [];
-                            if (!subtagToMain[subtag].includes(mainTag)) {
-                                subtagToMain[subtag].push(mainTag);
-                            }
-                        }
-
-                        const cardData = {
-                            tags: subtags,           // Only subtags (for display)
-                            mainTags: mainTags,      // Main tags (for indexing)
-                            subtagToMain: subtagToMain,
-                            sourceFile: cardName,
-                            title: displayName,      // Display name from front matter
-                            date: dateValue          // Date for sorting (null if not specified)
-                        };
-
-                        // Store in cache for later use
-                        this.fileTagCache.set(cardName, cardData);
-
-                        // Add to individual tag index (for specific tag pages)
-                        subtags.forEach(tag => {
-                            if (!this.globalTagIndex[tag]) {
-                                this.globalTagIndex[tag] = [];
-                            }
-                            const existing = this.globalTagIndex[tag].find(item => item.sourceFile === cardName);
-                            if (!existing) {
-                                this.globalTagIndex[tag].push(cardData);
-                            }
-                        });
-
-                        // Add to main tag index (for overview)
-                        mainTags.forEach(mainTag => {
-                            if (!this.mainTagIndex[mainTag]) {
-                                this.mainTagIndex[mainTag] = [];
-                            }
-                            const existing = this.mainTagIndex[mainTag].find(item => item.sourceFile === cardName);
-                            if (!existing) {
-                                this.mainTagIndex[mainTag].push(cardData);
-                            }
-                        });
-                    }
-                }
-            } catch (error) {
-                console.warn(`Error processing ${cardName}:`, error);
+            const displayName = meta.name || cardName;
+            let dateValue = null;
+            if (meta.date) {
+                const [month, day, year] = meta.date.split('-').map(Number);
+                dateValue = new Date(year, month - 1, day);
             }
+
+            const tagsStr = meta.tags;
+            const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+            const subtags = [];
+            const mainTags = [];
+            const subtagToMain = {};
+
+            let match;
+            while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                const subtag = match[1].trim();
+                const mainTag = match[2].trim();
+
+                if (!subtags.includes(subtag)) subtags.push(subtag);
+                if (!mainTags.includes(mainTag)) mainTags.push(mainTag);
+
+                if (!subtagToMain[subtag]) subtagToMain[subtag] = [];
+                if (!subtagToMain[subtag].includes(mainTag)) {
+                    subtagToMain[subtag].push(mainTag);
+                }
+            }
+
+            const cardData = {
+                tags: subtags,
+                mainTags: mainTags,
+                subtagToMain: subtagToMain,
+                sourceFile: cardName,
+                title: displayName,
+                date: dateValue
+            };
+
+            this.fileTagCache.set(cardName, cardData);
+
+            subtags.forEach(tag => {
+                if (!this.globalTagIndex[tag]) {
+                    this.globalTagIndex[tag] = [];
+                }
+                this.globalTagIndex[tag].push(cardData);
+            });
+
+            mainTags.forEach(mainTag => {
+                if (!this.mainTagIndex[mainTag]) {
+                    this.mainTagIndex[mainTag] = [];
+                }
+                this.mainTagIndex[mainTag].push(cardData);
+            });
         }
     }
 
@@ -1843,18 +1713,15 @@ class PaperCanvas {
     // Register content providers for dynamic cards
     initContentProviders() {
         this.contentProviders = {
-            // Tags overview page - kept for backwards compatibility
             'tags': async () => {
+                await this.tagIndexReady;
                 return await this.generateTagsContent();
             },
 
-            // Writing page - kept for backwards compatibility
             'writing': async () => {
+                await this.tagIndexReady;
                 return await this.generateWritingContent();
             },
-
-            // Individual tag pages (pattern: tag-{tagName})
-            // This will be handled by a more flexible system
         };
 
         // Embed generators - return just the HTML content, no headings
@@ -2097,7 +1964,7 @@ ${renderColumn(rightColumn)}
 
         // Register the content provider
         this.contentProviders[cardName] = async () => {
-            // Get all cards with this tag from global index
+            await this.tagIndexReady;
             const taggedCards = this.getGlobalCardsWithTag(tagName);
 
             // Generate content for the tag page
@@ -3108,450 +2975,7 @@ ${renderColumn(rightColumn)}
     /**
      * Schedule a debounced save of canvas state
      */
-    scheduleSave() {
-        // Don't save during restoration or split mode
-        if (this.isRestoring || this.isSplitMode) return;
-
-        if (this.saveDebounceTimer) {
-            clearTimeout(this.saveDebounceTimer);
-        }
-        this.saveDebounceTimer = setTimeout(() => {
-            this.saveCanvasState();
-        }, this.SAVE_DEBOUNCE_MS);
-    }
-
-    /**
-     * Save the complete canvas state to localStorage
-     */
-    saveCanvasState() {
-        const state = {
-            version: 1,
-            savedAt: Date.now(),
-            canvas: {
-                panX: this.panX,
-                panY: this.panY,
-                zoom: this.zoom,
-                rotation: this.rotation
-            },
-            counters: {
-                pageCounter: this.pageCounter,
-                zIndexCounter: this.zIndexCounter
-            },
-            cards: [],
-            connections: [],
-            editorCards: []
-        };
-
-        // Serialize cards (skip preview and scatter cards)
-        this.cards.forEach(card => {
-            if (card.element.classList.contains('card-preview')) return;
-            if (card.element.dataset.scatterGroup) return;
-            state.cards.push(card.toJSON());
-        });
-
-        // Serialize editor cards
-        this.editorCards.forEach(editor => {
-            state.editorCards.push(editor.toJSON());
-        });
-
-        // Serialize connections (Map<string, Set<string>> -> Array)
-        this.connections.forEach((children, parentId) => {
-            children.forEach(childId => {
-                state.connections.push({ parent: parentId, child: childId });
-            });
-        });
-
-        try {
-            localStorage.setItem('paper-canvas-state', JSON.stringify(state));
-        } catch (e) {
-            console.error('Failed to save canvas state:', e);
-        }
-    }
-
-    /**
-     * Load saved canvas state from localStorage
-     * @returns {Object|null} The saved state or null if not found/invalid
-     */
-    loadSavedState() {
-        try {
-            const raw = localStorage.getItem('paper-canvas-state');
-            if (!raw) return null;
-
-            const state = JSON.parse(raw);
-
-            // Validate version
-            if (state.version !== 1) {
-                console.warn('Unsupported canvas state version, clearing...');
-                localStorage.removeItem('paper-canvas-state');
-                return null;
-            }
-
-            return state;
-        } catch (e) {
-            console.error('Failed to load saved state:', e);
-            localStorage.removeItem('paper-canvas-state');
-            return null;
-        }
-    }
-
-    /**
-     * Restore the complete canvas state from saved data
-     * @param {Object} state - The saved state object
-     */
-    async restoreCanvasState(state) {
-        // Prevent saves during restoration
-        this.isRestoring = true;
-
-        try {
-            // 0. Clear any existing cards from DOM to prevent stacking on refresh
-            this.cards.forEach(card => card.element.remove());
-            this.cards.clear();
-            this.editorCards.forEach(editor => editor.element.remove());
-            this.editorCards.clear();
-
-            // 1. Restore canvas transform
-            this.panX = state.canvas.panX;
-            this.panY = state.canvas.panY;
-            this.zoom = state.canvas.zoom;
-            this.rotation = state.canvas.rotation;
-            this.updateCanvasTransform();
-
-            // 2. Restore counters
-            this.pageCounter = state.counters.pageCounter;
-            this.zIndexCounter = state.counters.zIndexCounter;
-
-            // 3. Restore cards
-            const cardIdMap = new Map(); // Map old IDs to new card objects
-            for (const cardState of state.cards) {
-                const card = await this.restoreCard(cardState);
-                if (card) {
-                    cardIdMap.set(cardState.id, card);
-                }
-            }
-
-            // 4. Restore connections
-            for (const conn of state.connections) {
-                const parentCard = cardIdMap.get(conn.parent);
-                const childCard = cardIdMap.get(conn.child);
-                if (parentCard && childCard) {
-                    // Add connection without triggering save
-                    if (!this.connections.has(parentCard.id)) {
-                        this.connections.set(parentCard.id, new Set());
-                    }
-                    this.connections.get(parentCard.id).add(childCard.id);
-                    this.createConnectionLine(parentCard.id, childCard.id);
-                    this.updateConnectionLine(parentCard.id, childCard.id);
-                }
-            }
-
-            // 5. Restore editor cards (if any and if EditorCard is available)
-            if (state.editorCards && state.editorCards.length > 0 && this.EditorCard) {
-                for (const editorState of state.editorCards) {
-                    const editor = new this.EditorCard({
-                        id: editorState.id,
-                        x: editorState.x,
-                        y: editorState.y,
-                        width: editorState.width,
-                        height: editorState.height,
-                        rotation: editorState.rotation,
-                        zIndex: editorState.zIndex,
-                        pinned: editorState.pinned,
-                        filename: editorState.filename,
-                        content: editorState.content,
-                        parser: this.parser,
-                        fsManager: this.fsManager,
-                        canvas: this
-                    });
-
-                    // Restore additional state
-                    editor.isDirty = editorState.isDirty;
-                    editor.lastSavedContent = editorState.lastSavedContent;
-                    editor.isPrivate = editorState.isPrivate;
-
-                    // Update the private checkbox UI if needed
-                    const privateCheckbox = editor.element.querySelector('.private-checkbox');
-                    if (privateCheckbox) {
-                        privateCheckbox.checked = editor.isPrivate;
-                    }
-
-                    // Update the textarea with content
-                    const textarea = editor.element.querySelector('.editor-textarea');
-                    if (textarea) {
-                        textarea.value = editorState.content;
-                    }
-
-                    // Update the filename input
-                    const filenameInput = editor.element.querySelector('.editor-filename');
-                    if (filenameInput) {
-                        filenameInput.value = editorState.filename;
-                    }
-
-                    // Reconnect to target card if it exists
-                    if (editorState.targetCardId) {
-                        const targetCard = cardIdMap.get(editorState.targetCardId);
-                        if (targetCard) {
-                            editor.targetCard = targetCard;
-                        }
-                    }
-
-                    // Update status display
-                    editor.updateStatus();
-
-                    // Add to editor cards map and DOM
-                    this.editorCards.set(editor.id, editor);
-                    this.canvasContent.appendChild(editor.element);
-                }
-            }
-
-            // 6. Restore scroll positions (after DOM is ready)
-            // Use a promise to ensure isRestoring stays true until RAF completes
-            await new Promise(resolve => {
-                requestAnimationFrame(() => {
-                    state.cards.forEach(savedCard => {
-                        const card = cardIdMap.get(savedCard.id);
-                        if (card) {
-                            const contentEl = card.element.querySelector('.card-content');
-                            if (contentEl) {
-                                contentEl.scrollTop = savedCard.scrollTop || 0;
-                                contentEl.scrollLeft = savedCard.scrollLeft || 0;
-                            }
-                        }
-                    });
-                    resolve();
-                });
-            });
-        } finally {
-            // Re-enable saving after restoration is fully complete
-            this.isRestoring = false;
-        }
-    }
-
-    /**
-     * Restore a single card from saved state
-     * @param {Object} cardState - The saved card state
-     * @returns {Card|null} The restored card or null
-     */
-    async restoreCard(cardState) {
-        // Skip preview cards (shouldn't be in saved state, but safeguard)
-        if (cardState.id && cardState.id.includes('preview')) return null;
-
-        // Handle encrypted cards that were locked
-        if (cardState.isLocked && cardState.encryptedData) {
-            return this.restoreLockedCard(cardState);
-        }
-
-        // Handle dynamic content (tag pages) - need to re-register provider
-        if (cardState.isDynamic && cardState.sourceFile) {
-            const tagMatch = cardState.sourceFile.match(/^dynamic:tag-(.+)$/);
-            if (tagMatch) {
-                const tagName = tagMatch[1];
-                this.registerTagPage(tagName, null);
-                const cardName = `tag-${tagName}`;
-
-                const card = await this.loadCardFromFile(cardName, {
-                    x: cardState.x,
-                    y: cardState.y,
-                    width: cardState.width,
-                    height: cardState.height,
-                    rotation: cardState.rotation + this.rotation, // Account for canvas rotation
-                    skipSave: true
-                });
-
-                if (card) {
-                    card.id = cardState.id;
-                    card.element.id = cardState.id;
-                    card.pageNumber = cardState.pageNumber;
-                    card.zIndex = cardState.zIndex;
-                    card.element.style.zIndex = cardState.zIndex;
-                    this.cards.delete(card.id);
-                    this.cards.set(cardState.id, card);
-                }
-                return card;
-            }
-
-            // Handle tags overview page
-            if (cardState.sourceFile === 'dynamic:tags-overview') {
-                const card = await this.loadCardFromFile('tags', {
-                    x: cardState.x,
-                    y: cardState.y,
-                    width: cardState.width,
-                    height: cardState.height,
-                    rotation: cardState.rotation + this.rotation,
-                    skipSave: true
-                });
-
-                if (card) {
-                    card.id = cardState.id;
-                    card.element.id = cardState.id;
-                    card.pageNumber = cardState.pageNumber;
-                    card.zIndex = cardState.zIndex;
-                    card.element.style.zIndex = cardState.zIndex;
-                    this.cards.delete(card.id);
-                    this.cards.set(cardState.id, card);
-                }
-                return card;
-            }
-        }
-
-        // Handle file-based cards
-        if (cardState.sourceFile && !cardState.isDynamic) {
-            const card = await this.loadCardFromFile(cardState.sourceFile, {
-                x: cardState.x,
-                y: cardState.y,
-                width: cardState.width,
-                height: cardState.height,
-                rotation: cardState.rotation + this.rotation, // Account for canvas rotation
-                marginTB: cardState.marginTB,
-                marginLR: cardState.marginLR,
-                skipSave: true
-            });
-
-            if (card) {
-                // Update card with preserved state
-                const oldId = card.id;
-                card.id = cardState.id;
-                card.element.id = cardState.id;
-                card.pageNumber = cardState.pageNumber;
-                card.pinned = cardState.pinned;
-                card.zIndex = cardState.zIndex;
-                card.scale = cardState.scale;
-                card.marginLeftSize = cardState.marginLeftSize;
-                card.marginRightSize = cardState.marginRightSize;
-                card.marginTopSize = cardState.marginTopSize;
-                card.marginBottomSize = cardState.marginBottomSize;
-
-                // Apply margin sizes to DOM
-                this.applyMarginSizes(card);
-
-                if (cardState.pinned) {
-                    card.element.classList.add('pinned');
-                }
-                card.element.style.zIndex = cardState.zIndex;
-
-                // Update cards map with correct ID
-                this.cards.delete(oldId);
-                this.cards.set(cardState.id, card);
-            }
-            return card;
-        }
-
-        // Handle embed cards
-        if (cardState.embedUrl) {
-            const card = this.addCard({
-                x: cardState.x,
-                y: cardState.y,
-                width: cardState.width,
-                height: cardState.height,
-                rotation: cardState.rotation,
-                pageNumber: cardState.pageNumber,
-                embedUrl: cardState.embedUrl
-            });
-
-            const oldId = card.id;
-            card.id = cardState.id;
-            card.element.id = cardState.id;
-            card.zIndex = cardState.zIndex;
-            card.element.style.zIndex = cardState.zIndex;
-
-            this.cards.delete(oldId);
-            this.cards.set(cardState.id, card);
-            return card;
-        }
-
-        // Fallback: recreate from saved content
-        const card = this.addCard({
-            x: cardState.x,
-            y: cardState.y,
-            width: cardState.width,
-            height: cardState.height,
-            rotation: cardState.rotation,
-            scale: cardState.scale,
-            pageNumber: cardState.pageNumber,
-            content: cardState.content,
-            margins: cardState.margins,
-            marginTB: cardState.marginTB,
-            marginLR: cardState.marginLR,
-            image: cardState.image,
-            caption: cardState.caption,
-            progressBar: cardState.progressBar,
-            wordCount: cardState.wordCount,
-            readTime: cardState.readTime,
-            tags: cardState.tags,
-            showTags: cardState.showTags
-        });
-
-        const oldId = card.id;
-        card.id = cardState.id;
-        card.element.id = cardState.id;
-        card.pinned = cardState.pinned;
-        card.zIndex = cardState.zIndex;
-        card.element.style.zIndex = cardState.zIndex;
-
-        if (cardState.pinned) {
-            card.element.classList.add('pinned');
-        }
-
-        this.cards.delete(oldId);
-        this.cards.set(cardState.id, card);
-        return card;
-    }
-
-    /**
-     * Restore a locked (encrypted) card
-     * @param {Object} cardState - The saved card state
-     * @returns {Card} The locked card
-     */
-    restoreLockedCard(cardState) {
-        const card = this.createLockedCard(
-            cardState.sourceFile,
-            {
-                isEncrypted: true,
-                encryptedData: cardState.encryptedData,
-                sourceFile: cardState.sourceFile,
-                metadata: {}
-            },
-            {
-                x: cardState.x,
-                y: cardState.y,
-                width: cardState.width,
-                height: cardState.height,
-                rotation: cardState.rotation
-            }
-        );
-
-        if (card) {
-            const oldId = card.id;
-            card.id = cardState.id;
-            card.element.id = cardState.id;
-            card.zIndex = cardState.zIndex;
-            card.element.style.zIndex = cardState.zIndex;
-
-            this.cards.delete(oldId);
-            this.cards.set(cardState.id, card);
-        }
-        return card;
-    }
-
-    /**
-     * Apply saved margin sizes to a card's DOM
-     * @param {Card} card - The card to update
-     */
-    applyMarginSizes(card) {
-        const container = card.element.querySelector('.card-container');
-        if (!container) return;
-
-        if (card.marginLeftSize || card.marginRightSize) {
-            const left = card.marginLeftSize || 100;
-            const right = card.marginRightSize || 100;
-            container.style.gridTemplateColumns = `${left}px 1fr ${right}px`;
-        }
-
-        if (card.marginTopSize || card.marginBottomSize) {
-            const top = card.marginTopSize || 40;
-            const bottom = card.marginBottomSize || 40;
-            container.style.gridTemplateRows = `${top}px 1fr ${bottom}px`;
-        }
-    }
+    scheduleSave() {}
 
     /**
      * Generic jump-to system for intra-card navigation

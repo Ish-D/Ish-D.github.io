@@ -17,5 +17,60 @@
     "todo",
     "weird",
     "writing"
-  ]
+  ],
+  "metadata": {
+    "about": {
+      "name": "About"
+    },
+    "bookmarks": {
+      "name": "Bookmarks"
+    },
+    "contact": {
+      "name": "Contact Me"
+    },
+    "journal": {
+      "tags": "[fiction, ideas], [horror, ideas]",
+      "encrypted": true
+    },
+    "koi": {
+      "name": "Koi Pond"
+    },
+    "llms_for_bozos_1": {
+      "name": "LLM Inference for Bozos, Part 1",
+      "tags": "[LLMs, technical], [C++, technical],[projects, meta]",
+      "date": "04-14-2026"
+    },
+    "llms_for_bozos_2": {
+      "name": "LLM Inference for Bozos, Part 2",
+      "tags": "[LLMs, technical], [C++, technical]",
+      "date": "04-14-2026"
+    },
+    "margin-test": {
+      "name": "Margin Test"
+    },
+    "math": {
+      "encrypted": true
+    },
+    "menu": {
+      "name": "Menu"
+    },
+    "photography": {
+      "name": "Photography",
+      "tags": "[photography, visual], [art, visual]"
+    },
+    "settings": {
+      "name": "Settings"
+    },
+    "tags": {
+      "name": "Tags"
+    },
+    "weird": {
+      "name": "Why Make a Page This Weird?",
+      "tags": "[essays, ideas], [design, meta]",
+      "date": "01-30-2026"
+    },
+    "writing": {
+      "name": "Writing"
+    }
+  }
 }
