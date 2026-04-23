@@ -2646,6 +2646,16 @@ sup.jump-link {
     transform: scale(1.1);
 }
 
+/* Share button (fixed UI) */
+.share-btn {
+    left: 112px !important;
+    font-size: 16px;
+}
+
+.share-btn:hover {
+    transform: scale(1.1);
+}
+
 /* Editor Preview with Margins */
 .preview-card-container {
     display: grid;
@@ -3075,7 +3085,8 @@ body.reader-mode-active {
 
 /* Settings button in reader mode - match card with strong shadow */
 body.reader-mode-active .settings-btn,
-body.reader-mode-active .edit-btn {
+body.reader-mode-active .edit-btn,
+body.reader-mode-active .share-btn {
     background: var(--color-card-background);
     color: var(--color-text-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -3083,7 +3094,8 @@ body.reader-mode-active .edit-btn {
 }
 
 body.reader-mode-active .settings-btn:hover,
-body.reader-mode-active .edit-btn:hover {
+body.reader-mode-active .edit-btn:hover,
+body.reader-mode-active .share-btn:hover {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 6px rgba(0, 0, 0, 0.25);
 }
 
@@ -3417,9 +3429,10 @@ body.split-mode-active {
     padding: 32px;
 }
 
-/* Settings/edit buttons in split mode */
+/* Settings/edit/share buttons in split mode */
 body.split-mode-active .settings-btn,
-body.split-mode-active .edit-btn {
+body.split-mode-active .edit-btn,
+body.split-mode-active .share-btn {
     background: var(--color-card-background);
     color: var(--color-text-primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.2);
@@ -3427,7 +3440,8 @@ body.split-mode-active .edit-btn {
 }
 
 body.split-mode-active .settings-btn:hover,
-body.split-mode-active .edit-btn:hover {
+body.split-mode-active .edit-btn:hover,
+body.split-mode-active .share-btn:hover {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 6px rgba(0, 0, 0, 0.25);
 }
 
