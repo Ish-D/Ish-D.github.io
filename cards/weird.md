@@ -1,5 +1,6 @@
 ---
 name: Why Make a Page This Weird?
+visible: false
 width: 320
 height: 400
 progressBar: true
@@ -8,7 +9,6 @@ readTime: true
 tags: [essays, ideas], [design, meta]
 date: 01-30-2026
 ---
-
 # Why Make a Page this Weird?
 [[tags]]
 [[date]]    
