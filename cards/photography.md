@@ -19,11 +19,11 @@ images/photography/madh_birds.png | Birds over Madh Island | Madh Island
 images/photography/sutro_tower_alta_plaza.JPG | Sutro Tower from Alta Plaza Park | Sutro Tower
 images/photography/glacier_lake.PNG | Glacial lake | Glacier
 images/photography/glacier_sunset.PNG | Sunset over the glacier | Glacier
-images/photography/glacier_canyon.jpg | Canyon at the glacier | Glacier
+images/photography/glacier_canyon.JPG | Canyon at the glacier | Glacier
 images/photography/campanile_forest.jpg | Campanile through the trees | Campanile
 images/photography/campanile_420.jpg | Campanile | Campanile
-images/photography/bnw_tree.jpg | Tree in black and white | Tree
+images/photography/bnw_tree.JPG | Tree in black and white | Tree
 images/photography/koi.jpg | Koi pond at the Japanese garden | Koi Pond
 images/photography/brown_boulevard_field.JPG | Field on Brown Boulevard | Brown Boulevard
-images/photography/griffith.png | Griffith Observatory | Griffith
+images/photography/griffith.PNG | Griffith Observatory | Griffith
 }
