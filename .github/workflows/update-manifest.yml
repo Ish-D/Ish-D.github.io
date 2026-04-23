@@ -58,6 +58,11 @@ jobs:
                   if 'encrypted: true' in fm:
                       meta['encrypted'] = True
 
+                  visible_match = re.search(r'^visible:\s*(true|false)', fm, re.M)
+                  if visible_match and visible_match.group(1) == 'false':
+                      cards.remove(name)
+                      continue
+
                   if meta:
                       metadata[name] = meta
 

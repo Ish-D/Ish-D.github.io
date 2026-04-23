@@ -1363,6 +1363,15 @@ class PaperCanvas {
             return await this.contentProviders[cardName]();
         }
 
+        // In production, only allow cards listed in the manifest
+        if (!this.isLocal) {
+            await this.tagIndexReady;
+            if (this.manifestCards && !this.manifestCards.has(cardName)) {
+                console.warn(`Card "${cardName}" is not available`);
+                return null;
+            }
+        }
+
         // Default: load from markdown file
         try {
             const cacheBuster = this.isLocal ? `?t=${Date.now()}` : '';
