@@ -853,7 +853,7 @@ export class MarkdownParser {
 
             // Find first processable block
             const block = blocks.find(b =>
-                ['center', 'style', 'image', 'quote', 'code'].includes(b.type)
+                ['center', 'style', 'image', 'quote', 'code', 'gallery'].includes(b.type)
             );
 
             if (block) {
@@ -886,6 +886,8 @@ export class MarkdownParser {
                 } else if (block.type === 'code') {
                     // Do NOT recursively process code blocks - preserve content exactly
                     replacement = this.renderCodeBlock(params || '', content);
+                } else if (block.type === 'gallery') {
+                    replacement = this.renderGalleryBlock(params || '', content.trim());
                 } else {
                     replacement = block.fullMatch;
                 }
@@ -1505,6 +1507,39 @@ export class MarkdownParser {
         html += '</div>';
 
         return html;
+    }
+
+    renderGalleryBlock(paramsStr, content) {
+        const params = this.parseParams(paramsStr);
+
+        const columns = parseInt(params.named.columns) || 3;
+        const gap = parseInt(params.named.gap) || 8;
+
+        const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length === 0) return '';
+
+        let itemsHtml = '';
+        for (const line of lines) {
+            const parts = line.split('|').map(p => p.trim());
+            const imagePath = parts[0] || '';
+            const text = parts[1] || '';
+            const label = parts[2] || '';
+
+            if (!imagePath) continue;
+
+            const escapedText = text.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+
+            itemsHtml += `<div class="gallery-item" data-src="${imagePath}" data-text="${escapedText}">`;
+            itemsHtml += `<img src="${imagePath}" alt="${label}" loading="lazy">`;
+            if (label) {
+                itemsHtml += `<div class="gallery-item-label">${label}</div>`;
+            }
+            itemsHtml += `</div>`;
+        }
+
+        if (!itemsHtml) return '';
+
+        return `<div class="gallery-grid" data-columns="${columns}" data-gap="${gap}">${itemsHtml}</div>`;
     }
 
     parseFrontMatter(frontMatter) {

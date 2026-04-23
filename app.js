@@ -322,6 +322,9 @@ class PaperCanvas {
         if (slashIndex === -1) {
             return [path, null];
         }
+        if (this.manifestCards?.has(path)) {
+            return [path, null];
+        }
         const cardName = path.slice(0, slashIndex);
         const headingId = path.slice(slashIndex + 1) || null;
         return [cardName, headingId];
@@ -1628,6 +1631,7 @@ class PaperCanvas {
 
         this.globalTagIndex = {};
         this.mainTagIndex = {};
+        this.manifestCards = new Set(manifest.cards);
         this.fileTagCache.clear();
 
         // Use pre-built metadata from manifest (no individual file fetches needed)
@@ -2372,6 +2376,98 @@ ${renderColumn(rightColumn)}
                 this.spawnMarginCard(arrow);
             });
         });
+
+        // Bind gallery item clicks — open lightbox
+        cardElement.querySelectorAll('.gallery-item').forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.openGalleryLightbox(item.dataset.src, item.dataset.text);
+            });
+        });
+
+        // Distribute gallery items into columns for row-major ordering
+        cardElement.querySelectorAll('.gallery-grid').forEach(grid => {
+            const items = Array.from(grid.querySelectorAll('.gallery-item'));
+            if (items.length === 0) return;
+
+            const numCols = parseInt(grid.dataset.columns) || 3;
+            const gap = parseInt(grid.dataset.gap) || 8;
+
+            const distribute = () => {
+                if (grid.clientWidth === 0) return false;
+
+                items.forEach(item => item.remove());
+                grid.innerHTML = '';
+                grid.style.display = 'flex';
+                grid.style.gap = gap + 'px';
+                grid.classList.add('gallery-grid-distributed');
+
+                const columns = [];
+                for (let i = 0; i < numCols; i++) {
+                    const col = document.createElement('div');
+                    col.className = 'gallery-column';
+                    col.style.gap = gap + 'px';
+                    grid.appendChild(col);
+                    columns.push(col);
+                }
+
+                items.forEach((item, i) => {
+                    columns[i % numCols].appendChild(item);
+                });
+                return true;
+            };
+
+            if (!distribute()) {
+                const ro = new ResizeObserver(() => {
+                    if (distribute()) ro.disconnect();
+                });
+                ro.observe(grid);
+            }
+        });
+    }
+
+    openGalleryLightbox(src, text) {
+        if (!src) return;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'gallery-lightbox';
+
+        const content = document.createElement('div');
+        content.className = 'gallery-lightbox-content';
+
+        const img = document.createElement('img');
+        img.className = 'gallery-lightbox-image';
+        img.src = src;
+
+        content.appendChild(img);
+
+        if (text) {
+            const textEl = document.createElement('div');
+            textEl.className = 'gallery-lightbox-text';
+            textEl.textContent = text;
+            content.appendChild(textEl);
+        }
+
+        overlay.appendChild(content);
+        document.body.appendChild(overlay);
+
+        requestAnimationFrame(() => overlay.classList.add('active'));
+
+        const close = () => {
+            overlay.classList.remove('active');
+            overlay.addEventListener('transitionend', () => overlay.remove(), { once: true });
+            document.removeEventListener('keydown', onKey);
+        };
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) close();
+        });
+
+        const onKey = (e) => {
+            if (e.key === 'Escape') close();
+        };
+        document.addEventListener('keydown', onKey);
     }
 
     /**

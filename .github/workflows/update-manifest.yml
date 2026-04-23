@@ -4,7 +4,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'cards/*.md'
+      - 'cards/**/*.md'
 
 jobs:
   update-manifest:
@@ -21,40 +21,47 @@ jobs:
           cards = []
           metadata = {}
 
-          for f in sorted(os.listdir('.')):
-              if not f.endswith('.md'):
-                  continue
-              name = f[:-3]
-              cards.append(name)
+          for root, dirs, files in os.walk('.'):
+              dirs.sort()
+              for f in sorted(files):
+                  if not f.endswith('.md'):
+                      continue
+                  rel_dir = os.path.relpath(root, '.')
+                  if rel_dir == '.':
+                      name = f[:-3]
+                  else:
+                      name = rel_dir + '/' + f[:-3]
+                  cards.append(name)
 
-              with open(f, 'r') as fh:
-                  content = fh.read()
+                  with open(os.path.join(root, f), 'r') as fh:
+                      content = fh.read()
 
-              fm_match = re.match(r'^---\s*\n([\s\S]*?)\n---', content)
-              if not fm_match:
-                  continue
+                  fm_match = re.match(r'^---\s*\n([\s\S]*?)\n---', content)
+                  if not fm_match:
+                      continue
 
-              fm = fm_match.group(1)
-              meta = {}
+                  fm = fm_match.group(1)
+                  meta = {}
 
-              name_match = re.search(r'^name:\s*(.+)', fm, re.M)
-              if name_match:
-                  meta['name'] = name_match.group(1).strip()
+                  name_match = re.search(r'^name:\s*(.+)', fm, re.M)
+                  if name_match:
+                      meta['name'] = name_match.group(1).strip()
 
-              tags_match = re.search(r'^tags:\s*(.+)', fm, re.M)
-              if tags_match:
-                  meta['tags'] = tags_match.group(1).strip()
+                  tags_match = re.search(r'^tags:\s*(.+)', fm, re.M)
+                  if tags_match:
+                      meta['tags'] = tags_match.group(1).strip()
 
-              date_match = re.search(r'^date:\s*(\d{2}-\d{2}-\d{4})', fm, re.M)
-              if date_match:
-                  meta['date'] = date_match.group(1)
+                  date_match = re.search(r'^date:\s*(\d{2}-\d{2}-\d{4})', fm, re.M)
+                  if date_match:
+                      meta['date'] = date_match.group(1)
 
-              if 'encrypted: true' in fm:
-                  meta['encrypted'] = True
+                  if 'encrypted: true' in fm:
+                      meta['encrypted'] = True
 
-              if meta:
-                  metadata[name] = meta
+                  if meta:
+                      metadata[name] = meta
 
+          cards.sort()
           result = {'cards': cards, 'metadata': metadata}
           with open('manifest.json', 'w') as out:
               json.dump(result, out, indent=2)
