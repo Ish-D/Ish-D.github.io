@@ -15,7 +15,6 @@
     "settings",
     "tags",
     "todo",
-    "weird",
     "writing"
   ],
   "metadata": {
@@ -62,11 +61,6 @@
     },
     "tags": {
       "name": "Tags"
-    },
-    "weird": {
-      "name": "Why Make a Page This Weird?",
-      "tags": "[essays, ideas], [design, meta]",
-      "date": "01-30-2026"
     },
     "writing": {
       "name": "Writing"
