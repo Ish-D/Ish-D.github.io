@@ -2637,18 +2637,19 @@ sup.jump-link {
     border-bottom: none;
 }
 
-/* Edit button (fixed UI) */
+/* Edit button (fixed UI) - hidden by default, shown by JS on localhost */
 .edit-btn {
     left: 66px !important;
+    display: none !important;
 }
 
 .edit-btn:hover {
     transform: scale(1.1);
 }
 
-/* Share button (fixed UI) */
+/* Share button (fixed UI) - defaults to 66px, shifted to 112px when editor is visible */
 .share-btn {
-    left: 112px !important;
+    left: 66px !important;
 }
 
 .share-btn:hover {

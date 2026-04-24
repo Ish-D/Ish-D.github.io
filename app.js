@@ -2673,17 +2673,7 @@ ${renderColumn(rightColumn)}
     async initEditor() {
         const editBtn = document.getElementById('edit-btn');
 
-        // Hide editor on production - only available locally
-        if (!this.isLocal) {
-            if (editBtn) {
-                editBtn.style.display = 'none';
-            }
-            const shareBtn = document.getElementById('share-btn');
-            if (shareBtn) {
-                shareBtn.style.left = '66px';
-            }
-            return;
-        }
+        if (!this.isLocal) return;
 
         // Dynamically import editor module (only on localhost)
         try {
@@ -2691,9 +2681,14 @@ ${renderColumn(rightColumn)}
             this.EditorCard = EditorCard;
             this.fsManager = new FileSystemManager();
 
-            // Bind edit button
+            // Show edit button and shift share button over
             if (editBtn) {
+                editBtn.style.setProperty('display', 'flex', 'important');
                 editBtn.addEventListener('click', () => this.openEditorCard());
+            }
+            const shareBtn = document.getElementById('share-btn');
+            if (shareBtn) {
+                shareBtn.style.setProperty('left', '112px', 'important');
             }
 
             // Try to restore directory handle from storage
@@ -2720,13 +2715,6 @@ ${renderColumn(rightColumn)}
             console.log('Editor enabled (localhost mode)');
         } catch (error) {
             console.log('Editor module not available:', error.message);
-            if (editBtn) {
-                editBtn.style.display = 'none';
-            }
-            const shareBtn = document.getElementById('share-btn');
-            if (shareBtn) {
-                shareBtn.style.left = '66px';
-            }
         }
     }
 
