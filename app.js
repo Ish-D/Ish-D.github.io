@@ -170,7 +170,6 @@ class PaperCanvas {
         this.splitClickHandler = null;
         this.splitDeleteHandler = null;
         this.splitTagClickHandler = null;
-        this.splitEscapeHandler = null;
 
         // Live-reload file watcher
         this.fileWatcher = new FileWatcherClient(this);
@@ -205,7 +204,7 @@ class PaperCanvas {
         // Bind hash change for direct URL edits (address bar changes)
         window.addEventListener('hashchange', () => this.handleHashChange());
 
-        // Bind viewport resize for reader mode
+        // Bind viewport resize for split mode
         window.addEventListener('resize', () => this.handleResize());
 
         // Check URL for direct card routing (takes priority over saved state)
@@ -359,26 +358,6 @@ class PaperCanvas {
         }, 100);
     }
 
-    /**
-     * Scroll to a heading in reader mode.
-     */
-    scrollToHeadingInReaderMode(headingId) {
-        // Small delay to ensure DOM is fully rendered
-        setTimeout(() => {
-            const readerContent = document.querySelector('.reader-mode-content');
-            const targetElement = readerContent?.querySelector(`#${CSS.escape(headingId)}`);
-            if (readerContent && targetElement) {
-                const containerRect = readerContent.getBoundingClientRect();
-                const targetRect = targetElement.getBoundingClientRect();
-                const scrollOffset = targetRect.top - containerRect.top + readerContent.scrollTop;
-                readerContent.scrollTo({
-                    top: scrollOffset - 20,
-                    behavior: 'smooth'
-                });
-            }
-        }, 100);
-    }
-
 
 
 
@@ -443,7 +422,7 @@ class PaperCanvas {
             // Check if clicking on a card or its children
             const isCard = e.target.closest('.card');
 
-            // Ignore canvas interactions when locked (reader mode)
+            // Ignore canvas interactions when locked (split mode)
             if (this.canvasLocked) return;
 
             // Left click on canvas background (not on a card) - pan
@@ -461,7 +440,7 @@ class PaperCanvas {
         // Touch events for canvas
         this.canvas.addEventListener('touchstart', (e) => {
             const isCard = e.target.closest('.card');
-            // Ignore canvas interactions when locked (reader mode)
+            // Ignore canvas interactions when locked (split mode)
             if (this.canvasLocked) return;
             if (!isCard) {
                 if (e.touches.length === 1) {
@@ -665,7 +644,7 @@ class PaperCanvas {
 
         // Show preview for a specific link after delay
         this.showPreviewAfterDelay = async (cardLink, mouseEvent) => {
-            // Disable previews in reader mode and split mode
+            // Disable previews in split mode
             if (this.isSplitMode) return;
             const cardName = cardLink.dataset.card;
             const timings = this.getPreviewTimings();
@@ -1291,14 +1270,7 @@ class PaperCanvas {
             }
             // Apply global margin size if no custom margins were specified
             if (card.marginTB === null && card.marginLR === null && this.settings.marginSize !== undefined) {
-                // Reader mode cards get a slightly larger margin
-                if (card.isReaderMode) {
-                    const marginMultiplier = isMobile() ? 1.4 : 1.1;
-                    const readerMargin = Math.min(45, this.settings.marginSize * marginMultiplier);
-                    card.updateMarginSize(readerMargin);
-                } else {
-                    card.updateMarginSize(this.settings.marginSize);
-                }
+                card.updateMarginSize(this.settings.marginSize);
             }
         }
 
@@ -2343,10 +2315,7 @@ ${renderColumn(rightColumn)}
         // Load saved settings from Controls.js configuration
         this.settings = controlsManager.loadSettings();
 
-        // Reader mode runtime state (can be URL-driven or toggle-driven)
-        this.isReaderMode = false;
         this.canvasLocked = false;
-        this.readerModeCurrentCard = null;
 
         // Track connections between cards (parentId -> [childIds])
         this.connections = new Map();
@@ -2699,111 +2668,6 @@ ${renderColumn(rightColumn)}
     }
 
     /**
-     * Open settings as a centered overlay in reader mode
-     */
-    async openSettingsOverlay() {
-        // Check if overlay already exists
-        if (document.getElementById('settings-overlay')) {
-            return;
-        }
-
-        // Create overlay backdrop
-        const overlay = document.createElement('div');
-        overlay.id = 'settings-overlay';
-        overlay.className = 'settings-overlay';
-
-        // Create settings card container
-        const container = document.createElement('div');
-        container.className = 'settings-overlay-card';
-
-        // Load settings content
-        const contentData = await this.getCardContent('settings');
-        if (!contentData) return;
-
-        const parsed = this.parser.parse(contentData.content);
-        if (!parsed) return;
-
-        // Build card content
-        container.innerHTML = `
-            <div class="settings-overlay-header">
-                <span>Settings</span>
-                <button class="settings-overlay-close">&times;</button>
-            </div>
-            <div class="settings-overlay-content">
-                ${parsed.content}
-            </div>
-        `;
-
-        overlay.appendChild(container);
-        document.body.appendChild(overlay);
-
-        // Hide Card Display section in reader mode
-        this.hideReaderModeOnlySettings(container);
-
-        // Bind interactive elements
-        this.bindInteractiveElements(container);
-
-        // Close on backdrop click
-        overlay.addEventListener('click', (e) => {
-            if (e.target === overlay) {
-                this.closeSettingsOverlay();
-            }
-        });
-
-        // Close button
-        container.querySelector('.settings-overlay-close').addEventListener('click', () => {
-            this.closeSettingsOverlay();
-        });
-
-        // Close on Escape key
-        const escHandler = (e) => {
-            if (e.key === 'Escape') {
-                this.closeSettingsOverlay();
-                document.removeEventListener('keydown', escHandler);
-            }
-        };
-        document.addEventListener('keydown', escHandler);
-    }
-
-    /**
-     * Close the settings overlay
-     */
-    closeSettingsOverlay() {
-        const overlay = document.getElementById('settings-overlay');
-        if (overlay) {
-            overlay.remove();
-        }
-    }
-
-    /**
-     * Hide settings sections that don't apply in reader mode
-     * Removes the "Card Display" section and its contents
-     * @param {HTMLElement} container - The settings container element
-     */
-    hideReaderModeOnlySettings(container) {
-        if (!this.isReaderMode) return;
-
-        // Find the "Card Display" heading
-        const headings = container.querySelectorAll('h2');
-        for (const heading of headings) {
-            if (heading.textContent.trim() === 'Card Display') {
-                // Collect all elements to remove (heading + siblings until next h2 or hr)
-                const elementsToRemove = [heading];
-                let sibling = heading.nextElementSibling;
-
-                while (sibling && sibling.tagName !== 'H2' && sibling.tagName !== 'HR') {
-                    elementsToRemove.push(sibling);
-                    sibling = sibling.nextElementSibling;
-                }
-
-                // Remove all collected elements
-                elementsToRemove.forEach(el => el.remove());
-                break;
-            }
-        }
-    }
-
-    /**
      * Initialize editor functionality (localhost only)
      */
     async initEditor() {
@@ -2813,6 +2677,10 @@ ${renderColumn(rightColumn)}
         if (!this.isLocal) {
             if (editBtn) {
                 editBtn.style.display = 'none';
+            }
+            const shareBtn = document.getElementById('share-btn');
+            if (shareBtn) {
+                shareBtn.style.left = '66px';
             }
             return;
         }
@@ -2835,6 +2703,8 @@ ${renderColumn(rightColumn)}
             document.addEventListener('editor-close', (e) => {
                 const editorId = e.detail.editorId;
                 this.editorCards.delete(editorId);
+                this.updateURLWithOpenCards();
+                this.scheduleSave();
             });
 
             // Warn about unsaved changes before leaving page
@@ -2852,6 +2722,10 @@ ${renderColumn(rightColumn)}
             console.log('Editor module not available:', error.message);
             if (editBtn) {
                 editBtn.style.display = 'none';
+            }
+            const shareBtn = document.getElementById('share-btn');
+            if (shareBtn) {
+                shareBtn.style.left = '66px';
             }
         }
     }
@@ -2920,6 +2794,9 @@ ${renderColumn(rightColumn)}
             await editor.loadFile(filename);
         }
 
+        this.updateURLWithOpenCards();
+        this.scheduleSave();
+
         return editor;
     }
 
@@ -2943,15 +2820,14 @@ ${renderColumn(rightColumn)}
      * @param {number} marginPercent - Margin size as percentage (0-45)
      */
     updateAllCardMargins(marginPercent) {
-        // In reader mode, apply the same multiplier used when creating the card
+        // Split mode cards get a slightly larger margin
         const marginMultiplier = isMobile() ? 1.4 : 1.1;
-        const readerModeMargin = Math.min(45, marginPercent * marginMultiplier);
+        const splitModeMargin = Math.min(45, marginPercent * marginMultiplier);
 
         this.cards.forEach(card => {
             if (card.updateMarginSize) {
-                // Reader mode cards use a multiplied margin
-                const effective = card.element.classList.contains('card-reader-mode')
-                    ? readerModeMargin
+                const effective = card.element.classList.contains('card-split-mode')
+                    ? splitModeMargin
                     : marginPercent;
                 card.updateMarginSize(effective);
             }
@@ -3167,6 +3043,9 @@ ${renderColumn(rightColumn)}
             const name = card.loadName || card.sourceFile;
             if (name) cardNames.push(name);
         }
+        for (const editor of this.editorCards.values()) {
+            cardNames.push('__editor__');
+        }
 
         if (cardNames.length === 0) {
             window.history.replaceState(null, '', window.location.pathname);
@@ -3177,7 +3056,10 @@ ${renderColumn(rightColumn)}
 
     collectSplitLeafNames(node) {
         if (!node) return [];
-        if (node.type === 'leaf') return node.cardName ? [node.cardName] : [];
+        if (node.type === 'leaf') {
+            if (node.editor) return ['__editor__'];
+            return node.cardName ? [node.cardName] : [];
+        }
         return [...this.collectSplitLeafNames(node.first), ...this.collectSplitLeafNames(node.second)];
     }
 
@@ -3228,6 +3110,15 @@ ${renderColumn(rightColumn)}
                     s: contentEl ? Math.round(contentEl.scrollTop) : 0
                 });
             }
+            for (const editor of this.editorCards.values()) {
+                cardNames.push('__editor__');
+                cards.push({
+                    n: '__editor__',
+                    f: editor.filename || '',
+                    x: Math.round(editor.x), y: Math.round(editor.y),
+                    w: Math.round(editor.width), h: Math.round(editor.height)
+                });
+            }
             if (cards.length === 0) return;
             entry = {
                 mode: 'canvas',
@@ -3274,6 +3165,12 @@ ${renderColumn(rightColumn)}
         this._suppressURLUpdate = true;
         this._suppressLayoutSave = true;
         for (const c of cached.cards) {
+            if (c.n === '__editor__') {
+                if (this.EditorCard) {
+                    await this.openEditorCard(c.f || null);
+                }
+                continue;
+            }
             const card = await this.loadCardFromFile(c.n, {
                 x: c.x, y: c.y, width: c.w, height: c.h
             });
@@ -3329,6 +3226,9 @@ ${renderColumn(rightColumn)}
     serializeSplitTree(node) {
         if (!node) return null;
         if (node.type === 'leaf') {
+            if (node.editor) {
+                return { n: '__editor__', f: node.editor.filename || '' };
+            }
             const el = node.card?.element?.querySelector('.card-content');
             return { n: node.cardName, s: el ? Math.round(el.scrollTop) : 0 };
         }
@@ -3359,16 +3259,23 @@ ${renderColumn(rightColumn)}
         return this.getFirstLeafFromTree(node[2]);
     }
 
+    getFirstCardLeafFromTree(node) {
+        if (!node) return null;
+        if (node.n !== undefined) return node.n !== '__editor__' ? node : null;
+        return this.getFirstCardLeafFromTree(node[2]) || this.getFirstCardLeafFromTree(node[3]);
+    }
+
     async restoreSplitFromTree(treeData) {
-        const firstLeaf = this.getFirstLeafFromTree(treeData);
+        const firstLeaf = this.getFirstCardLeafFromTree(treeData) || this.getFirstLeafFromTree(treeData);
         if (!firstLeaf) {
             await this.loadMenuCard();
             return;
         }
 
+        const initialCard = firstLeaf.n === '__editor__' ? 'menu' : firstLeaf.n;
         this._suppressURLUpdate = true;
         this._suppressLayoutSave = true;
-        await this.enterSplitMode(firstLeaf.n, false);
+        await this.enterSplitMode(initialCard, false);
         await this.rebuildSplitNode(this.splitRoot, treeData);
         this._suppressURLUpdate = false;
         this._suppressLayoutSave = false;
@@ -3378,10 +3285,28 @@ ${renderColumn(rightColumn)}
     async rebuildSplitNode(currentLeaf, treeData) {
         if (!treeData || !currentLeaf) return;
 
-        // Leaf node: {n: name, s: scrollTop}
+        // Leaf node: {n: name, s: scrollTop} or {n: '__editor__', f: filename}
         if (treeData.n !== undefined) {
-            if (currentLeaf.cardName !== treeData.n) {
-                // Need to load a different card into this leaf
+            const isEditor = treeData.n === '__editor__';
+
+            if (isEditor && this.EditorCard) {
+                const newLeaf = this.createSplitEditorLeaf(treeData.f || '');
+                const parent = currentLeaf.parent;
+                if (parent) {
+                    if (parent.first === currentLeaf) {
+                        parent.first = newLeaf;
+                    } else {
+                        parent.second = newLeaf;
+                    }
+                    newLeaf.parent = parent;
+                    currentLeaf.element.parentElement.replaceChild(newLeaf.element, currentLeaf.element);
+                    if (currentLeaf.resizeObserver) currentLeaf.resizeObserver.disconnect();
+                } else {
+                    this.splitRoot = newLeaf;
+                    this.splitContainer.innerHTML = '';
+                    this.splitContainer.appendChild(newLeaf.element);
+                }
+            } else if (!isEditor && currentLeaf.cardName !== treeData.n) {
                 const newLeaf = await this.createSplitLeaf(treeData.n);
                 const parent = currentLeaf.parent;
                 if (parent) {
@@ -3399,8 +3324,8 @@ ${renderColumn(rightColumn)}
                     this.splitContainer.appendChild(newLeaf.element);
                 }
             }
-            // Set scroll position
-            if (treeData.s) {
+            // Set scroll position for card leaves
+            if (!isEditor && treeData.s) {
                 const leaf = currentLeaf.cardName === treeData.n ? currentLeaf : (currentLeaf.parent?.first?.cardName === treeData.n ? currentLeaf.parent.first : currentLeaf.parent?.second);
                 const el = leaf?.card?.element?.querySelector('.card-content');
                 if (el) requestAnimationFrame(() => { el.scrollTop = treeData.s; });
@@ -3410,11 +3335,17 @@ ${renderColumn(rightColumn)}
 
         // Branch node: [dir, ratio, firstData, secondData]
         const [dir, ratio, firstData, secondData] = treeData;
-        const secondLeafName = this.getFirstLeafFromTree(secondData)?.n;
-        if (!secondLeafName) return;
+        const secondLeafData = this.getFirstLeafFromTree(secondData);
+        if (!secondLeafData) return;
 
-        // Split the current leaf to create the branch
-        await this.splitPane(currentLeaf, secondLeafName);
+        const isEditorSecond = secondLeafData.n === '__editor__';
+        if (isEditorSecond && this.EditorCard) {
+            await this.splitPaneWithEditor(currentLeaf, secondLeafData.f || '');
+        } else if (!isEditorSecond) {
+            await this.splitPane(currentLeaf, secondLeafData.n);
+        } else {
+            return;
+        }
 
         // Find the branch that was just created (it's now the parent of currentLeaf)
         const branch = currentLeaf.parent;
@@ -3772,7 +3703,7 @@ ${renderColumn(rightColumn)}
     }
 
     // ============================================
-    // Reader Mode Methods
+    // Canvas Lock / Split Mode Helpers
     // ============================================
 
     /**
@@ -3782,7 +3713,7 @@ ${renderColumn(rightColumn)}
         this.canvasLocked = true;
         this.canvas.style.cursor = 'default';
 
-        // Reset transform for reader mode
+        // Reset transform for split mode
         this.panX = 0;
         this.panY = 0;
         this.zoom = 1;
@@ -3796,67 +3727,6 @@ ${renderColumn(rightColumn)}
     unlockCanvas() {
         this.canvasLocked = false;
         this.canvas.style.cursor = 'grab';
-    }
-
-    /**
-     * Enter reader mode with a specific card
-     * @param {string} cardName - The card to display
-     * @param {boolean} pushHistory - Whether to push to browser history
-     */
-    async enterReaderMode(cardName, pushHistory = true) {
-        this.isReaderMode = true;
-        this.lockCanvas();
-        this.clearAllCards();
-        this.canvas.classList.add('reader-mode');
-        document.body.classList.add('reader-mode-active');
-
-        // Sync settings to reflect reader mode is active
-        this.settings.readerMode = true;
-        localStorage.setItem('settings-readerMode', 'true');
-        this.syncAllSettingsCards();
-
-        const card = await this.loadCardInReaderMode(cardName);
-        if (card) {
-            this.readerModeCurrentCard = card;
-            const url = `#/r/${cardName}`;
-            if (pushHistory) {
-                window.history.pushState({ readerMode: true, cardName }, '', url);
-            } else {
-                window.history.replaceState({ readerMode: true, cardName }, '', url);
-            }
-        }
-    }
-
-    /**
-     * Clean up reader mode state without navigating.
-     * Used by hash/popstate handlers that will navigate separately.
-     */
-    cleanupReaderMode() {
-        this.isReaderMode = false;
-        this.unlockCanvas();
-        this.canvas.classList.remove('reader-mode');
-        document.body.classList.remove('reader-mode-active');
-        this.clearAllCards();
-        this.readerModeCurrentCard = null;
-
-        this.settings.readerMode = false;
-        localStorage.setItem('settings-readerMode', 'false');
-        this.syncAllSettingsCards();
-    }
-
-    /**
-     * Exit reader mode, restoring normal canvas behavior
-     */
-    exitReaderMode() {
-        const currentCard = this.readerModeCurrentCard?.sourceFile;
-        this.cleanupReaderMode();
-
-        if (currentCard) {
-            window.history.replaceState(null, '', `#/${currentCard}`);
-            this.loadCardFromFile(currentCard, { fillViewport: true });
-        } else {
-            this.loadMenuCard();
-        }
     }
 
     /**
@@ -3879,167 +3749,6 @@ ${renderColumn(rightColumn)}
             editor.element.remove();
         });
         this.editorCards.clear();
-    }
-
-    /**
-     * Get appropriate margin for reader mode based on viewport
-     */
-    getReaderModeMargin() {
-        // No margin - cards take up full screen
-        return 0;
-    }
-
-    /**
-     * Load a card specifically for reader mode display
-     */
-    async loadCardInReaderMode(cardName) {
-        const contentData = await this.getCardContent(cardName);
-        if (!contentData) return null;
-
-        // Handle encrypted content
-        if (contentData.isEncrypted) {
-            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
-            if (decryptedBody) {
-                const fullMarkdown = this.reconstructDecryptedMarkdown(
-                    contentData.encryptedData.originalFrontmatter,
-                    decryptedBody
-                );
-                contentData.content = fullMarkdown;
-                contentData.isEncrypted = false;
-            } else {
-                // Show locked card in reader mode style
-                return this.createLockedCardReaderMode(cardName, contentData);
-            }
-        }
-
-        const parsed = this.parser.parse(contentData.content);
-        if (!parsed) return null;
-
-        const margin = this.getReaderModeMargin();
-
-        const card = this.addCard({
-            x: margin,
-            y: margin,
-            width: window.innerWidth - (margin * 2),
-            height: window.innerHeight - (margin * 2),
-            rotation: 0,
-            pageNumber: null, // No page number in reader mode
-            content: parsed.content,
-            margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
-            sourceFile: contentData.sourceFile,
-            progressBar: parsed.metadata.progressBar === 'true',
-            wordCount: parsed.metadata.wordCount === 'true',
-            readTime: parsed.metadata.readTime === 'true',
-            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
-            tags: (() => {
-                const tagsStr = parsed.metadata.tags || '';
-                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
-                const subtags = [];
-                let match;
-                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
-                    const subtag = match[1].trim();
-                    if (!subtags.includes(subtag)) subtags.push(subtag);
-                }
-                return subtags;
-            })(),
-            isDynamic: contentData.isDynamic || false,
-            isReaderMode: true
-        });
-
-        card.element.classList.add('card-reader-mode');
-
-        // Bind interactive elements
-        this.bindInteractiveElements(card.element);
-
-        // Load companion script
-        await this.loadCardScript(cardName, card.element);
-
-        // Register for live-reload
-        if (!contentData.isDynamic && contentData.sourceFile) {
-            this.fileWatcher.watch(contentData.sourceFile);
-        }
-
-        return card;
-    }
-
-    /**
-     * Create a locked card in reader mode for encrypted content
-     */
-    createLockedCardReaderMode(cardName, contentData) {
-        const margin = this.getReaderModeMargin();
-
-        // Create a simple locked card display
-        const lockedContent = `
-            <div class="locked-card-content">
-                <div class="lock-icon">🔒</div>
-                <h2>Encrypted Card</h2>
-                <p>This card is encrypted. Enter password to unlock.</p>
-                <input type="password" class="password-input" placeholder="Password" autocomplete="current-password">
-                <button class="unlock-btn">Unlock</button>
-            </div>
-        `;
-
-        const card = this.addCard({
-            x: margin,
-            y: margin,
-            width: window.innerWidth - (margin * 2),
-            height: window.innerHeight - (margin * 2),
-            rotation: 0,
-            pageNumber: null,
-            content: lockedContent,
-            sourceFile: cardName,
-            isReaderMode: true
-        });
-
-        card.element.classList.add('card-reader-mode', 'card-locked');
-
-        // Bind unlock button
-        const unlockBtn = card.element.querySelector('.unlock-btn');
-        const passwordInput = card.element.querySelector('.password-input');
-
-        if (unlockBtn && passwordInput) {
-            const tryUnlock = async () => {
-                const password = passwordInput.value;
-                if (password) {
-                    try {
-                        const decrypted = await this.crypto.decrypt(
-                            contentData.encryptedData.encryptedContent,
-                            password,
-                            contentData.encryptedData.salt,
-                            contentData.encryptedData.iv
-                        );
-                        if (decrypted) {
-                            // Cache password for future
-                            this.crypto.cachePassword(cardName, password);
-                            // Reload the card
-                            this.navigateReaderMode(cardName);
-                        }
-                    } catch (e) {
-                        passwordInput.classList.add('error');
-                        setTimeout(() => passwordInput.classList.remove('error'), 500);
-                    }
-                }
-            };
-
-            unlockBtn.addEventListener('click', tryUnlock);
-            passwordInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') tryUnlock();
-            });
-        }
-
-        return card;
-    }
-
-    /**
-     * Navigate to a new card in reader mode (in-place replacement)
-     */
-    async navigateReaderMode(cardName) {
-        this.clearAllCards();
-        const card = await this.loadCardInReaderMode(cardName);
-        if (card) {
-            this.readerModeCurrentCard = card;
-            window.history.pushState({ readerMode: true, cardName }, '', `#/r/${cardName}`);
-        }
     }
 
     // ========================================
@@ -4214,14 +3923,6 @@ ${renderColumn(rightColumn)}
         };
         this.splitContainer.addEventListener('click', this.splitHeadingLinkHandler);
 
-        // Escape key to exit
-        this.splitEscapeHandler = (e) => {
-            if (e.key === 'Escape' && this.isSplitMode) {
-                this.pushNavigationState();
-                this.exitSplitMode();
-            }
-        };
-        document.addEventListener('keydown', this.splitEscapeHandler);
 
         // URL — reflect all cards in the split tree
         const allNames = this.collectSplitLeafNames(this.splitRoot);
@@ -4272,10 +3973,6 @@ ${renderColumn(rightColumn)}
         if (this.splitContainer && this.splitHeadingLinkHandler) {
             this.splitContainer.removeEventListener('click', this.splitHeadingLinkHandler);
             this.splitHeadingLinkHandler = null;
-        }
-        if (this.splitEscapeHandler) {
-            document.removeEventListener('keydown', this.splitEscapeHandler);
-            this.splitEscapeHandler = null;
         }
 
         // Destroy all cards in the tree
@@ -4542,8 +4239,7 @@ ${renderColumn(rightColumn)}
                 }
                 return null;
             })(),
-            isDynamic: contentData.isDynamic || false,
-            isReaderMode: true
+            isDynamic: contentData.isDynamic || false
         });
 
         card.element.classList.add('card-split-mode');
@@ -4567,8 +4263,8 @@ ${renderColumn(rightColumn)}
                     // Recalculate margins based on actual pane dimensions
                     if (card.marginTB === null && card.marginLR === null && this.settings?.marginSize !== undefined) {
                         const marginMultiplier = isMobile() ? 1.4 : 1.1;
-                        const readerMargin = Math.min(45, this.settings.marginSize * marginMultiplier);
-                        card.updateMarginSize(readerMargin);
+                        const splitMargin = Math.min(45, this.settings.marginSize * marginMultiplier);
+                        card.updateMarginSize(splitMargin);
                     }
                 }
             }
@@ -4927,6 +4623,9 @@ ${renderColumn(rightColumn)}
         if (filename && newLeaf.editor) {
             await newLeaf.editor.loadFile(filename);
         }
+
+        this.updateURLWithOpenCards();
+        this.scheduleLayoutSave();
     }
 
     /**
@@ -5231,17 +4930,27 @@ ${renderColumn(rightColumn)}
                 if (cached) {
                     await this.restoreSplitFromTree(cached.tree);
                 } else {
-                    await this.enterSplitMode(urlInfo.cardNames[0], false);
-                    for (let i = 1; i < urlInfo.cardNames.length; i++) {
-                        const leaf = this.findLastSplitLeaf(this.splitRoot);
-                        if (leaf) await this.splitPane(leaf, urlInfo.cardNames[i]);
+                    const cardOnly = urlInfo.cardNames.filter(n => n !== '__editor__');
+                    if (cardOnly.length > 0) {
+                        await this.enterSplitMode(cardOnly[0], false);
+                        for (let i = 1; i < cardOnly.length; i++) {
+                            const leaf = this.findLastSplitLeaf(this.splitRoot);
+                            if (leaf) await this.splitPane(leaf, cardOnly[i]);
+                        }
+                    } else {
+                        await this.enterSplitMode('menu', false);
                     }
                 }
             } else {
                 if (cached) {
                     await this.restoreCanvasFromCache(cached);
                 } else {
-                    await this.loadMultipleCards(urlInfo.cardNames);
+                    const cardOnly = urlInfo.cardNames.filter(n => n !== '__editor__');
+                    if (cardOnly.length > 0) {
+                        await this.loadMultipleCards(cardOnly);
+                    } else {
+                        await this.loadMenuCard();
+                    }
                 }
             }
         } else {
@@ -5259,38 +4968,6 @@ ${renderColumn(rightColumn)}
     handleResize() {
         // Split mode: flexbox handles resize automatically
         if (this.isSplitMode) return;
-    }
-
-    /**
-     * Bind swipe gestures for reader mode navigation
-     */
-    bindReaderModeSwipes() {
-        let touchStartX = 0;
-        let touchStartY = 0;
-        const SWIPE_THRESHOLD = 100;
-        const EDGE_ZONE = 50; // pixels from left edge
-
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (!this.isReaderMode) return;
-            touchStartX = e.touches[0].clientX;
-            touchStartY = e.touches[0].clientY;
-        }, { passive: true });
-
-        this.canvas.addEventListener('touchend', (e) => {
-            if (!this.isReaderMode) return;
-
-            const touchEndX = e.changedTouches[0].clientX;
-            const touchEndY = e.changedTouches[0].clientY;
-            const deltaX = touchEndX - touchStartX;
-            const deltaY = touchEndY - touchStartY;
-
-            // Swipe right from left edge = go back
-            if (touchStartX < EDGE_ZONE &&
-                deltaX > SWIPE_THRESHOLD &&
-                Math.abs(deltaX) > Math.abs(deltaY)) {
-                window.history.back();
-            }
-        }, { passive: true });
     }
 
 

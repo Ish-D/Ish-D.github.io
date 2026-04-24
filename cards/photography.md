@@ -5,7 +5,7 @@ height: 700
 ---
 
 # Photography
-[[summary]]{Collection of some of my favorite pictures that I have taken. Mostly all on an Olympus OM-1.}
+[[summary]]{A collection of some of my favorite pictures that I've taken over time. Mostly all on an Olympus OM-1.}
 [[bigbreak]]
 [[gallery(gap: 10)]]
 {
