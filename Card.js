@@ -331,7 +331,7 @@ export class Card {
 
         topHandle.innerHTML = `
             ${externalBtn}
-            <button class="card-action-btn pin-btn" title="Pin">📌</button>
+            <button class="card-action-btn pin-btn" title="Pin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg></button>
             <button class="card-action-btn delete-btn" title="Delete">×</button>
         `;
         card.appendChild(topHandle);
@@ -2215,7 +2215,9 @@ export class Card {
         this.element.classList.toggle('pinned', this.pinned);
 
         const pinBtn = this.element.querySelector('.pin-btn');
-        pinBtn.textContent = this.pinned ? '📍' : '📌';
+        pinBtn.innerHTML = this.pinned
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
 
         // Dispatch state change for persistence
         this.element.dispatchEvent(new CustomEvent('card-state-changed', { bubbles: true }));

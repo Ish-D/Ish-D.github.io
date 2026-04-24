@@ -307,20 +307,19 @@ export class EditorCard {
         container.innerHTML = `
             <!-- Toolbar -->
             <div class="editor-toolbar">
-                <input type="text" class="editor-filename"
-                       placeholder="untitled"
-                       value="${this.escapeHtml(this.filename)}"
-                       spellcheck="false">
                 <div class="editor-toolbar-buttons">
+                    <button class="editor-btn save-btn" title="Save (Ctrl+S)">Save</button>
+                    <button class="editor-btn new-btn" title="New Card">New</button>
+                    <button class="editor-btn open-btn" title="Open File">Open</button>
                     <label class="editor-private-toggle" title="Encrypt this card (password protected)">
                         <input type="checkbox" class="private-checkbox">
                         <span class="private-label">&#128274; Private</span>
                     </label>
-                    <button class="editor-btn save-btn" title="Save (Ctrl+S)">Save</button>
-                    <button class="editor-btn new-btn" title="New Card">New</button>
-                    <button class="editor-btn open-btn" title="Open File">Open</button>
-                    <button class="editor-btn close-btn" title="Close">&times;</button>
                 </div>
+                <input type="text" class="editor-filename"
+                       placeholder="untitled"
+                       value="${this.escapeHtml(this.filename)}"
+                       spellcheck="false">
             </div>
 
             <!-- Insert Toolbar -->
@@ -336,73 +335,104 @@ export class EditorCard {
                     <button class="insert-btn" data-insert="code" title="Code">&lt;/&gt;</button>
                 </div>
                 <div class="insert-group">
-                    <button class="insert-btn dropdown-toggle" data-dropdown="margin" title="Margin Text">Margin ▾</button>
-                    <button class="insert-btn dropdown-toggle" data-dropdown="link" title="Links">Link ▾</button>
                     <button class="insert-btn dropdown-toggle" data-dropdown="block" title="Blocks">Block ▾</button>
-                    <button class="insert-btn dropdown-toggle" data-dropdown="more" title="More">More ▾</button>
+                    <button class="insert-btn dropdown-toggle" data-dropdown="margin" title="Margin">Margin ▾</button>
+                    <button class="insert-btn dropdown-toggle" data-dropdown="link" title="Links &amp; References">Link ▾</button>
+                    <button class="insert-btn dropdown-toggle" data-dropdown="insert" title="Insert Elements">Insert ▾</button>
+                    <button class="insert-btn dropdown-toggle" data-dropdown="interactive" title="Interactive &amp; Dynamic">Active ▾</button>
                 </div>
             </div>
 
             <!-- Dropdown Menus -->
             <div class="editor-dropdowns">
-                <!-- Margin Dropdown -->
-                <div class="insert-dropdown" data-dropdown-id="margin">
-                    <div class="dropdown-section">
-                        <div class="dropdown-title">Margin Position</div>
-                        <button class="dropdown-item" data-insert="margin-left">Left margin</button>
-                        <button class="dropdown-item" data-insert="margin-right">Right margin</button>
-                        <button class="dropdown-item" data-insert="margin-top">Top margin</button>
-                        <button class="dropdown-item" data-insert="margin-bottom">Bottom margin</button>
-                    </div>
-                    <div class="dropdown-section">
-                        <div class="dropdown-title">Margin Type</div>
-                        <button class="dropdown-item" data-insert="margin-absolute">Fixed position (absolute)</button>
-                        <button class="dropdown-item" data-insert="margin-relative">Anchored to content (relative)</button>
-                    </div>
-                </div>
-
-                <!-- Link Dropdown -->
-                <div class="insert-dropdown" data-dropdown-id="link">
-                    <button class="dropdown-item" data-insert="card-link">Card link [[card]]</button>
-                    <button class="dropdown-item" data-insert="card-link-display">Card link with text [[card|text]]</button>
-                    <button class="dropdown-item" data-insert="card-link-full">Card link (full options)</button>
-                    <button class="dropdown-item" data-insert="external-link">External link [text](url)</button>
-                    <button class="dropdown-item" data-insert="anchor">Anchor point</button>
-                    <button class="dropdown-item" data-insert="jump">Jump to anchor</button>
-                </div>
-
                 <!-- Block Dropdown -->
                 <div class="insert-dropdown" data-dropdown-id="block">
                     <button class="dropdown-item" data-insert="center">Center block</button>
-                    <button class="dropdown-item" data-insert="style-block">Styled block</button>
+                    <button class="dropdown-item" data-insert="style-block">Style block</button>
                     <button class="dropdown-item" data-insert="image-block">Image block</button>
-                    <button class="dropdown-item" data-insert="blockquote">Blockquote</button>
+                    <button class="dropdown-item" data-insert="gallery">Gallery</button>
+                    <button class="dropdown-item" data-insert="quote-block">Quote block</button>
                     <button class="dropdown-item" data-insert="code-block">Code block</button>
                     <button class="dropdown-item" data-insert="hr">Horizontal rule</button>
                 </div>
 
-                <!-- More Dropdown -->
-                <div class="insert-dropdown" data-dropdown-id="more">
+                <!-- Margin Dropdown -->
+                <div class="insert-dropdown" data-dropdown-id="margin">
                     <div class="dropdown-section">
-                        <div class="dropdown-title">Text</div>
-                        <button class="dropdown-item" data-insert="centered-text">Centered text -&gt;text&lt;-</button>
-                        <button class="dropdown-item" data-insert="inline-style">Styled text</button>
-                        <button class="dropdown-item" data-insert="list-ul">Bullet list</button>
-                        <button class="dropdown-item" data-insert="list-ol">Numbered list</button>
+                        <div class="dropdown-title">Position</div>
+                        <button class="dropdown-item" data-insert="margin-left">Left margin</button>
+                        <button class="dropdown-item" data-insert="margin-right">Right margin</button>
+                        <button class="dropdown-item" data-insert="margin-top">Top margin</button>
+                        <button class="dropdown-item" data-insert="margin-bottom">Bottom margin</button>
+                        <button class="dropdown-item" data-insert="note">Inline note</button>
+                    </div>
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Type</div>
+                        <button class="dropdown-item" data-insert="margin-absolute">Fixed position (absolute)</button>
+                        <button class="dropdown-item" data-insert="margin-relative">Anchored (relative)</button>
+                    </div>
+                </div>
+
+                <!-- Link & Refs Dropdown -->
+                <div class="insert-dropdown" data-dropdown-id="link">
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Links</div>
+                        <button class="dropdown-item" data-insert="card-link">Card link [[card]]</button>
+                        <button class="dropdown-item" data-insert="card-link-display">Card link [[card|text]]</button>
+                        <button class="dropdown-item" data-insert="card-link-full">Full link options</button>
+                        <button class="dropdown-item" data-insert="external-link">External link [text](url)</button>
+                        <button class="dropdown-item" data-insert="anchor">Anchor point</button>
+                        <button class="dropdown-item" data-insert="jump">Jump to anchor</button>
                     </div>
                     <div class="dropdown-section">
                         <div class="dropdown-title">References</div>
                         <button class="dropdown-item" data-insert="citation">Citation</button>
                         <button class="dropdown-item" data-insert="bibliography">Bibliography</button>
+                        <button class="dropdown-item" data-insert="toc">Table of contents</button>
+                    </div>
+                </div>
+
+                <!-- Insert Dropdown -->
+                <div class="insert-dropdown" data-dropdown-id="insert">
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Spacing &amp; Layout</div>
+                        <button class="dropdown-item" data-insert="drop-cap">Drop cap</button>
+                        <button class="dropdown-item" data-insert="tab">Tab indent</button>
+                        <button class="dropdown-item" data-insert="break">Small break</button>
+                        <button class="dropdown-item" data-insert="bigbreak">Big break</button>
+                    </div>
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Placeholders</div>
+                        <button class="dropdown-item" data-insert="date">Date</button>
+                        <button class="dropdown-item" data-insert="tags">Tags</button>
+                        <button class="dropdown-item" data-insert="summary">Summary</button>
+                    </div>
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Text</div>
+                        <button class="dropdown-item" data-insert="centered-text">Centered text</button>
+                        <button class="dropdown-item" data-insert="inline-style">Styled text</button>
+                        <button class="dropdown-item" data-insert="list-ul">Bullet list</button>
+                        <button class="dropdown-item" data-insert="list-ol">Numbered list</button>
+                        <button class="dropdown-item" data-insert="blockquote">Blockquote</button>
                         <button class="dropdown-item" data-insert="math-inline">Math (inline)</button>
                         <button class="dropdown-item" data-insert="math-display">Math (display)</button>
                     </div>
+                </div>
+
+                <!-- Interactive Dropdown -->
+                <div class="insert-dropdown" data-dropdown-id="interactive">
                     <div class="dropdown-section">
-                        <div class="dropdown-title">Interactive</div>
+                        <div class="dropdown-title">Controls</div>
                         <button class="dropdown-item" data-insert="toggle">Toggle switch</button>
                         <button class="dropdown-item" data-insert="slider">Slider</button>
                         <button class="dropdown-item" data-insert="button">Button</button>
-                        <button class="dropdown-item" data-insert="tags">Tags placeholder</button>
+                        <button class="dropdown-item" data-insert="input">Input field</button>
+                        <button class="dropdown-item" data-insert="textarea">Textarea</button>
+                    </div>
+                    <div class="dropdown-section">
+                        <div class="dropdown-title">Dynamic</div>
+                        <button class="dropdown-item" data-insert="viz">Visualization</button>
+                        <button class="dropdown-item" data-insert="embed">Embed</button>
                     </div>
                 </div>
             </div>
@@ -460,7 +490,7 @@ export class EditorCard {
         const topHandle = document.createElement('div');
         topHandle.className = 'card-top-handle';
         topHandle.innerHTML = `
-            <button class="card-action-btn pin-btn" title="Pin">${this.pinned ? '📍' : '📌'}</button>
+            <button class="card-action-btn pin-btn" title="Pin">${this.pinned ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>'}</button>
             <button class="card-action-btn delete-btn" title="Close">&times;</button>
         `;
         card.appendChild(topHandle);
@@ -526,7 +556,6 @@ export class EditorCard {
         this.element.querySelector('.save-btn').addEventListener('click', () => this.save());
         this.element.querySelector('.new-btn').addEventListener('click', () => this.newCard());
         this.element.querySelector('.open-btn').addEventListener('click', () => this.toggleFilePicker());
-        this.element.querySelector('.close-btn').addEventListener('click', () => this.close());
 
         // Private toggle
         const privateCheckbox = this.element.querySelector('.private-checkbox');
@@ -1368,7 +1397,9 @@ Your content here...
 
         const pinBtn = this.element.querySelector('.pin-btn');
         if (pinBtn) {
-            pinBtn.textContent = this.pinned ? '📍' : '📌';
+            pinBtn.innerHTML = this.pinned
+                ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>'
+                : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
         }
     }
 
@@ -1798,7 +1829,66 @@ Optional caption
                 prefix: '[[button(action: actionName, label: ',
                 suffix: ')]]'
             },
-            'tags': { text: '[[tags]]', cursorOffset: 8 }
+            'tags': { text: '[[tags]]', cursorOffset: 8 },
+
+            // New templates
+            'gallery': {
+                text: `[[gallery(columns: 3, gap: 8)]]
+{
+path/to/image.jpg|alt text|label
+}
+`,
+                cursorOffset: 35
+            },
+            'quote-block': {
+                text: `[[quote(author: "Author Name")]]
+{
+Quote text here
+}
+`,
+                cursorOffset: 18,
+                prefix: `[[quote(author: "Author Name")]]
+{
+`,
+                suffix: `
+}
+`
+            },
+            'note': {
+                text: '[[note(right)]]{anchor text}{margin content}',
+                cursorOffset: 16
+            },
+            'input': {
+                text: '[[input(name: field, placeholder: "Enter text")]]',
+                cursorOffset: 13
+            },
+            'textarea': {
+                text: '[[textarea(name: field, placeholder: "Enter text", rows: 4)]]',
+                cursorOffset: 15
+            },
+            'viz': {
+                text: '[[viz(type: polynomial, width: 400, height: 300)]]',
+                cursorOffset: 11
+            },
+            'embed': {
+                text: '{{name}}',
+                cursorOffset: 2
+            },
+            'drop-cap': {
+                text: '[[drop(A)]]',
+                cursorOffset: 7
+            },
+            'tab': { text: '[[tab]]', cursorOffset: 7 },
+            'break': { text: '[[break]]', cursorOffset: 9 },
+            'bigbreak': { text: '[[bigbreak]]', cursorOffset: 12 },
+            'toc': { text: '[[toc]]', cursorOffset: 7 },
+            'date': { text: '[[date]]', cursorOffset: 8 },
+            'summary': {
+                text: '[[summary]]{summary text}',
+                cursorOffset: 12,
+                prefix: '[[summary]]{',
+                suffix: '}'
+            }
         };
 
         return templates[type] || null;

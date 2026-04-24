@@ -6,7 +6,7 @@ progressBar: true
 wordCount: true
 readTime: true
 tags: [LLMs, technical], [C++, technical]
-date: 04-14-2026
+date: 04-30-2026
 ---
 
 # LLM Inference for Bozos, Part 2

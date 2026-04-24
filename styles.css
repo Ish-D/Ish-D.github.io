@@ -2318,7 +2318,6 @@ sup.jump-link {
     height: 100%;
     width: 100%;
     background: var(--color-card-background);
-    border-radius: 2px;
     overflow: hidden;
 }
 
@@ -2327,38 +2326,38 @@ sup.jump-link {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 8px 12px;
-    background: var(--color-background);
+    gap: 12px;
+    padding: 8px 16px;
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
 }
 
 .editor-toolbar-buttons {
     display: flex;
-    gap: 4px;
+    align-items: center;
+    gap: 2px;
 }
 
 .editor-filename {
     flex: 1;
     max-width: 200px;
-    padding: 4px 8px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
+    padding: 2px 0;
+    border: none;
+    border-bottom: 1px solid var(--color-border);
     font-family: var(--font-family-serif);
-    font-size: 12px;
-    background: var(--color-card-background);
+    font-size: 13px;
+    background: transparent;
     color: var(--color-text-primary);
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: border-color var(--transition-normal);
 }
 
 .editor-filename:focus {
-    border-color: var(--color-text-secondary);
+    border-bottom-color: var(--color-text-primary);
 }
 
 .editor-filename.error {
-    border-color: var(--color-error);
+    border-bottom-color: var(--color-error);
     animation: shake 0.3s ease;
 }
 
@@ -2369,29 +2368,22 @@ sup.jump-link {
 }
 
 .editor-btn {
-    padding: 4px 12px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: var(--color-card-background);
-    color: var(--color-text-primary);
+    padding: 4px 10px;
+    border: none;
+    background: none;
+    color: var(--color-text-secondary);
     cursor: pointer;
     font-size: 12px;
     font-family: var(--font-family-serif);
-    transition: background 0.2s ease, transform 0.1s ease;
+    transition: color var(--transition-normal);
 }
 
 .editor-btn:hover {
-    background: var(--color-background);
+    color: var(--color-text-primary);
 }
 
 .editor-btn:active {
     transform: scale(0.95);
-}
-
-.editor-btn.close-btn {
-    padding: 4px 10px;
-    font-size: 16px;
-    line-height: 1;
 }
 
 /* Source-only editor (no split view) */
@@ -2410,11 +2402,11 @@ sup.jump-link {
 .editor-source-pane .editor-textarea {
     flex: 1;
     width: 100%;
-    padding: 16px;
+    padding: var(--card-padding-vertical) var(--card-padding-horizontal);
     border: none;
     resize: none;
     font-family: var(--font-family-serif);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
     background: var(--color-card-background);
     color: var(--color-text-primary);
@@ -2426,40 +2418,42 @@ sup.jump-link {
 .editor-insert-toolbar {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 12px;
-    background: var(--color-card-background);
+    align-items: center;
+    gap: 2px;
+    padding: 4px 16px;
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
 }
 
 .insert-group {
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: 1px;
     padding-right: 8px;
+    margin-right: 4px;
     border-right: 1px solid var(--color-border);
 }
 
 .insert-group:last-child {
     border-right: none;
     padding-right: 0;
+    margin-right: 0;
 }
 
 .insert-btn {
-    padding: 4px 8px;
-    border: 1px solid var(--color-border);
-    border-radius: 3px;
-    background: var(--color-card-background);
-    color: var(--color-text-primary);
+    padding: 3px 7px;
+    border: none;
+    background: none;
+    color: var(--color-text-secondary);
     cursor: pointer;
     font-size: 11px;
-    font-family: var(--font-family-mono);
-    transition: background 0.15s ease;
+    font-family: var(--font-family-serif);
+    transition: color var(--transition-fast);
     white-space: nowrap;
 }
 
 .insert-btn:hover {
-    background: var(--color-background);
+    color: var(--color-text-primary);
 }
 
 .insert-btn:active {
@@ -2485,8 +2479,7 @@ sup.jump-link {
     overflow-y: auto;
     background: var(--color-card-background);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     z-index: 1000;
 }
 
@@ -2504,26 +2497,26 @@ sup.jump-link {
 }
 
 .dropdown-title {
-    padding: 4px 12px;
+    padding: 6px 16px 2px;
     font-size: 10px;
-    font-weight: bold;
     color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    font-family: var(--font-family-serif);
 }
 
 .dropdown-item {
     display: block;
     width: 100%;
-    padding: 8px 12px;
+    padding: 6px 16px;
     border: none;
     background: none;
     color: var(--color-text-primary);
-    font-size: 12px;
+    font-size: 13px;
     font-family: var(--font-family-serif);
     text-align: left;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background var(--transition-fast);
 }
 
 .dropdown-item:hover {
@@ -2548,11 +2541,11 @@ sup.jump-link {
 .editor-textarea {
     flex: 1;
     width: 100%;
-    padding: 16px;
+    padding: var(--card-padding-vertical) var(--card-padding-horizontal);
     border: none;
     resize: none;
     font-family: var(--font-family-serif);
-    font-size: 13px;
+    font-size: 14px;
     line-height: 1.6;
     background: var(--color-card-background);
     color: var(--color-text-primary);
@@ -2562,15 +2555,15 @@ sup.jump-link {
 
 .editor-textarea::placeholder {
     color: var(--color-text-secondary);
-    opacity: 0.7;
+    opacity: 0.5;
 }
 
 .editor-divider {
-    width: 4px;
+    width: 1px;
     background: var(--color-border);
     cursor: ew-resize;
     flex-shrink: 0;
-    transition: background 0.2s ease;
+    transition: background var(--transition-normal);
 }
 
 .editor-divider:hover {
@@ -2596,11 +2589,10 @@ sup.jump-link {
 .editor-status {
     display: flex;
     justify-content: space-between;
-    padding: 4px 12px;
-    background: var(--color-background);
+    padding: 4px 16px;
     border-top: 1px solid var(--color-border);
     font-size: 11px;
-    font-family: var(--font-family-mono);
+    font-family: var(--font-family-serif);
     color: var(--color-text-secondary);
     flex-shrink: 0;
 }
@@ -2615,18 +2607,17 @@ sup.jump-link {
     overflow-y: auto;
     background: var(--color-card-background);
     border: 1px solid var(--color-border);
-    border-radius: 4px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
     z-index: 100;
 }
 
 .editor-file-item {
-    padding: 8px 12px;
+    padding: 6px 16px;
     cursor: pointer;
-    font-family: var(--font-family-mono);
-    font-size: 12px;
+    font-family: var(--font-family-serif);
+    font-size: 13px;
     border-bottom: 1px solid var(--color-border);
-    transition: background 0.15s ease;
+    transition: background var(--transition-fast);
 }
 
 .editor-file-item:hover {
@@ -2872,17 +2863,17 @@ sup.jump-link {
     align-items: center;
     gap: 4px;
     cursor: pointer;
-    padding: 4px 8px;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    background: var(--color-card-background);
+    padding: 4px 10px;
+    border: none;
+    background: none;
     font-size: 12px;
-    transition: background 0.2s ease, border-color 0.2s ease;
-    margin-right: 8px;
+    font-family: var(--font-family-serif);
+    transition: color var(--transition-normal);
+    margin-right: 4px;
 }
 
 .editor-private-toggle:hover {
-    background: var(--color-background);
+    color: var(--color-text-primary);
 }
 
 .editor-private-toggle input[type="checkbox"] {
@@ -2891,17 +2882,15 @@ sup.jump-link {
 
 .editor-private-toggle .private-label {
     color: var(--color-text-secondary);
-    transition: color 0.2s ease;
+    transition: color var(--transition-normal);
 }
 
 .editor-private-toggle input[type="checkbox"]:checked + .private-label {
     color: var(--color-error);
-    font-weight: bold;
 }
 
 .editor-private-toggle:has(input:checked) {
-    border-color: var(--color-error);
-    background: color-mix(in srgb, var(--color-error) 10%, transparent);
+    background: none;
 }
 
 /* ============================================
@@ -3048,7 +3037,7 @@ body.split-mode-active {
     filter: none !important;
     box-shadow: none !important;
     border-radius: 0;
-    z-index: 1;
+    z-index: 1 !important;
 }
 
 /* Editor cards in split panes */
