@@ -5,7 +5,7 @@ height: 700
 ---
 
 # Photography
-[[summary]]{A collection of some of my favorite pictures that I've taken over time. Mostly all on an Olympus OM-1.}
+[[summary]]{Some of my favorite frames.}
 [[bigbreak]]
 [[gallery(gap: 10)]]
 {
@@ -53,7 +53,7 @@ images/photography/bnw_tree.JPG | Tree in black and white | Tree on Campus
 
 images/photography/koi.jpg | Koi pond at the Japanese garden | Koi Pond
 
-images/photography/brown_boulevard_field.JPG | Field on Brown Boulevard | Brown Boulevard
+images/photography/brown_boulevard_field.JPG |  My last year of college I took a Spring break trip to Taiwan with some friends, we spent two days in Taitung on the Southeastern coast. We stayed in a nice house by the beach, waking up to the sound of fighter jets over the Pacific. Early one morning we tried to make our way to a rental car agency, waiting at a bus stop for a half hour  past when the bus was supposed to arrive, trying to communicate with some locals that owned a bike shop nearby whether it was coming at all. When it arrived it was more of a van than a bus, but we made it to the agency eventually. We drove up towards Brown's, stopping to try stinky tofu for lunch, and rented some bikes when we got there. The view of of the vast rice paddies stretching towards the mountains was idyllic beyond words. I'll never forget sitting on the edge of the road, my feet dangling over the paddy, eating passionfruit ice cream from a truck stopped nearby.| Brown Boulevard
 
 images/photography/griffith.PNG | A picture from one of my first rolls of film. My dad gave me this Canon EOS Rebel 2000 when I told him I was thinking of buying a film camera after scrolling r/analog in class all Summer. I never really quite got the hang of using it, and there was a probably 20 year old piece of tape on the back to keep it from swinging open because the latch was broken.(I gave up on it and bought my OM-1 a year later when the tape went loose and the back swung open, exposing the film). I think this might've been the first picture I was proud of. The sky is such a perfect blue and I've always loved pictures with this dreamlike atmosphere.| Griffith Observatory
 }

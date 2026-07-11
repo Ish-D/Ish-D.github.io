@@ -3,7 +3,7 @@ import { MarkdownParser } from './MarkdownParser.js';
 import { CardCrypto } from './Crypto.js';
 import { controlsManager, SettingsConfig } from './Controls.js';
 import { vizManager } from './Visualizations.js';
-import { Z_INDEX_BASE, Z_INDEX_CARD_CAP, Z_INDEX_PREVIEW, CARD_DEFAULT_WIDTH, CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, DEFAULT_MARGIN_PERCENT, SPLIT_DIVIDER_SIZE, SPLIT_MIN_PANE_RATIO, isMobile } from './constants.js';
+import { Z_INDEX_BASE, Z_INDEX_CARD_CAP, CARD_DEFAULT_WIDTH, CARD_TEMPLATE_WIDTH, CARD_TEMPLATE_HEIGHT, DEFAULT_MARGIN_PERCENT, SPLIT_DIVIDER_SIZE, SPLIT_MIN_PANE_RATIO, isMobile } from './constants.js';
 
 // Editor is loaded dynamically only on localhost
 
@@ -207,55 +207,12 @@ class PaperCanvas {
         // Bind viewport resize for split mode
         window.addEventListener('resize', () => this.handleResize());
 
-        // Check URL for direct card routing (takes priority over saved state)
+        // Custom right-click / long-press menu on card links
+        this.bindContextMenu();
+
+        // Route to the card named by the URL; default to the menu
         const urlInfo = this.getCardNameFromURL();
-
-        if (urlInfo) {
-            if (urlInfo.snapshot) {
-                await this.restoreFromSnapshot(urlInfo.snapshot);
-            } else if (urlInfo.multiCard && urlInfo.splitMode) {
-                const cached = this.getCachedLayout(urlInfo.cardNames, true);
-                if (cached) {
-                    await this.restoreSplitFromTree(cached.tree);
-                } else {
-                    await this.enterSplitMode(urlInfo.cardNames[0], false);
-                    for (let i = 1; i < urlInfo.cardNames.length; i++) {
-                        const leaf = this.findLastSplitLeaf(this.splitRoot);
-                        if (leaf) await this.splitPane(leaf, urlInfo.cardNames[i]);
-                    }
-                }
-            } else if (urlInfo.multiCard) {
-                const cached = this.getCachedLayout(urlInfo.cardNames, false);
-                if (cached) {
-                    await this.restoreCanvasFromCache(cached);
-                } else {
-                    await this.loadMultipleCards(urlInfo.cardNames);
-                }
-            } else if (urlInfo.splitMode) {
-                await this.enterSplitMode(urlInfo.cardName, false);
-            } else {
-                const cached = this.getCachedLayout([urlInfo.cardName], false);
-                if (cached) {
-                    await this.restoreCanvasFromCache(cached);
-                } else {
-                    this.panX = 0;
-                    this.panY = 0;
-                    this.zoom = 1;
-                    this.rotation = 0;
-                    this.updateCanvasTransform();
-
-                    const card = await this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
-                    if (!card) {
-                        console.warn(`Card "${urlInfo.cardName}" not found, loading menu`);
-                        await this.loadMenuCard();
-                    } else if (urlInfo.headingId) {
-                        this.scrollToHeadingInCard(card, urlInfo.headingId);
-                    }
-                }
-            }
-        } else {
-            await this.loadMenuCard();
-        }
+        await this.showCard(urlInfo?.cardName || 'menu', false, urlInfo?.headingId || null);
     }
 
     /**
@@ -271,53 +228,21 @@ class PaperCanvas {
     }
 
     getCardNameFromURL() {
-        // Helper to parse a segment that may contain multi-card (+) or snapshot (v/) formats
-        const parseSegment = (segment) => {
-            // Snapshot URL: v/BASE64_ENCODED_STATE
-            if (segment.startsWith('v/')) {
-                return { snapshot: segment.slice(2) };
-            }
-            // Split mode prefix
-            if (segment.startsWith('r/') || segment.startsWith('s/')) {
-                const rest = segment.slice(2);
-                // Multi-card split: r/card1~card2~card3
-                if (rest.includes('~')) {
-                    return { cardNames: rest.split('~'), splitMode: true, multiCard: true };
-                }
-                const [cardName, headingId] = this.parseCardAndHeading(rest);
-                return { cardName, splitMode: true, headingId };
-            }
-            // Multi-card canvas: card1~card2~card3
-            if (segment.includes('~')) {
-                return { cardNames: segment.split('~'), splitMode: false, multiCard: true };
-            }
-            // Single card
-            const [cardName, headingId] = this.parseCardAndHeading(segment);
-            return { cardName, splitMode: false, headingId };
-        };
+        // Extract the raw target from pathname, hash, or ?page= (priority order)
+        let raw = decodeURIComponent(window.location.pathname.replace(/^\/+|\/+$/g, ''));
+        if (!raw) raw = decodeURIComponent(window.location.hash.replace(/^#\/?/, ''));
+        if (!raw) raw = decodeURIComponent(new URLSearchParams(window.location.search).get('page') || '');
+        if (!raw) return null;
 
-        // Check pathname first (for SPA-configured servers)
-        const path = window.location.pathname;
-        const pathCard = decodeURIComponent(path.replace(/^\/+|\/+$/g, ''));
-        if (pathCard) {
-            return parseSegment(pathCard);
-        }
+        // Legacy snapshot links (v/…) don't map to a single page — fall back to the menu
+        if (raw.startsWith('v/')) return null;
+        // Strip legacy mode prefixes: r/ (reader), c/ (canvas), s/ (split)
+        raw = raw.replace(/^[rcs]\//, '');
+        // Legacy multi-card URLs were ~-joined; the first card is the page
+        if (raw.includes('~')) raw = raw.split('~')[0];
 
-        // Check hash (works with any static server: /#journal or #journal)
-        const hash = window.location.hash;
-        const hashCard = decodeURIComponent(hash.replace(/^#\/?/, ''));
-        if (hashCard) {
-            return parseSegment(hashCard);
-        }
-
-        // Check query parameter (?page=journal)
-        const params = new URLSearchParams(window.location.search);
-        const queryCard = params.get('page');
-        if (queryCard) {
-            return parseSegment(decodeURIComponent(queryCard));
-        }
-
-        return null;
+        const [cardName, headingId] = this.parseCardAndHeading(raw);
+        return { cardName, headingId };
     }
 
     /**
@@ -379,42 +304,7 @@ class PaperCanvas {
         });
     }
 
-    async addScatterCards(centerX, centerY) {
-        // Remove any existing scatter cards
-        const toRemove = [];
-        this.cards.forEach((card, id) => {
-            if (card.element.dataset.scatterGroup) {
-                toRemove.push(id);
-            }
-        });
-        toRemove.forEach(id => {
-            const card = this.cards.get(id);
-            const img = card.element.querySelector('.card-image');
-            if (img && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
-            card.element.remove();
-            this.cards.delete(id);
-        });
 
-        const { scatterImage } = await import('./ImageScatter.js');
-        const specs = await scatterImage('images/higuchi.png', 8, 420, 0, centerX, centerY);
-
-        const groupId = Date.now().toString();
-        specs.forEach(spec => {
-            const card = this.createCard({
-                x: spec.x,
-                y: spec.y,
-                width: spec.width,
-                height: spec.height,
-                rotation: spec.rotation,
-                extra: { image: spec.dataUrl },
-            });
-            card.zIndex = spec.zIndex;
-            card.element.style.zIndex = spec.zIndex;
-            card.element.dataset.scatterGroup = groupId;
-            const imgContainer = card.element.querySelector('.card-image-container');
-            if (imgContainer) imgContainer.style.height = '100%';
-        });
-    }
 
     bindCanvasEvents() {
         // Canvas panning with left mouse on empty space
@@ -569,14 +459,6 @@ class PaperCanvas {
                 const cardName = cardLink.dataset.card;
                 const embedUrl = cardLink.dataset.url;
 
-                // If there's a preview card, make it permanent
-                if (this.previewCard && this.previewCardLink === cardLink) {
-                    this.previewCard.element.classList.remove('card-preview');
-                    this.previewCard = null;
-                    this.previewCardLink = null;
-                    return;
-                }
-
                 // Get the parent card element
                 const parentCardEl = cardLink.closest('.card');
                 const parentCard = parentCardEl ? this.getCardById(parentCardEl.id) : null;
@@ -611,192 +493,6 @@ class PaperCanvas {
                 }
             }
         });
-
-        // Handle card link hover - sophisticated preview system with delays
-        this.previewLoadingId = 0; // Track loading to prevent race conditions
-        this.previewShowTimeout = null; // Timeout for delayed showing
-        this.previewHideTimeout = null; // Timeout for delayed hiding
-        this.pendingPreviewLink = null; // Track which link we're waiting to show preview for
-
-        // Get preview timing from CSS custom properties
-        this.getPreviewTimings = () => {
-            const styles = getComputedStyle(document.documentElement);
-            const delayStr = styles.getPropertyValue('--preview-delay').trim();
-            const lingerStr = styles.getPropertyValue('--preview-linger').trim();
-
-            const delay = parseInt(delayStr) || 1000;
-            const linger = parseInt(lingerStr) || 1000;
-
-            return { delay, linger };
-        };
-
-        // Clear all preview timeouts
-        this.clearPreviewTimeouts = () => {
-            if (this.previewShowTimeout) {
-                clearTimeout(this.previewShowTimeout);
-                this.previewShowTimeout = null;
-            }
-            if (this.previewHideTimeout) {
-                clearTimeout(this.previewHideTimeout);
-                this.previewHideTimeout = null;
-            }
-        };
-
-        // Show preview for a specific link after delay
-        this.showPreviewAfterDelay = async (cardLink, mouseEvent) => {
-            // Disable previews in split mode
-            if (this.isSplitMode) return;
-            const cardName = cardLink.dataset.card;
-            const timings = this.getPreviewTimings();
-
-            // Track that we're pending a preview for this link
-            this.pendingPreviewLink = cardLink;
-
-            // Increment loading ID for this specific show attempt
-            const loadId = ++this.previewLoadingId;
-
-            this.previewShowTimeout = setTimeout(async () => {
-                // Check if this show is still valid and we're still pending for the same link
-                if (loadId !== this.previewLoadingId || this.pendingPreviewLink !== cardLink) {
-                    return;
-                }
-
-                // Calculate position from the mouse event
-                const rect = this.canvas.getBoundingClientRect();
-                const cursorX = (mouseEvent.clientX - rect.left - this.panX) / this.zoom;
-                const cursorY = (mouseEvent.clientY - rect.top - this.panY) / this.zoom;
-
-                const previewSize = 400;
-                const offset = 50;
-                const previewX = cursorX + offset;
-                const previewY = cursorY + offset;
-
-                // Load the preview card
-                const previewCard = await this.loadCardFromFile(cardName, {
-                    x: previewX,
-                    y: previewY,
-                    width: previewSize,
-                    height: previewSize,
-                    rotation: 0,
-                    marginTB: 8,
-                    marginLR: 8,
-                    isPreview: true  // Mark as preview to avoid incrementing page counter
-                });
-
-                // Check if this load is still valid
-                if (loadId !== this.previewLoadingId || !previewCard || this.pendingPreviewLink !== cardLink) {
-                    if (previewCard) {
-                        this.cards.delete(previewCard.id);
-                        previewCard.element.remove();
-                    }
-                    return;
-                }
-
-                // Set up the preview card
-                previewCard.element.classList.add('card-preview');
-                previewCard.zIndex = Z_INDEX_PREVIEW;
-                previewCard.element.style.zIndex = Z_INDEX_PREVIEW;
-                this.previewCard = previewCard;
-                this.previewCardLink = cardLink;
-                this.pendingPreviewLink = null; // No longer pending, now active
-
-                // Add hover listeners to the preview card itself
-                this.bindPreviewCardHover(previewCard);
-
-                this.previewShowTimeout = null;
-            }, timings.delay);
-        };
-
-        // Bind hover events to preview card to keep it visible when hovered
-        this.bindPreviewCardHover = (previewCard) => {
-            const previewElement = previewCard.element;
-
-            previewElement.addEventListener('mouseenter', () => {
-                // Mouse entered preview card - cancel any pending hide
-                this.clearPreviewTimeouts();
-            });
-
-            previewElement.addEventListener('mouseleave', () => {
-                // Mouse left preview card - start hide timer
-                this.hidePreviewAfterDelay();
-            });
-        };
-
-        // Hide preview after linger delay
-        this.hidePreviewAfterDelay = () => {
-            const timings = this.getPreviewTimings();
-
-            // Cancel any pending show
-            if (this.previewShowTimeout) {
-                clearTimeout(this.previewShowTimeout);
-                this.previewShowTimeout = null;
-                this.pendingPreviewLink = null;
-            }
-
-            this.previewHideTimeout = setTimeout(() => {
-                this.clearPreviewCard();
-                this.previewHideTimeout = null;
-            }, timings.linger);
-        };
-
-        // Handle card link mouse enter
-        this.canvas.addEventListener('mouseenter', (e) => {
-            const cardLink = e.target.closest('.card-link');
-            if (!cardLink || !cardLink.dataset.card) return;
-
-            // Check if previews are disabled
-            if (!this.getSetting('showPreviews')) return;
-
-            // Don't preview embed links
-            if (cardLink.dataset.url) return;
-
-            // Check if this link is inside a preview card - if so, ignore it
-            const parentCard = cardLink.closest('.card');
-            if (parentCard && parentCard.classList.contains('card-preview')) {
-                return; // Don't create previews from links inside preview cards
-            }
-
-            // If we're already showing a preview for this same link, do nothing
-            if (this.previewCardLink === cardLink && this.previewCard) return;
-
-            // If we're already pending for this same link, do nothing
-            if (this.pendingPreviewLink === cardLink) return;
-
-            // Clear any existing timeouts
-            this.clearPreviewTimeouts();
-
-            // Clear any existing preview from different link
-            if (this.previewCardLink !== cardLink) {
-                this.clearPreviewCard();
-            }
-
-            // Clear any pending preview from different link
-            this.pendingPreviewLink = null;
-
-            // Start delayed show for this link
-            this.showPreviewAfterDelay(cardLink, e);
-        }, true);
-
-        // Handle card link mouse leave
-        this.canvas.addEventListener('mouseleave', (e) => {
-            const cardLink = e.target.closest('.card-link');
-            if (!cardLink) return;
-
-            // Handle leaving a link we're pending a preview for
-            if (this.pendingPreviewLink === cardLink) {
-                // Cancel the pending preview
-                this.clearPreviewTimeouts();
-                this.pendingPreviewLink = null;
-                this.previewLoadingId++; // Cancel any in-progress loads
-                return;
-            }
-
-            // Handle leaving a link with an active preview
-            if (this.previewCardLink === cardLink && this.previewCard) {
-                // Start hide timer for active preview
-                this.hidePreviewAfterDelay();
-            }
-        }, true);
 
         // Handle tag clicks
         this.canvas.addEventListener('tag-click', async (e) => {
@@ -872,7 +568,7 @@ class PaperCanvas {
                         const cardId = cardElement.dataset.cardId;
                         const card = this.cards.get(cardId);
                         if (card && card.sourceFile) {
-                            const newUrl = `#/${card.sourceFile}/${targetId}`;
+                            const newUrl = `#/c/${card.sourceFile}/${targetId}`;
                             window.history.pushState(
                                 { cardName: card.sourceFile, headingId: targetId },
                                 '',
@@ -945,7 +641,7 @@ class PaperCanvas {
                     const cardId = cardElement.dataset.cardId;
                     const card = this.cards.get(cardId);
                     if (card && card.sourceFile) {
-                        const newUrl = `#/${card.sourceFile}/${targetId}`;
+                        const newUrl = `#/c/${card.sourceFile}/${targetId}`;
                         window.history.pushState(
                             { cardName: card.sourceFile, headingId: targetId },
                             '',
@@ -972,7 +668,7 @@ class PaperCanvas {
                     const cardId = cardElement.dataset.cardId;
                     const card = this.cards.get(cardId);
                     if (card && card.sourceFile) {
-                        const url = `${window.location.origin}${window.location.pathname}#/${card.sourceFile}/${headingId}`;
+                        const url = `${window.location.origin}${window.location.pathname}#/c/${card.sourceFile}/${headingId}`;
                         navigator.clipboard.writeText(url).catch(err => {
                             console.error('Failed to copy link:', err);
                         });
@@ -997,51 +693,6 @@ class PaperCanvas {
         });
     }
 
-    clearPreviewCard() {
-        // Clear any pending timeouts
-        this.clearPreviewTimeouts();
-
-        // Clear pending state
-        this.pendingPreviewLink = null;
-
-        if (this.previewCard) {
-            this.removeConnectionsForCard(this.previewCard.id);
-            this.cards.delete(this.previewCard.id);
-            this.previewCard.element.remove();
-            this.previewCard = null;
-            this.previewCardLink = null;
-        }
-    }
-
-    getPreviewPosition(parentCard, options, e) {
-        let x, y;
-
-        if (options.absX !== null && options.absY !== null) {
-            x = options.absX;
-            y = options.absY;
-        } else if (options.relX !== null && options.relY !== null && parentCard) {
-            x = parentCard.x + options.relX;
-            y = parentCard.y + options.relY;
-        } else if (parentCard) {
-            x = parentCard.x + parentCard.width + 40;
-            y = parentCard.y;
-        } else {
-            x = this.defaultOffset.x;
-            y = this.defaultOffset.y;
-        }
-
-        return {
-            x: x,
-            y: y,
-            width: options.width,
-            height: options.height,
-            rotation: options.rotation || 0,
-            marginTB: options.marginTB,
-            marginLR: options.marginLR,
-            parentCard: options.parentCard
-        };
-    }
-
     getCardById(id) {
         return this.cards.get(id) || null;
     }
@@ -1049,12 +700,6 @@ class PaperCanvas {
     getNextPageNumber() {
         this.pageCounter++;
         return String(this.pageCounter).padStart(2, '0');
-    }
-
-    // Get page number for preview cards without incrementing the counter
-    getPreviewPageNumber() {
-        const nextNumber = this.pageCounter + 1;
-        return String(nextNumber).padStart(2, '0');
     }
 
     applyJitter(value, jitter) {
@@ -1506,7 +1151,7 @@ class PaperCanvas {
             y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
         }
 
-        const pageNumber = positionOptions.isPreview ? this.getPreviewPageNumber() : this.getNextPageNumber();
+        const pageNumber = this.getNextPageNumber();
         const cardRotation = (positionOptions.rotation || 0) - this.rotation;
 
         // Create locked content HTML - minimal, just a password input
@@ -2059,8 +1704,7 @@ ${renderColumn(rightColumn)}
             y = positionOptions.y !== undefined ? positionOptions.y : this.defaultOffset.y;
         }
 
-        // Assign page number - use preview numbering if this is a preview card
-        const pageNumber = positionOptions.isPreview ? this.getPreviewPageNumber() : this.getNextPageNumber();
+        const pageNumber = this.getNextPageNumber();
 
         // Check if this is an image card
         const isImageCard = parsed.metadata.image ? true : false;
@@ -2137,29 +1781,6 @@ ${renderColumn(rightColumn)}
         return card;
     }
 
-    async loadMultipleCards(cardNames) {
-        this.panX = 0;
-        this.panY = 0;
-        this.zoom = 1;
-        this.rotation = 0;
-        this.updateCanvasTransform();
-
-        this._suppressURLUpdate = true;
-        this._suppressLayoutSave = true;
-        for (let i = 0; i < cardNames.length; i++) {
-            if (i === 0) {
-                await this.loadCardFromFile(cardNames[i], { fillViewport: true });
-            } else {
-                await this.loadCardFromFile(cardNames[i], {
-                    x: 60 + (i * 60), y: 60 + (i * 40), width: 400, height: 500
-                });
-            }
-        }
-        this._suppressURLUpdate = false;
-        this._suppressLayoutSave = false;
-        this.updateURLWithOpenCards();
-    }
-
     /**
      * Load an optional companion script for a card.
      * If cards/{cardName}.js exists, dynamically import it and call its init() export.
@@ -2190,33 +1811,6 @@ ${renderColumn(rightColumn)}
         const jitter = options.jitter || 0;
 
         // Special handling for 'about' card: position left of menu with scatter image right of menu
-        if (cardName === 'about' && parentCard) {
-            const aboutW = options.width || 500;
-            const aboutH = options.height || 600;
-            const menuCenterX = parentCard.x + parentCard.width / 2;
-            const menuCenterY = parentCard.y + parentCard.height / 2;
-
-            x = menuCenterX - aboutW - 80;
-            y = menuCenterY - aboutH / 2;
-
-            await this.loadCardFromFile(cardName, {
-                x: x,
-                y: y,
-                width: options.width,
-                height: options.height,
-                rotation: options.rotation,
-                marginTB: options.marginTB,
-                marginLR: options.marginLR,
-                parentCard: parentCard
-            });
-
-            // Add scattered image to the right of menu
-            const scatterCenterX = menuCenterX + parentCard.width / 2 + 300;
-            const scatterCenterY = menuCenterY;
-            await this.addScatterCards(scatterCenterX, scatterCenterY);
-            return;
-        }
-
         // Determine position based on options
         if (typeof options.absX === 'number' && typeof options.absY === 'number') {
             // Absolute positioning
@@ -2323,18 +1917,14 @@ ${renderColumn(rightColumn)}
         // Apply saved settings immediately
         this.applySettings();
 
-        // Bind settings button
+        // Bind settings button \u2014 open settings as a page
         const settingsBtn = document.getElementById('settings-btn');
-        settingsBtn.addEventListener('click', () => this.openSettingsCard());
+        settingsBtn.addEventListener('click', () => this.showCard('settings', true));
 
-        // Bind share button
+        // Bind share button \u2014 copy the current page URL
         const shareBtn = document.getElementById('share-btn');
         shareBtn.addEventListener('click', () => {
-            const url = this.generateSnapshotURL();
-            navigator.clipboard.writeText(url).then(() => {
-                shareBtn.querySelector('span').textContent = '\u2713';
-                setTimeout(() => { shareBtn.querySelector('span').textContent = '\uD83D\uDD17\uFE0E'; }, 2000);
-            }).catch(err => console.error('Failed to copy:', err));
+            navigator.clipboard.writeText(window.location.href).catch(err => console.error('Failed to copy:', err));
         });
     }
 
@@ -2636,37 +2226,6 @@ ${renderColumn(rightColumn)}
         this.updateCardShadows();
     }
 
-    async openSettingsCard() {
-        // In split mode, open settings as a new pane
-        if (this.isSplitMode) {
-            const leaf = this.findLastSplitLeaf(this.splitRoot);
-            if (leaf) await this.splitPane(leaf, 'settings');
-            return;
-        }
-
-        // Calculate position further from the corner with some jitter for multiple cards
-        const btnRect = document.getElementById('settings-btn').getBoundingClientRect();
-        const baseX = (btnRect.left + 100 - this.panX) / this.zoom;
-        const baseY = (btnRect.top - 450 - this.panY) / this.zoom;
-
-        // Add some jitter so multiple settings cards don't stack exactly
-        const jitterX = (Math.random() - 0.5) * 100;
-        const jitterY = (Math.random() - 0.5) * 100;
-
-        const x = baseX + jitterX;
-        const y = Math.max(40, baseY + jitterY);
-
-        // Load settings card from file
-        const card = await this.loadCardFromFile('settings', {
-            x: x,
-            y: y
-        });
-
-        if (card) {
-            card.element.setAttribute('data-settings-card', 'true');
-        }
-    }
-
     /**
      * Initialize editor functionality (localhost only)
      */
@@ -2723,69 +2282,23 @@ ${renderColumn(rightColumn)}
      * @param {string} filename - Optional filename to open
      */
     async openEditorCard(filename = null) {
-        // In split mode, embed the editor in a new pane
-        if (this.isSplitMode) {
-            if (!this.isLocal || !this.EditorCard) {
-                console.warn('Editor is only available on localhost');
-                return null;
-            }
-            if (!this.fsManager || !this.fsManager.isSupported()) {
-                alert('Editor requires File System Access API. Please use Chrome or Edge.');
-                return null;
-            }
-            const leaf = this.findLastSplitLeaf(this.splitRoot);
-            if (leaf) await this.splitPaneWithEditor(leaf, filename);
-            return null;
-        }
-
-        // Editor only available locally
+        // Editor is local-only and needs the File System Access API
         if (!this.isLocal || !this.EditorCard) {
             console.warn('Editor is only available on localhost');
             return null;
         }
-
-        // Check if File System Access API is supported
         if (!this.fsManager || !this.fsManager.isSupported()) {
             alert('Editor requires File System Access API. Please use Chrome or Edge.');
             return null;
         }
 
-        // Calculate position with jitter for multiple editors
-        const btnRect = document.getElementById('edit-btn')?.getBoundingClientRect()
-            || document.getElementById('settings-btn').getBoundingClientRect();
-        const baseX = (btnRect.left + 120 - this.panX) / this.zoom;
-        const baseY = (btnRect.top - 500 - this.panY) / this.zoom;
-
-        // Add jitter so multiple editors don't stack exactly
-        const jitterX = (Math.random() - 0.5) * 100;
-        const jitterY = (Math.random() - 0.5) * 100;
-
-        const x = baseX + jitterX + (this.editorCards.size * 30);
-        const y = Math.max(40, baseY + jitterY + (this.editorCards.size * 30));
-
-        const editor = new this.EditorCard({
-            x,
-            y,
-            width: 900,
-            height: 600,
-            parser: this.parser,
-            fsManager: this.fsManager,
-            canvas: this,
-            zIndex: ++this.zIndexCounter
-        });
-
-        this.editorCards.set(editor.id, editor);
-        this.canvasContent.appendChild(editor.element);
-
-        // Load file if specified
-        if (filename) {
-            await editor.loadFile(filename);
+        // The editor always opens in a split alongside the current page
+        if (!this.isSplitMode) {
+            await this.enterSplitMode(this.currentPage || 'menu');
         }
-
-        this.updateURLWithOpenCards();
-        this.scheduleSave();
-
-        return editor;
+        const leaf = this.findLastSplitLeaf(this.splitRoot);
+        if (leaf) await this.splitPaneWithEditor(leaf, filename);
+        return null;
     }
 
     updateCardShadows() {
@@ -2976,16 +2489,6 @@ ${renderColumn(rightColumn)}
     }
 
     // Export all cards to JSON
-    exportCards() {
-        const cardsArray = [];
-        this.cards.forEach(card => {
-            cardsArray.push(card.toJSON());
-        });
-        return JSON.stringify(cardsArray, null, 2);
-    }
-
-
-
     // Remove a card and its connections
     removeCard(cardId) {
         const card = this.cards.get(cardId);
@@ -3008,23 +2511,12 @@ ${renderColumn(rightColumn)}
     }
 
     pushNavigationState() {
-        const state = this.isSplitMode
-            ? { splitMode: true, cardName: this.splitModeInitialCard }
-            : null;
-        window.history.pushState(state, '', window.location.href);
+        // Split navigation is ephemeral — no per-action history entries
     }
 
     updateURLWithOpenCards() {
-        if (this._suppressURLUpdate) return;
-
-        if (this.isSplitMode) {
-            const names = this.collectSplitLeafNames(this.splitRoot);
-            if (names.length > 0) {
-                const url = '#/r/' + names.join('~');
-                window.history.replaceState({ splitMode: true, cardName: names[0] }, '', url);
-            }
-            return;
-        }
+        // Split is ephemeral — it never writes to the URL
+        if (this.isSplitMode) return;
 
         const cardNames = [];
         for (const card of this.cards.values()) {
@@ -3038,324 +2530,14 @@ ${renderColumn(rightColumn)}
         if (cardNames.length === 0) {
             window.history.replaceState(null, '', window.location.pathname);
         } else {
-            window.history.replaceState(null, '', '#/' + cardNames.join('~'));
+            window.history.replaceState(null, '', '#/c/' + cardNames.join('~'));
         }
     }
 
-    collectSplitLeafNames(node) {
-        if (!node) return [];
-        if (node.type === 'leaf') {
-            if (node.editor) return ['__editor__'];
-            return node.cardName ? [node.cardName] : [];
-        }
-        return [...this.collectSplitLeafNames(node.first), ...this.collectSplitLeafNames(node.second)];
-    }
+    // Layout persistence was removed; these remain as no-ops for their existing call sites.
+    scheduleSave() {}
 
-    /**
-     * Schedule a debounced save of canvas state
-     */
-    scheduleSave() {
-        this.scheduleLayoutSave();
-    }
-
-    getLayoutCacheKey(cardNames, isSplit) {
-        const sorted = [...cardNames].sort().join('~');
-        return isSplit ? 'r:' + sorted : sorted;
-    }
-
-    scheduleLayoutSave() {
-        if (this._suppressLayoutSave) return;
-        if (this._layoutSaveTimer) clearTimeout(this._layoutSaveTimer);
-        this._layoutSaveTimer = setTimeout(() => this.saveLayoutToCache(), 500);
-    }
-
-    saveLayoutToCache() {
-        if (this._suppressLayoutSave) return;
-
-        const cardNames = [];
-        let entry;
-
-        if (this.isSplitMode) {
-            const names = this.collectSplitLeafNames(this.splitRoot);
-            if (names.length === 0) return;
-            entry = {
-                mode: 'split',
-                tree: this.serializeSplitTree(this.splitRoot),
-                ts: Date.now()
-            };
-            cardNames.push(...names);
-        } else {
-            const cards = [];
-            for (const card of this.cards.values()) {
-                const name = card.loadName || card.sourceFile;
-                if (!name) continue;
-                cardNames.push(name);
-                const contentEl = card.element.querySelector('.card-content');
-                cards.push({
-                    n: name,
-                    x: Math.round(card.x), y: Math.round(card.y),
-                    w: Math.round(card.width), h: Math.round(card.height),
-                    s: contentEl ? Math.round(contentEl.scrollTop) : 0
-                });
-            }
-            for (const editor of this.editorCards.values()) {
-                cardNames.push('__editor__');
-                cards.push({
-                    n: '__editor__',
-                    f: editor.filename || '',
-                    x: Math.round(editor.x), y: Math.round(editor.y),
-                    w: Math.round(editor.width), h: Math.round(editor.height)
-                });
-            }
-            if (cards.length === 0) return;
-            entry = {
-                mode: 'canvas',
-                cards: cards,
-                viewport: [Math.round(this.panX), Math.round(this.panY), +this.zoom.toFixed(2)],
-                ts: Date.now()
-            };
-        }
-
-        const key = this.getLayoutCacheKey(cardNames, this.isSplitMode);
-        try {
-            const allLayouts = JSON.parse(localStorage.getItem('papercanvas-layouts') || '{}');
-            allLayouts[key] = entry;
-
-            const entries = Object.entries(allLayouts);
-            if (entries.length > 50) {
-                entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
-                localStorage.setItem('papercanvas-layouts', JSON.stringify(Object.fromEntries(entries.slice(0, 50))));
-            } else {
-                localStorage.setItem('papercanvas-layouts', JSON.stringify(allLayouts));
-            }
-        } catch (e) {
-            // localStorage may be unavailable or full
-        }
-    }
-
-    getCachedLayout(cardNames, isSplit) {
-        try {
-            const key = this.getLayoutCacheKey(cardNames, isSplit);
-            const allLayouts = JSON.parse(localStorage.getItem('papercanvas-layouts') || '{}');
-            return allLayouts[key] || null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    async restoreCanvasFromCache(cached) {
-        this.panX = cached.viewport[0];
-        this.panY = cached.viewport[1];
-        this.zoom = cached.viewport[2];
-        this.rotation = 0;
-        this.updateCanvasTransform();
-
-        this._suppressURLUpdate = true;
-        this._suppressLayoutSave = true;
-        for (const c of cached.cards) {
-            if (c.n === '__editor__') {
-                if (this.EditorCard) {
-                    await this.openEditorCard(c.f || null);
-                }
-                continue;
-            }
-            const card = await this.loadCardFromFile(c.n, {
-                x: c.x, y: c.y, width: c.w, height: c.h
-            });
-            if (card && c.s) {
-                requestAnimationFrame(() => {
-                    const el = card.element.querySelector('.card-content');
-                    if (el) el.scrollTop = c.s;
-                });
-            }
-        }
-        this._suppressURLUpdate = false;
-        this._suppressLayoutSave = false;
-        this.updateURLWithOpenCards();
-    }
-
-    // --- Snapshot URL encoding/decoding ---
-
-    encodeSnapshot(state) {
-        return btoa(JSON.stringify(state)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-    }
-
-    decodeSnapshot(encoded) {
-        const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/');
-        return JSON.parse(atob(base64));
-    }
-
-    generateSnapshotURL() {
-        let state;
-        if (this.isSplitMode) {
-            state = { m: 's', t: this.serializeSplitTree(this.splitRoot) };
-        } else {
-            const cards = [];
-            for (const card of this.cards.values()) {
-                const name = card.loadName || card.sourceFile;
-                if (!name) continue;
-                const contentEl = card.element.querySelector('.card-content');
-                cards.push({
-                    n: name,
-                    x: Math.round(card.x), y: Math.round(card.y),
-                    w: Math.round(card.width), h: Math.round(card.height),
-                    s: contentEl ? Math.round(contentEl.scrollTop) : 0
-                });
-            }
-            state = {
-                m: 'c',
-                c: cards,
-                v: [Math.round(this.panX), Math.round(this.panY), +this.zoom.toFixed(2)]
-            };
-        }
-        return `${window.location.origin}${window.location.pathname}#/v/${this.encodeSnapshot(state)}`;
-    }
-
-    serializeSplitTree(node) {
-        if (!node) return null;
-        if (node.type === 'leaf') {
-            if (node.editor) {
-                return { n: '__editor__', f: node.editor.filename || '' };
-            }
-            const el = node.card?.element?.querySelector('.card-content');
-            return { n: node.cardName, s: el ? Math.round(el.scrollTop) : 0 };
-        }
-        const dir = node.type === 'horizontal' ? 'h' : 'v';
-        return [dir, +node.splitRatio.toFixed(2), this.serializeSplitTree(node.first), this.serializeSplitTree(node.second)];
-    }
-
-    async restoreFromSnapshot(encoded) {
-        try {
-            const state = this.decodeSnapshot(encoded);
-            if (state.m === 's') {
-                await this.restoreSplitFromTree(state.t);
-            } else {
-                await this.restoreCanvasFromCache({
-                    cards: state.c, viewport: state.v
-                });
-            }
-        } catch (e) {
-            console.error('Failed to restore snapshot:', e);
-            await this.loadMenuCard();
-        }
-    }
-
-    getFirstLeafFromTree(node) {
-        if (!node) return null;
-        if (node.n !== undefined) return node;
-        // Branch: [dir, ratio, first, second]
-        return this.getFirstLeafFromTree(node[2]);
-    }
-
-    getFirstCardLeafFromTree(node) {
-        if (!node) return null;
-        if (node.n !== undefined) return node.n !== '__editor__' ? node : null;
-        return this.getFirstCardLeafFromTree(node[2]) || this.getFirstCardLeafFromTree(node[3]);
-    }
-
-    async restoreSplitFromTree(treeData) {
-        const firstLeaf = this.getFirstCardLeafFromTree(treeData) || this.getFirstLeafFromTree(treeData);
-        if (!firstLeaf) {
-            await this.loadMenuCard();
-            return;
-        }
-
-        const initialCard = firstLeaf.n === '__editor__' ? 'menu' : firstLeaf.n;
-        this._suppressURLUpdate = true;
-        this._suppressLayoutSave = true;
-        await this.enterSplitMode(initialCard, false);
-        await this.rebuildSplitNode(this.splitRoot, treeData);
-        this._suppressURLUpdate = false;
-        this._suppressLayoutSave = false;
-        this.updateURLWithOpenCards();
-    }
-
-    async rebuildSplitNode(currentLeaf, treeData) {
-        if (!treeData || !currentLeaf) return;
-
-        // Leaf node: {n: name, s: scrollTop} or {n: '__editor__', f: filename}
-        if (treeData.n !== undefined) {
-            const isEditor = treeData.n === '__editor__';
-
-            if (isEditor && this.EditorCard) {
-                const newLeaf = this.createSplitEditorLeaf(treeData.f || '');
-                const parent = currentLeaf.parent;
-                if (parent) {
-                    if (parent.first === currentLeaf) {
-                        parent.first = newLeaf;
-                    } else {
-                        parent.second = newLeaf;
-                    }
-                    newLeaf.parent = parent;
-                    currentLeaf.element.parentElement.replaceChild(newLeaf.element, currentLeaf.element);
-                    if (currentLeaf.resizeObserver) currentLeaf.resizeObserver.disconnect();
-                } else {
-                    this.splitRoot = newLeaf;
-                    this.splitContainer.innerHTML = '';
-                    this.splitContainer.appendChild(newLeaf.element);
-                }
-            } else if (!isEditor && currentLeaf.cardName !== treeData.n) {
-                const newLeaf = await this.createSplitLeaf(treeData.n);
-                const parent = currentLeaf.parent;
-                if (parent) {
-                    if (parent.first === currentLeaf) {
-                        parent.first = newLeaf;
-                    } else {
-                        parent.second = newLeaf;
-                    }
-                    newLeaf.parent = parent;
-                    currentLeaf.element.parentElement.replaceChild(newLeaf.element, currentLeaf.element);
-                    if (currentLeaf.resizeObserver) currentLeaf.resizeObserver.disconnect();
-                } else {
-                    this.splitRoot = newLeaf;
-                    this.splitContainer.innerHTML = '';
-                    this.splitContainer.appendChild(newLeaf.element);
-                }
-            }
-            // Set scroll position for card leaves
-            if (!isEditor && treeData.s) {
-                const leaf = currentLeaf.cardName === treeData.n ? currentLeaf : (currentLeaf.parent?.first?.cardName === treeData.n ? currentLeaf.parent.first : currentLeaf.parent?.second);
-                const el = leaf?.card?.element?.querySelector('.card-content');
-                if (el) requestAnimationFrame(() => { el.scrollTop = treeData.s; });
-            }
-            return;
-        }
-
-        // Branch node: [dir, ratio, firstData, secondData]
-        const [dir, ratio, firstData, secondData] = treeData;
-        const secondLeafData = this.getFirstLeafFromTree(secondData);
-        if (!secondLeafData) return;
-
-        const isEditorSecond = secondLeafData.n === '__editor__';
-        if (isEditorSecond && this.EditorCard) {
-            await this.splitPaneWithEditor(currentLeaf, secondLeafData.f || '');
-        } else if (!isEditorSecond) {
-            await this.splitPane(currentLeaf, secondLeafData.n);
-        } else {
-            return;
-        }
-
-        // Find the branch that was just created (it's now the parent of currentLeaf)
-        const branch = currentLeaf.parent;
-        if (!branch) return;
-
-        // Set the split ratio
-        branch.splitRatio = ratio;
-        // Override direction if needed
-        const targetDir = dir === 'h' ? 'horizontal' : 'vertical';
-        if (branch.type !== targetDir) {
-            branch.type = targetDir;
-            branch.element.classList.remove('split-vertical', 'split-horizontal');
-            branch.element.classList.add(targetDir === 'vertical' ? 'split-vertical' : 'split-horizontal');
-            branch.divider.classList.remove('split-divider-vertical', 'split-divider-horizontal');
-            branch.divider.classList.add(targetDir === 'vertical' ? 'split-divider-vertical' : 'split-divider-horizontal');
-        }
-        this.applySplitRatio(branch);
-
-        // Recurse into both children
-        await this.rebuildSplitNode(branch.first, firstData);
-        await this.rebuildSplitNode(branch.second, secondData);
-    }
+    scheduleLayoutSave() {}
 
     /**
      * Generic jump-to system for intra-card navigation
@@ -3461,40 +2643,6 @@ ${renderColumn(rightColumn)}
     /**
      * Highlight the jump target element briefly
      */
-    highlightJumpTarget(targetElement) {
-        // Get highlight duration from CSS custom property
-        const styles = getComputedStyle(document.documentElement);
-        const durationStr = styles.getPropertyValue('--jump-highlight-duration').trim();
-
-        // Parse duration - handle both "5000ms" and "5000" formats
-        let duration = 2000; // Default
-        if (durationStr) {
-            const numericValue = parseFloat(durationStr.replace(/ms$/, ''));
-            if (!isNaN(numericValue)) {
-                duration = numericValue;
-            }
-        }
-
-        // Calculate when to start fade-out (60% through the total duration)
-        const fadeStartDelay = duration * 0.6;
-
-        // Clear any existing highlight
-        targetElement.classList.remove('jump-target-highlight', 'fade-out');
-
-        // Add highlight class
-        targetElement.classList.add('jump-target-highlight');
-
-        // Start fade out after staying visible for 60% of the duration
-        setTimeout(() => {
-            targetElement.classList.add('fade-out');
-        }, fadeStartDelay);
-
-        // Remove all highlight classes after the full duration
-        setTimeout(() => {
-            targetElement.classList.remove('jump-target-highlight', 'fade-out');
-        }, duration);
-    }
-
     /**
      * Find the scrollable container for a target element
      * Returns the container element and its type
@@ -3726,7 +2874,6 @@ ${renderColumn(rightColumn)}
             card.element.remove();
         });
         this.cards.clear();
-        this.clearPreviewCard();
 
         // Also clear editor cards
         this.editorCards.forEach(editor => {
@@ -3739,6 +2886,638 @@ ${renderColumn(rightColumn)}
         this.editorCards.clear();
     }
 
+    /**
+     * Build a Card for a card file: fetch content, decrypt if possible, parse markdown,
+     * construct the Card, bind interactive elements, and register live-reload.
+     * Returns the Card, or null if missing/unparseable. Positioning is the caller's job.
+     */
+    async buildCard(cardName) {
+        if (cardName.startsWith('tag-')) {
+            this.registerTagPage(cardName.slice(4), null);
+        }
+
+        const contentData = await this.getCardContent(cardName);
+        if (!contentData) return null;
+
+        if (contentData.isEncrypted) {
+            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
+            if (decryptedBody) {
+                contentData.content = this.reconstructDecryptedMarkdown(
+                    contentData.encryptedData.originalFrontmatter, decryptedBody
+                );
+                contentData.isEncrypted = false;
+            }
+        }
+
+        const parsed = this.parser.parse(contentData.content);
+        if (!parsed) return null;
+
+        const card = new Card({
+            x: 0, y: 0,
+            width: window.innerWidth, height: window.innerHeight,
+            rotation: 0,
+            pageNumber: null,
+            content: parsed.content,
+            margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
+            sourceFile: contentData.sourceFile,
+            progressBar: parsed.metadata.progressBar === 'true',
+            wordCount: parsed.metadata.wordCount === 'true',
+            readTime: parsed.metadata.readTime === 'true',
+            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
+            tags: (() => {
+                const tagsStr = parsed.metadata.tags || '';
+                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
+                const subtags = [];
+                let match;
+                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
+                    const subtag = match[1].trim();
+                    if (!subtags.includes(subtag)) subtags.push(subtag);
+                }
+                return subtags;
+            })(),
+            date: (() => {
+                const dateStr = parsed.metadata.date || '';
+                const dateMatch = dateStr.match(/(\d{2})-(\d{2})-(\d{4})/);
+                if (dateMatch) {
+                    const [, month, day, year] = dateMatch;
+                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                }
+                return null;
+            })(),
+            isDynamic: contentData.isDynamic || false
+        });
+
+        this.cards.set(card.id, card);
+        this.bindInteractiveElements(card.element);
+        await this.loadCardScript(cardName, card.element);
+
+        if (!contentData.isDynamic && contentData.sourceFile) {
+            this.fileWatcher.watch(contentData.sourceFile);
+        }
+
+        return card;
+    }
+
+    /**
+     * Render a single card as the full-screen reading page, replacing the current one.
+     * This is the primary navigation primitive: [[link]] clicks and URL changes route here.
+     * The pannable canvas stays dormant behind the page (reserved for the canvas page).
+     */
+    async showCard(cardName, pushHistory = true, headingId = null) {
+        if (!cardName) cardName = 'menu';
+
+        // One-time setup: page container, overlay layer, and delegated handlers
+        if (!this.pageContainer) {
+            this.lockCanvas();
+            document.body.classList.add('reader-active');
+
+            this.pageContainer = document.createElement('div');
+            this.pageContainer.id = 'page-container';
+            document.body.appendChild(this.pageContainer);
+            this.bindPageHandlers(this.pageContainer);
+            this.setupPrintHandlers();
+
+            // Floating overlay layer (above the page, below the fixed buttons)
+            this.overlayLayer = document.createElement('div');
+            this.overlayLayer.id = 'overlay-layer';
+            document.body.appendChild(this.overlayLayer);
+            this.bindPageHandlers(this.overlayLayer);
+            this.bindOverlayLayerEvents(this.overlayLayer);
+
+            this.overlays = [];
+            this.overlayCache = new Map();
+            this.overlayCascade = 0;
+
+            // Dismiss the top overlay on Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && this.overlays.length) {
+                    this.overlays[this.overlays.length - 1].card.delete();
+                }
+            });
+        }
+
+        // Tear down the previous page and its overlays
+        this.clearAllCards();
+        this.pageContainer.replaceChildren();
+        this.overlayLayer.replaceChildren();
+        this.overlays = [];
+        this.overlayCascade = 0;
+        this.currentPage = cardName;
+
+        const card = await this.buildCard(cardName);
+        if (!card) {
+            if (cardName !== 'menu') return this.showCard('menu', pushHistory);
+            this.pageContainer.innerHTML = '<div class="page-empty">Not found</div>';
+            return;
+        }
+
+        card.element.classList.add('card-reader');
+        if (this.settings && !this.settings.cardShadow) {
+            card.element.style.filter = 'none';
+        }
+        this.pageContainer.appendChild(card.element);
+        this.baseCard = card;
+
+        // Size the card to the container; keep margins in sync on resize
+        const applySize = () => {
+            const w = this.pageContainer.clientWidth;
+            const h = this.pageContainer.clientHeight;
+            if (w > 0 && h > 0) {
+                card.width = w;
+                card.height = h;
+                if (card.marginTB === null && card.marginLR === null && this.settings?.marginSize !== undefined) {
+                    const marginMultiplier = isMobile() ? 1.4 : 1.1;
+                    card.updateMarginSize(Math.min(45, this.settings.marginSize * marginMultiplier));
+                }
+            }
+        };
+        applySize();
+        if (this.baseResizeObserver) this.baseResizeObserver.disconnect();
+        this.baseResizeObserver = new ResizeObserver(applySize);
+        this.baseResizeObserver.observe(this.pageContainer);
+
+        if (headingId) {
+            setTimeout(() => this.scrollToHeadingInCard(card, headingId), 0);
+        }
+
+        // Restore overlays previously opened on this page (back/forward continuity)
+        this.restoreOverlaysForPage(cardName);
+
+        const url = `#/${cardName}`;
+        if (pushHistory) {
+            window.history.pushState({ cardName }, '', url);
+        } else {
+            window.history.replaceState({ cardName }, '', url);
+        }
+    }
+
+    /**
+     * Bind print event handlers once. Native Cmd+P / "Save as PDF" fire
+     * beforeprint/afterprint; Safari is unreliable there, so we also drive
+     * off the print media query.
+     */
+    setupPrintHandlers() {
+        if (this._printHandlersBound) return;
+        this._printHandlersBound = true;
+
+        window.addEventListener('beforeprint', () => this.preparePrintLayout());
+        window.addEventListener('afterprint', () => this.teardownPrintLayout());
+
+        const mql = window.matchMedia('print');
+        const onChange = (e) => {
+            if (e.matches) this.preparePrintLayout();
+            else this.teardownPrintLayout();
+        };
+        if (mql.addEventListener) mql.addEventListener('change', onChange);
+        else if (mql.addListener) mql.addListener(onChange);
+    }
+
+    /**
+     * Walk up from an element to the nearest ancestor that is a direct child
+     * of container (its block-level owner within the content flow).
+     */
+    blockAncestor(el, container) {
+        let cur = el;
+        while (cur && cur.parentNode !== container) {
+            cur = cur.parentNode;
+            if (!cur || cur === document.body) return null;
+        }
+        return cur;
+    }
+
+    /**
+     * Rebuild the reading page for print: relocate each margin [[note]] next to
+     * its anchor as a floated sidenote, and snapshot interactive content.
+     * Every mutation is recorded in _printCleanup for exact teardown.
+     */
+    preparePrintLayout() {
+        if (this._printActive) return;
+        const card = this.baseCard;
+        if (!card || !document.body.classList.contains('reader-active')) return;
+        const content = card.element.querySelector('.card-content');
+        if (!content) return;
+
+        this._printActive = true;
+        this._printCleanup = [];
+
+        // Relocate left/right margin notes inline, floated into the gutters.
+        const registry = card.marginItemRegistry || {};
+        for (const side of ['left', 'right']) {
+            for (const item of (registry[side] || [])) {
+                if (!item.anchorId) continue;
+                const anchor = content.querySelector(`[data-anchor-id="${CSS.escape(item.anchorId)}"]`);
+                if (!anchor) continue;
+                const contentEl = item.element.querySelector('.margin-item-content');
+                if (!contentEl) continue;
+
+                const aside = document.createElement('aside');
+                aside.className = `print-sidenote print-sidenote-${side}`;
+                aside.innerHTML = contentEl.innerHTML;
+
+                const block = this.blockAncestor(anchor, content);
+                if (block) content.insertBefore(aside, block);
+                else content.appendChild(aside);
+
+                this._printCleanup.push(() => aside.remove());
+            }
+        }
+
+        // Snapshot visualizations (WebGL via capture(), 2D canvas directly).
+        content.querySelectorAll('.viz-container').forEach((vc) => this.capturePrintViz(vc));
+
+        // Iframes (embeds) can't be snapshotted cross-origin — leave a pointer.
+        content.querySelectorAll('iframe').forEach((frame) => {
+            const url = frame.getAttribute('src') || '';
+            const ph = document.createElement('div');
+            ph.className = 'print-viz-fallback';
+            ph.textContent = url ? `[Embedded content — ${url}]` : '[Embedded content]';
+            frame.style.display = 'none';
+            frame.parentNode.insertBefore(ph, frame.nextSibling);
+            this._printCleanup.push(() => { ph.remove(); frame.style.display = ''; });
+        });
+    }
+
+    /**
+     * Replace a live visualization with a static snapshot for print, or a
+     * captioned placeholder if capture fails (e.g. context evicted/tainted).
+     */
+    capturePrintViz(vc) {
+        let dataURL = null;
+        try {
+            const inst = vc._viz3dState;
+            if (inst && typeof inst.capture === 'function') {
+                dataURL = inst.capture();
+            } else {
+                const canvas = vc.querySelector('canvas');
+                if (canvas) dataURL = canvas.toDataURL('image/png');
+            }
+        } catch (e) {
+            dataURL = null;
+        }
+
+        const label = vc.dataset.vizType || 'visualization';
+        let node;
+        if (dataURL) {
+            node = document.createElement('img');
+            node.className = 'print-viz-img';
+            node.src = dataURL;
+            node.alt = label;
+        } else {
+            node = document.createElement('div');
+            node.className = 'print-viz-fallback';
+            node.textContent = `[Interactive ${label} — view online]`;
+        }
+
+        vc.classList.add('print-captured');
+        vc.appendChild(node);
+        this._printCleanup.push(() => { node.remove(); vc.classList.remove('print-captured'); });
+    }
+
+    /**
+     * Revert every mutation made by preparePrintLayout().
+     */
+    teardownPrintLayout() {
+        if (!this._printActive) return;
+        for (const undo of (this._printCleanup || [])) {
+            try { undo(); } catch (e) { /* best-effort restore */ }
+        }
+        this._printCleanup = [];
+        this._printActive = false;
+    }
+
+    /**
+     * Bind delegated handlers on the reading page: [[link]] navigation, jump/TOC/heading
+     * links, and tag clicks. [[card]] overlay handling is added by the overlay system.
+     */
+    bindPageHandlers(container) {
+        container.addEventListener('click', (e) => {
+            // [[card]] — spawn a floating overlay near the click
+            const overlayLink = e.target.closest('.card-overlay-link');
+            if (overlayLink) {
+                const targetCard = overlayLink.dataset.card;
+                if (targetCard) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const w = parseInt(overlayLink.dataset.width) || null;
+                    const h = parseInt(overlayLink.dataset.height) || null;
+                    this.spawnOverlay(targetCard, { clickX: e.clientX, clickY: e.clientY, width: w, height: h, anchorEl: overlayLink.closest('.card-content') });
+                }
+                return;
+            }
+
+            // [[link]] — replace the page with the target card
+            const cardLink = e.target.closest('.card-link');
+            if (cardLink) {
+                const targetCard = cardLink.dataset.card;
+                if (targetCard && !cardLink.dataset.url) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.showCard(targetCard, true);
+                }
+                return;
+            }
+
+            // Jump links (intra-card anchors)
+            const jumpLink = e.target.closest('.jump-link');
+            if (jumpLink) {
+                e.preventDefault();
+                const sourceCard = jumpLink.closest('.card');
+                if (sourceCard && jumpLink.dataset.jumpTarget) {
+                    this.jumpToAnchor(sourceCard, jumpLink.dataset.jumpTarget);
+                }
+                return;
+            }
+
+            // TOC links — scroll to a heading within the card
+            const tocLink = e.target.closest('[data-toc-target]');
+            if (tocLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const cardElement = tocLink.closest('.card');
+                const targetId = tocLink.dataset.tocTarget;
+                if (cardElement && targetId) {
+                    const contentContainer = cardElement.querySelector('.card-content');
+                    const targetElement = cardElement.querySelector(`#${CSS.escape(targetId)}`);
+                    if (contentContainer && targetElement) {
+                        const containerRect = contentContainer.getBoundingClientRect();
+                        const targetRect = targetElement.getBoundingClientRect();
+                        const scrollOffset = targetRect.top - containerRect.top + contentContainer.scrollTop;
+                        contentContainer.scrollTo({ top: scrollOffset - 10, behavior: 'smooth' });
+                    }
+                }
+                return;
+            }
+
+            // Heading links — copy a deep link to the clipboard
+            const headingLink = e.target.closest('.heading-link');
+            if (headingLink) {
+                e.preventDefault();
+                e.stopPropagation();
+                const headingId = headingLink.dataset.headingId;
+                const cardElement = headingLink.closest('.card');
+                if (cardElement && headingId) {
+                    const card = this.cards.get(cardElement.dataset.cardId);
+                    if (card && card.sourceFile) {
+                        const url = `${window.location.origin}${window.location.pathname}#/${card.sourceFile}/${headingId}`;
+                        navigator.clipboard.writeText(url).catch(err => console.error('Failed to copy link:', err));
+                    }
+                }
+            }
+        });
+
+        // Tag clicks — navigate to the tag page
+        container.addEventListener('tag-click', (e) => {
+            const { tagName, card } = e.detail;
+            const tagCardName = this.registerTagPage(tagName, card);
+            this.showCard(tagCardName, true);
+        });
+    }
+
+    /**
+     * React to overlay cards' own events: close on delete, re-anchor on move/resize/pin.
+     */
+    bindOverlayLayerEvents(layer) {
+        layer.addEventListener('card-delete', (e) => {
+            const el = e.target.closest('.card');
+            const ov = this.overlays.find(o => o.el === el);
+            if (ov) this.closeOverlay(ov);
+        });
+        layer.addEventListener('card-state-changed', (e) => {
+            const el = e.target.closest('.card');
+            const ov = this.overlays.find(o => o.el === el);
+            if (ov) this.syncOverlay(ov);
+        });
+    }
+
+    /**
+     * Spawn a floating overlay card over the current page. Positioned near the click and
+     * cascaded for multiples; the card owns its geometry (draggable + scalable) while this
+     * layer keeps unpinned overlays anchored to the page as it scrolls. Pass opts.restore to
+     * recreate a cached overlay at its saved position.
+     */
+    async spawnOverlay(cardName, opts = {}) {
+        if (!cardName || !this.overlayLayer) return null;
+        const card = await this.buildCard(cardName);
+        if (!card) return null;
+        card.element.classList.add('card-overlay');
+
+        const vw = window.innerWidth, vh = window.innerHeight, mobile = isMobile();
+        const restore = opts.restore || null;
+        // Scroll container the overlay follows (its source text); falls back to the base card
+        const scrollEl = opts.anchorEl || this.baseCard?.element.querySelector('.card-content') || null;
+        const scroll = scrollEl ? scrollEl.scrollTop : 0;
+
+        // Compact default size (resizable afterward), clamped to fit
+        let width = opts.width || restore?.width || Math.round(mobile ? vw * 0.8 : vw * 0.26);
+        let height = opts.height || restore?.height || Math.round(mobile ? vh * 0.4 : vh * 0.52);
+        width = Math.max(240, Math.min(width, vw - 24));
+        height = Math.max(200, Math.min(height, vh - 24));
+
+        // Position + scroll anchor (docY = position in the page's scroll space)
+        let left, top, docY, pinned = false;
+        if (restore) {
+            pinned = !!restore.pinned;
+            left = restore.left;
+            top = pinned ? restore.screenTop : (restore.docY - scroll);
+            docY = pinned ? (top + scroll) : restore.docY;
+        } else {
+            const cascade = (this.overlayCascade || 0) * 28;
+            left = Math.max(12, Math.min((opts.clickX ?? vw / 2) + 14 + cascade, vw - width - 12));
+            top = Math.max(12, Math.min((opts.clickY ?? vh / 3) + 14 + cascade, vh - height - 12));
+            docY = top + scroll;
+            this.overlayCascade = (this.overlayCascade || 0) + 1;
+        }
+
+        // The Card owns its geometry so its native drag/resize work (the canvas is locked at
+        // zoom 1 here, so mouse deltas map 1:1 to the viewport).
+        card.x = left;
+        card.y = top;
+        card.width = width;
+        card.height = height;
+        this.overlayLayer.appendChild(card.element);
+        card.updateTransform();
+        card.updateMarginSize(0);  // overlays are small — minimize gutters
+        if (pinned) card.setPinned(true);
+
+        const ov = { card, el: card.element, cardName, docY, pinned, scrollEl };
+        this.overlays.push(ov);
+        this.bindOverlayScroll(scrollEl);
+        if (!restore) this.saveOverlayCache();
+        return ov;
+    }
+
+    /**
+     * Remove an overlay. Its element is already detached when this is triggered by the
+     * card's own delete (close button / Escape); the extra remove() is a harmless no-op.
+     */
+    closeOverlay(ov) {
+        if (!ov) return;
+        this.cards.delete(ov.card.id);
+        ov.el.remove();
+        const i = this.overlays.indexOf(ov);
+        if (i >= 0) this.overlays.splice(i, 1);
+        this.saveOverlayCache();
+    }
+
+    /**
+     * Attach a scroll listener to an overlay's source scroll container (deduped) so the
+     * overlay follows that text as it scrolls.
+     */
+    bindOverlayScroll(el) {
+        if (!el || el._overlayScrollBound) return;
+        el._overlayScrollBound = true;
+        el.addEventListener('scroll', () => this.updateOverlayPositions(), { passive: true });
+    }
+
+    /**
+     * Follow scroll: move each unpinned overlay with its own source container, keeping the
+     * card's y in sync so a subsequent drag starts from the correct position.
+     */
+    updateOverlayPositions() {
+        if (!this.overlays) return;
+        for (const ov of this.overlays) {
+            if (ov.pinned) continue;
+            const scroll = ov.scrollEl ? ov.scrollEl.scrollTop : 0;
+            const top = ov.docY - scroll;
+            ov.card.y = top;
+            ov.el.style.top = top + 'px';
+        }
+    }
+
+    /**
+     * Re-sync an overlay after the user moved, resized, or (un)pinned it. A pinned overlay
+     * freezes on screen; an unpinned one re-anchors to the page at its current position.
+     */
+    syncOverlay(ov) {
+        const scroll = ov.scrollEl ? ov.scrollEl.scrollTop : 0;
+        ov.pinned = ov.card.pinned;
+        if (!ov.pinned) ov.docY = ov.card.y + scroll;
+        this.saveOverlayCache();
+    }
+
+    /**
+     * Re-open overlays that were open on this page the last time it was shown.
+     */
+    restoreOverlaysForPage(cardName) {
+        const saved = this.overlayCache?.get(cardName);
+        if (!saved || !saved.length) return;
+        for (const s of saved) this.spawnOverlay(s.cardName, { restore: s });
+    }
+
+    /**
+     * Persist the current page's overlays in memory (keyed by page) for back/forward.
+     */
+    saveOverlayCache() {
+        if (!this.currentPage || !this.overlayCache) return;
+        if (!this.overlays.length) {
+            this.overlayCache.delete(this.currentPage);
+            return;
+        }
+        this.overlayCache.set(this.currentPage, this.overlays.map(o => ({
+            cardName: o.cardName,
+            left: o.card.x,
+            width: o.card.width,
+            height: o.card.height,
+            pinned: o.pinned,
+            docY: o.docY,
+            screenTop: o.card.y
+        })));
+    }
+
+    /**
+     * Wire the custom context menu for card links: desktop right-click and mobile
+     * long-press. Only card references (data-card, not external data-url) are intercepted;
+     * everything else keeps the native browser menu.
+     */
+    bindContextMenu() {
+        const menu = document.createElement('div');
+        menu.id = 'link-context-menu';
+        menu.style.display = 'none';
+        document.body.appendChild(menu);
+        this.contextMenu = menu;
+        this.hideContextMenu = () => { menu.style.display = 'none'; };
+
+        const linkFor = (target) => {
+            const link = target.closest?.('.card-link, .card-overlay-link');
+            return (link && link.dataset.card && !link.dataset.url) ? link : null;
+        };
+
+        // Desktop right-click (also fires on Android long-press)
+        document.addEventListener('contextmenu', (e) => {
+            const link = linkFor(e.target);
+            if (!link) return;
+            e.preventDefault();
+            this.showContextMenu(e.clientX, e.clientY, link.dataset.card, link.textContent.trim(), link.closest('.card-content'));
+        });
+
+        // Mobile long-press (iOS, where contextmenu doesn't fire)
+        let lpTimer = null, lpMoved = false;
+        document.addEventListener('touchstart', (e) => {
+            const link = linkFor(e.target);
+            if (!link) return;
+            lpMoved = false;
+            const t = e.touches[0];
+            const x = t.clientX, y = t.clientY;
+            lpTimer = setTimeout(() => {
+                if (!lpMoved) this.showContextMenu(x, y, link.dataset.card, link.textContent.trim(), link.closest('.card-content'));
+            }, 500);
+        }, { passive: true });
+        const cancelLongPress = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+        document.addEventListener('touchmove', () => { lpMoved = true; cancelLongPress(); }, { passive: true });
+        document.addEventListener('touchend', cancelLongPress, { passive: true });
+
+        // Dismiss on outside interaction
+        document.addEventListener('click', (e) => {
+            if (menu.style.display !== 'none' && !menu.contains(e.target) && !menu._justOpened) {
+                this.hideContextMenu();
+            }
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.hideContextMenu(); });
+        window.addEventListener('blur', () => this.hideContextMenu());
+    }
+
+    /**
+     * Populate and position the context menu for a card reference.
+     */
+    showContextMenu(x, y, cardName, text, anchorEl = null) {
+        const base = window.location.origin + window.location.pathname;
+        const url = `${base}#/${cardName}`;
+        const items = [
+            { label: 'Open in split', run: () => this.openInSplit(cardName) },
+            { label: 'Open as card', run: () => this.spawnOverlay(cardName, { clickX: x, clickY: y, anchorEl }) },
+            { label: 'Open in new tab', run: () => window.open(url, '_blank', 'noopener') },
+            { label: 'Open in new window', run: () => window.open(url, '_blank', 'noopener,width=900,height=720') },
+            { label: 'Copy link', run: () => navigator.clipboard?.writeText(url).catch(() => {}) },
+            { label: 'Copy text', run: () => navigator.clipboard?.writeText(text).catch(() => {}) },
+        ];
+
+        const menu = this.contextMenu;
+        menu.innerHTML = '';
+        for (const it of items) {
+            const btn = document.createElement('button');
+            btn.className = 'context-menu-item';
+            btn.textContent = it.label;
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                this.hideContextMenu();
+                it.run();
+            });
+            menu.appendChild(btn);
+        }
+
+        // Show, then clamp within the viewport
+        menu.style.display = 'block';
+        menu.style.left = '0px';
+        menu.style.top = '0px';
+        const rect = menu.getBoundingClientRect();
+        menu.style.left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8)) + 'px';
+        menu.style.top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8)) + 'px';
+
+        // Guard against the opening interaction immediately dismissing it (touch)
+        menu._justOpened = true;
+        setTimeout(() => { menu._justOpened = false; }, 300);
+    }
+
     // ========================================
     // Split Screen Mode
     // ========================================
@@ -3749,8 +3528,21 @@ ${renderColumn(rightColumn)}
      * @param {boolean} pushHistory - Whether to push to browser history
      * @param {Array} cardInfos - Optional array of {cardName, x, y, width, height} for multi-card transition
      */
+    /**
+     * Open a card in the background split: enters split mode (current page | target) if not
+     * already split, otherwise adds the target as a new pane beside the most recent one.
+     */
+    async openInSplit(cardName) {
+        if (!cardName) return;
+        if (!this.isSplitMode) {
+            await this.enterSplitMode(this.currentPage || 'menu');
+        }
+        const leaf = this.findLastSplitLeaf(this.splitRoot);
+        if (leaf) await this.splitPane(leaf, cardName);
+    }
+
     async enterSplitMode(cardName, pushHistory = true, cardInfos = null) {
-        // Default to menu if no card specified (e.g. #/r/ with no name)
+        // Default to menu if no card specified (e.g. #/ with no name)
         if (!cardName) cardName = 'menu';
 
         // Register dynamic tag page provider if navigating directly to a tag URL
@@ -3762,14 +3554,10 @@ ${renderColumn(rightColumn)}
         this.isSplitMode = true;
         this.splitModeInitialCard = cardName;
         this.lockCanvas();
-        this.clearAllCards();
+        // Keep the page (hidden underneath) and any overlays intact: the split layers on top
+        // and overlays keep floating above it. Everything is restored when the split exits.
         this.canvas.classList.add('split-mode');
         document.body.classList.add('split-mode-active');
-
-        // Sync settings toggle
-        this.settings.readerMode = true;
-        localStorage.setItem('settings-readerMode', 'true');
-        this.syncAllSettingsCards();
 
         // Create fixed overlay container
         this.splitContainer = document.createElement('div');
@@ -3789,6 +3577,17 @@ ${renderColumn(rightColumn)}
 
         // Bind click handler on split container for link interception
         this.splitClickHandler = async (e) => {
+            // [[card]] — spawn a floating overlay over the split
+            const overlayLink = e.target.closest('.card-overlay-link');
+            if (overlayLink && overlayLink.dataset.card) {
+                e.preventDefault();
+                e.stopPropagation();
+                const w = parseInt(overlayLink.dataset.width) || null;
+                const h = parseInt(overlayLink.dataset.height) || null;
+                this.spawnOverlay(overlayLink.dataset.card, { clickX: e.clientX, clickY: e.clientY, width: w, height: h, anchorEl: overlayLink.closest('.card-content') });
+                return;
+            }
+
             const cardLink = e.target.closest('.card-link');
             if (!cardLink) return;
 
@@ -3809,8 +3608,7 @@ ${renderColumn(rightColumn)}
                 if (pane) {
                     const leafNode = this.findSplitLeafByElement(pane);
                     if (leafNode) {
-                        this.pushNavigationState();
-                        await this.splitPane(leafNode, targetCard);
+                        await this.paneNavigate(leafNode, targetCard);
                     }
                 }
             }
@@ -3825,8 +3623,7 @@ ${renderColumn(rightColumn)}
             if (pane) {
                 const leafNode = this.findSplitLeafByElement(pane);
                 if (leafNode) {
-                    this.pushNavigationState();
-                    await this.splitPane(leafNode, tagCardName);
+                    await this.paneNavigate(leafNode, tagCardName);
                 }
             }
         };
@@ -3901,7 +3698,7 @@ ${renderColumn(rightColumn)}
                     const cardId = cardElement.dataset.cardId;
                     const card = this.cards.get(cardId);
                     if (card && card.sourceFile) {
-                        const url = `${window.location.origin}${window.location.pathname}#/r/${card.sourceFile}/${headingId}`;
+                        const url = `${window.location.origin}${window.location.pathname}#/${card.sourceFile}/${headingId}`;
                         navigator.clipboard.writeText(url).catch(err => {
                             console.error('Failed to copy link:', err);
                         });
@@ -3912,14 +3709,10 @@ ${renderColumn(rightColumn)}
         this.splitContainer.addEventListener('click', this.splitHeadingLinkHandler);
 
 
-        // URL — reflect all cards in the split tree
-        const allNames = this.collectSplitLeafNames(this.splitRoot);
-        const urlNames = allNames.length > 0 ? allNames.join('~') : cardName;
-        const url = `#/r/${urlNames}`;
+        // Split is ephemeral: don't touch the URL. Push one history entry (same URL) so the
+        // browser back button exits the split.
         if (pushHistory) {
-            window.history.pushState({ splitMode: true, cardName }, '', url);
-        } else {
-            window.history.replaceState({ splitMode: true, cardName }, '', url);
+            window.history.pushState({ split: true }, '', window.location.href);
         }
     }
 
@@ -3931,11 +3724,6 @@ ${renderColumn(rightColumn)}
         this.unlockCanvas();
         this.canvas.classList.remove('split-mode');
         document.body.classList.remove('split-mode-active');
-
-        // Sync settings toggle
-        this.settings.readerMode = false;
-        localStorage.setItem('settings-readerMode', 'false');
-        this.syncAllSettingsCards();
 
         // Remove event listeners
         if (this.splitContainer && this.splitClickHandler) {
@@ -3976,82 +3764,17 @@ ${renderColumn(rightColumn)}
     }
 
     /**
-     * Exit split mode, converting all split pane cards into canvas cards
+     * Exit split mode and return to the single-page reading view.
      */
-    async exitSplitMode() {
-        // Collect all leaf info before destroying the tree
-        const paneInfo = [];
-        const collectLeaves = (node) => {
-            if (!node) return;
-            if (node.type === 'leaf') {
-                const rect = node.element.getBoundingClientRect();
-                if (node.editor) {
-                    paneInfo.push({
-                        isEditor: true,
-                        filename: node.editor.filename || '',
-                        x: rect.left,
-                        y: rect.top,
-                        width: rect.width,
-                        height: rect.height
-                    });
-                } else if (node.cardName) {
-                    paneInfo.push({
-                        cardName: node.cardName,
-                        x: rect.left,
-                        y: rect.top,
-                        width: rect.width,
-                        height: rect.height
-                    });
-                }
-            } else {
-                collectLeaves(node.first);
-                collectLeaves(node.second);
-            }
-        };
-        collectLeaves(this.splitRoot);
-
+    async exitSplitMode(cardName = null) {
+        if (!cardName) {
+            const firstLeaf = this.findFirstSplitLeaf(this.splitRoot);
+            cardName = (firstLeaf && firstLeaf.cardName && firstLeaf.cardName !== 'editor')
+                ? firstLeaf.cardName
+                : (this.currentPage || 'menu');
+        }
         this.cleanupSplitMode();
-
-        // Reset canvas view
-        this.panX = 0;
-        this.panY = 0;
-        this.zoom = 1;
-        this.rotation = 0;
-        this.updateCanvasTransform();
-
-        if (paneInfo.length === 0) {
-            this.loadMenuCard();
-            window.history.replaceState(null, '', window.location.pathname);
-            return;
-        }
-
-        // Recreate each pane as a canvas card/editor, inset from pane edges for gaps
-        const gap = 15;
-        this._suppressURLUpdate = true;
-        for (const info of paneInfo) {
-            const cx = info.x + info.width / 2;
-            const cy = info.y + info.height / 2;
-            const w = info.width - gap * 2;
-            const h = info.height - gap * 2;
-            const x = cx - w / 2;
-            const y = cy - h / 2;
-
-            if (info.isEditor) {
-                this.openEditorCard(info.filename).then(editor => {
-                    if (editor) {
-                        editor.x = x;
-                        editor.y = y;
-                        editor.width = w;
-                        editor.height = h;
-                        editor.updateTransform();
-                    }
-                });
-            } else {
-                await this.loadCardFromFile(info.cardName, { x, y, width: w, height: h });
-            }
-        }
-        this._suppressURLUpdate = false;
-        this.updateURLWithOpenCards();
+        await this.showCard(cardName, false);
     }
 
     /**
@@ -4156,90 +3879,23 @@ ${renderColumn(rightColumn)}
      * Create a leaf node for the split tree
      */
     async createSplitLeaf(cardName) {
-        // Ensure dynamic tag page providers are registered
-        if (cardName.startsWith('tag-')) {
-            const tagName = cardName.slice(4);
-            this.registerTagPage(tagName, null);
-        }
-
         const pane = document.createElement('div');
         pane.className = 'split-pane';
         pane.dataset.cardName = cardName;
 
-        const contentData = await this.getCardContent(cardName);
-        if (!contentData) {
+        const card = await this.buildCard(cardName);
+        if (!card) {
             pane.innerHTML = `<div class="split-pane-empty">Card "${cardName}" not found</div>`;
-            const node = { type: 'leaf', cardName, card: null, element: pane, parent: null };
+            const node = { type: 'leaf', cardName, card: null, element: pane, parent: null, history: [cardName], historyIndex: 0 };
             this.addSplitPaneControls(pane, node);
             return node;
         }
-
-        // Handle encrypted content
-        if (contentData.isEncrypted) {
-            const decryptedBody = await this.tryAutoDecrypt(contentData.encryptedData);
-            if (decryptedBody) {
-                contentData.content = this.reconstructDecryptedMarkdown(
-                    contentData.encryptedData.originalFrontmatter, decryptedBody
-                );
-                contentData.isEncrypted = false;
-            }
-        }
-
-        const parsed = this.parser.parse(contentData.content);
-        if (!parsed) {
-            pane.innerHTML = `<div class="split-pane-empty">Failed to parse "${cardName}"</div>`;
-            const node = { type: 'leaf', cardName, card: null, element: pane, parent: null };
-            this.addSplitPaneControls(pane, node);
-            return node;
-        }
-
-        // Create Card instance directly (not via addCard which appends to canvasContent)
-        // Initial dimensions are placeholders; ResizeObserver below will set correct values
-        const card = new Card({
-            x: 0, y: 0,
-            width: window.innerWidth, height: window.innerHeight,
-            rotation: 0,
-            pageNumber: null,
-            content: parsed.content,
-            margins: parsed.margins || { left: [], right: [], top: [], bottom: [] },
-            sourceFile: contentData.sourceFile,
-            progressBar: parsed.metadata.progressBar === 'true',
-            wordCount: parsed.metadata.wordCount === 'true',
-            readTime: parsed.metadata.readTime === 'true',
-            showTags: parsed.metadata.showTags === 'true' || parsed.metadata.showTags === true,
-            tags: (() => {
-                const tagsStr = parsed.metadata.tags || '';
-                const tagPairPattern = /\[([^,\]]+),\s*([^\]]+)\]/g;
-                const subtags = [];
-                let match;
-                while ((match = tagPairPattern.exec(tagsStr)) !== null) {
-                    const subtag = match[1].trim();
-                    if (!subtags.includes(subtag)) subtags.push(subtag);
-                }
-                return subtags;
-            })(),
-            date: (() => {
-                const dateStr = parsed.metadata.date || '';
-                const dateMatch = dateStr.match(/(\d{2})-(\d{2})-(\d{4})/);
-                if (dateMatch) {
-                    const [, month, day, year] = dateMatch;
-                    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                }
-                return null;
-            })(),
-            isDynamic: contentData.isDynamic || false
-        });
 
         card.element.classList.add('card-split-mode');
-        this.cards.set(card.id, card);
-        pane.appendChild(card.element);
-
-        // Apply settings
-        if (this.settings) {
-            if (!this.settings.cardShadow) {
-                card.element.style.filter = 'none';
-            }
+        if (this.settings && !this.settings.cardShadow) {
+            card.element.style.filter = 'none';
         }
+        pane.appendChild(card.element);
 
         // Observe pane size and update card dimensions + margins accordingly
         const observer = new ResizeObserver((entries) => {
@@ -4259,18 +3915,7 @@ ${renderColumn(rightColumn)}
         });
         observer.observe(pane);
 
-        // Bind interactive elements
-        this.bindInteractiveElements(card.element);
-
-        // Load companion script
-        await this.loadCardScript(cardName, card.element);
-
-        // Register for live-reload
-        if (!contentData.isDynamic && contentData.sourceFile) {
-            this.fileWatcher.watch(contentData.sourceFile);
-        }
-
-        const node = { type: 'leaf', cardName, card, element: pane, parent: null, resizeObserver: observer };
+        const node = { type: 'leaf', cardName, card, element: pane, parent: null, resizeObserver: observer, history: [cardName], historyIndex: 0 };
         this.addSplitPaneControls(pane, node);
         return node;
     }
@@ -4432,6 +4077,27 @@ ${renderColumn(rightColumn)}
         controls.appendChild(dragBtn);
         controls.appendChild(closeBtn);
         pane.appendChild(controls);
+
+        // Prev/next navigation for this pane's own history (top-left)
+        const nav = document.createElement('div');
+        nav.className = 'split-pane-nav';
+
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'split-pane-nav-btn split-nav-prev';
+        prevBtn.innerHTML = '‹';
+        prevBtn.title = 'Back';
+        prevBtn.addEventListener('click', (e) => { e.stopPropagation(); this.paneGoBack(node); });
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'split-pane-nav-btn split-nav-next';
+        nextBtn.innerHTML = '›';
+        nextBtn.title = 'Forward';
+        nextBtn.addEventListener('click', (e) => { e.stopPropagation(); this.paneGoForward(node); });
+
+        nav.appendChild(prevBtn);
+        nav.appendChild(nextBtn);
+        pane.appendChild(nav);
+        this.updatePaneNavButtons(node);
     }
 
     /**
@@ -4493,6 +4159,85 @@ ${renderColumn(rightColumn)}
     /**
      * Split a leaf pane to show a new card alongside it
      */
+    /**
+     * Replace the card shown in a split pane, keeping the pane's place in the tree.
+     * (A regular link click navigates within its pane; use splitPane to add a new pane.)
+     */
+    async navigatePaneToCard(oldLeaf, cardName, history = null, index = null) {
+        if (!oldLeaf) return;
+        const newLeaf = await this.createSplitLeaf(cardName);
+        if (history) {
+            newLeaf.history = history;
+            newLeaf.historyIndex = index;
+        }
+
+        // Preserve the pane's size within its parent split
+        newLeaf.element.style.flex = oldLeaf.element.style.flex;
+
+        // Swap the pane element in the DOM
+        const domParent = oldLeaf.element.parentElement;
+        if (domParent) domParent.replaceChild(newLeaf.element, oldLeaf.element);
+
+        // Swap the leaf node in the tree
+        newLeaf.parent = oldLeaf.parent;
+        if (this.splitRoot === oldLeaf) {
+            this.splitRoot = newLeaf;
+        } else if (oldLeaf.parent) {
+            if (oldLeaf.parent.first === oldLeaf) oldLeaf.parent.first = newLeaf;
+            else oldLeaf.parent.second = newLeaf;
+        }
+
+        // Tear down the old leaf's card/editor/observer
+        if (oldLeaf.resizeObserver) oldLeaf.resizeObserver.disconnect();
+        if (oldLeaf.editor) {
+            oldLeaf.editor.stopAutosave?.();
+            if (oldLeaf.editor.updateDebounceTimer) clearTimeout(oldLeaf.editor.updateDebounceTimer);
+            this.editorCards.delete(oldLeaf.editor.id);
+        }
+        if (oldLeaf.card) {
+            this.removeConnectionsForCard(oldLeaf.card.id);
+            this.cards.delete(oldLeaf.card.id);
+        }
+
+        this.updatePaneNavButtons(newLeaf);
+        return newLeaf;
+    }
+
+    /**
+     * Navigate a pane to a card via a link click: pushes onto the pane's own history
+     * (dropping any forward entries).
+     */
+    async paneNavigate(leaf, cardName) {
+        const hist = (leaf.history || [leaf.cardName]).slice(0, (leaf.historyIndex ?? 0) + 1);
+        hist.push(cardName);
+        await this.navigatePaneToCard(leaf, cardName, hist, hist.length - 1);
+    }
+
+    /** Step back in a pane's own history. */
+    async paneGoBack(leaf) {
+        if (!leaf.history || (leaf.historyIndex ?? 0) <= 0) return;
+        const i = leaf.historyIndex - 1;
+        await this.navigatePaneToCard(leaf, leaf.history[i], leaf.history, i);
+    }
+
+    /** Step forward in a pane's own history. */
+    async paneGoForward(leaf) {
+        if (!leaf.history || (leaf.historyIndex ?? 0) >= leaf.history.length - 1) return;
+        const i = leaf.historyIndex + 1;
+        await this.navigatePaneToCard(leaf, leaf.history[i], leaf.history, i);
+    }
+
+    /** Enable/disable a pane's prev/next arrows based on its history position. */
+    updatePaneNavButtons(leaf) {
+        if (!leaf || !leaf.element) return;
+        const idx = leaf.historyIndex ?? 0;
+        const len = leaf.history ? leaf.history.length : 0;
+        const prev = leaf.element.querySelector('.split-nav-prev');
+        const next = leaf.element.querySelector('.split-nav-next');
+        if (prev) prev.disabled = !(idx > 0);
+        if (next) next.disabled = !(len > 0 && idx < len - 1);
+    }
+
     async splitPane(leafNode, newCardName) {
         const paneElement = leafNode.element;
         const rect = paneElement.getBoundingClientRect();
@@ -4639,7 +4384,7 @@ ${renderColumn(rightColumn)}
         this.editorCards.set(editor.id, editor);
         pane.appendChild(editor.element);
 
-        const node = { type: 'leaf', cardName: 'editor', card: null, editor, element: pane, parent: null, resizeObserver: null };
+        const node = { type: 'leaf', cardName: 'editor', card: null, editor, element: pane, parent: null, resizeObserver: null, history: [], historyIndex: 0 };
         this.addSplitPaneControls(pane, node);
         return node;
     }
@@ -4665,14 +4410,10 @@ ${renderColumn(rightColumn)}
                 this.cards.delete(leafNode.card.id);
                 leafNode.card.element.remove();
             }
-            // Load menu in its place
-            this.createSplitLeaf('menu').then(menuLeaf => {
-                this.splitRoot = menuLeaf;
-                this.splitModeInitialCard = 'menu';
-                this.splitContainer.innerHTML = '';
-                this.splitContainer.appendChild(menuLeaf.element);
-                window.history.replaceState({ splitMode: true, cardName: 'menu' }, '', '#/r/menu');
-            });
+            // Closing the last pane exits the split, showing this card as the page
+            const lastCard = (leafNode.cardName && leafNode.cardName !== 'editor')
+                ? leafNode.cardName : this.currentPage;
+            this.exitSplitMode(lastCard);
             return;
         }
 
@@ -4876,78 +4617,20 @@ ${renderColumn(rightColumn)}
     /**
      * Handle browser back/forward navigation
      */
-    handlePopState(event) {
-        if (this._handlingNavigation) return;
-        if (this.isSplitMode) {
-            this.cleanupSplitMode();
-        }
+    handlePopState() {
+        // In split mode, back exits the split rather than navigating
+        if (this.isSplitMode) { this.exitSplitMode(); return; }
         this.loadFromURL();
     }
 
     handleHashChange() {
-        if (this._handlingNavigation) return;
-        if (this.isSplitMode) {
-            this.cleanupSplitMode();
-        }
         this.loadFromURL();
     }
 
+    // Re-render the page from the current URL (browser back/forward, manual hash edits)
     async loadFromURL() {
-        this._handlingNavigation = true;
-        try {
-            await this._loadFromURLInner();
-        } finally {
-            this._handlingNavigation = false;
-        }
-    }
-
-    async _loadFromURLInner() {
-        const urlInfo = this.getCardNameFromURL();
-        if (!urlInfo) {
-            this.clearAllCards();
-            this.loadMenuCard();
-            return;
-        }
-        if (urlInfo.snapshot) {
-            this.clearAllCards();
-            await this.restoreFromSnapshot(urlInfo.snapshot);
-        } else if (urlInfo.multiCard) {
-            this.clearAllCards();
-            const cached = this.getCachedLayout(urlInfo.cardNames, urlInfo.splitMode);
-            if (urlInfo.splitMode) {
-                if (cached) {
-                    await this.restoreSplitFromTree(cached.tree);
-                } else {
-                    const cardOnly = urlInfo.cardNames.filter(n => n !== '__editor__');
-                    if (cardOnly.length > 0) {
-                        await this.enterSplitMode(cardOnly[0], false);
-                        for (let i = 1; i < cardOnly.length; i++) {
-                            const leaf = this.findLastSplitLeaf(this.splitRoot);
-                            if (leaf) await this.splitPane(leaf, cardOnly[i]);
-                        }
-                    } else {
-                        await this.enterSplitMode('menu', false);
-                    }
-                }
-            } else {
-                if (cached) {
-                    await this.restoreCanvasFromCache(cached);
-                } else {
-                    const cardOnly = urlInfo.cardNames.filter(n => n !== '__editor__');
-                    if (cardOnly.length > 0) {
-                        await this.loadMultipleCards(cardOnly);
-                    } else {
-                        await this.loadMenuCard();
-                    }
-                }
-            }
-        } else {
-            this.clearAllCards();
-            const card = await this.loadCardFromFile(urlInfo.cardName, { fillViewport: true });
-            if (card && urlInfo.headingId) {
-                this.scrollToHeadingInCard(card, urlInfo.headingId);
-            }
-        }
+        const info = this.getCardNameFromURL();
+        await this.showCard(info?.cardName || 'menu', false, info?.headingId || null);
     }
 
     /**

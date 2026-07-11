@@ -129,5 +129,3 @@ It should render as horizontal text on the right side.It should render as horizo
 [[break]]
 
 ## Image Scatter Test
-
-[[button(action: scatterImage, label: Scatter Image)]]

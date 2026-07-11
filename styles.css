@@ -923,14 +923,17 @@ h3:target {
 }
 
 /* Card links - clickable links to other cards */
-.card-link {
+.card-link,
+.card-overlay-link {
     cursor: pointer;
     font-weight: bold;
     font-style: italic;
     transition: color var(--transition-fast);
+    -webkit-touch-callout: none;
 }
 
-.card-link:hover {
+.card-link:hover,
+.card-overlay-link:hover {
     color: var(--color-link-hover);
 }
 
@@ -2986,8 +2989,157 @@ sup.jump-link {
    Split Screen Mode
    ============================================ */
 
+/* ============================================
+   Reading page (single-card base view)
+   ============================================ */
+body.reader-active {
+    overflow: hidden;
+}
+
+body.reader-active #canvas {
+    display: none;
+}
+
+#page-container {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--color-background);
+}
+
+.page-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    color: var(--color-text-secondary);
+    font-style: italic;
+}
+
+/* Base reading card fills the page; manipulation chrome is hidden */
+.card.card-reader {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    filter: none !important;
+    box-shadow: none !important;
+    border-radius: 0;
+    z-index: 1 !important;
+}
+
+.card.card-reader .card-top-handle,
+.card.card-reader .card-corner-fold,
+.card.card-reader .card-corner-fold-tl,
+.card.card-reader .card-corner-fold-tr,
+.card.card-reader .card-corner-fold-bl,
+.card.card-reader .card-corner-fold-br,
+.card.card-reader .card-drag-handle,
+.card.card-reader .card-drag-handle-tl,
+.card.card-reader .card-drag-handle-tr,
+.card.card-reader .card-drag-handle-bl,
+.card.card-reader .card-drag-handle-br,
+.card.card-reader .card-handle,
+.card.card-reader .card-rotate-handle,
+.card.card-reader .pin-btn,
+.card.card-reader .card-page-number-absolute,
+.card.card-reader .margin-resize-handle {
+    display: none !important;
+}
+
+.card.card-reader .card-content {
+    padding: 48px;
+}
+
+@media (max-width: 768px) {
+    .card.card-reader .card-content {
+        padding: 32px 28px;
+    }
+}
+
+@media (max-width: 480px) {
+    .card.card-reader .card-content {
+        padding: 28px 24px;
+    }
+}
+
+/* ============================================
+   Floating overlay cards ([[card]]) — draggable/scalable cards over the page
+   ============================================ */
+#overlay-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    pointer-events: none;
+}
+
+#overlay-layer > .card {
+    pointer-events: auto;
+}
+
+.card.card-overlay {
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28), 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* pin + close stay visible so overlays are discoverable (esp. on touch) */
+.card.card-overlay .card-top-handle {
+    opacity: 1;
+}
+
+/* rotation is disabled for overlays — keep them upright and readable */
+.card.card-overlay .card-rotate-handle {
+    display: none !important;
+}
+
+.card.card-overlay .card-content {
+    padding: 24px 26px;
+}
+
+/* ============================================
+   Custom link context menu (right-click / long-press)
+   ============================================ */
+#link-context-menu {
+    position: fixed;
+    z-index: 11000;
+    min-width: 190px;
+    padding: 4px;
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+    font-family: var(--font-family-serif);
+}
+
+.context-menu-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--color-text-primary);
+    cursor: pointer;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.context-menu-item:hover {
+    background: var(--color-background);
+}
+
 body.split-mode-active {
     overflow: hidden;
+}
+
+/* The single-page view is hidden while a split workspace is open; overlays may still
+   float above the split. */
+body.split-mode-active #page-container {
+    display: none;
 }
 
 #split-mode-container {
@@ -3060,6 +3212,45 @@ body.split-mode-active {
 
 .split-pane:hover > .split-pane-controls {
     opacity: 1;
+}
+
+.split-pane-nav {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 200;
+    display: flex;
+    gap: 4px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.split-pane:hover > .split-pane-nav {
+    opacity: 1;
+}
+
+.split-pane-nav-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    font-size: 18px;
+    line-height: 28px;
+    text-align: center;
+    cursor: pointer;
+    transition: background 0.2s ease, opacity 0.2s ease;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.split-pane-nav-btn:hover:not(:disabled) {
+    background: var(--color-background);
+}
+
+.split-pane-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .split-pane-close,
@@ -3267,18 +3458,6 @@ body.split-mode-active .share-btn:hover {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 3px 6px rgba(0, 0, 0, 0.25);
 }
 
-/* Split mode link styling */
-.card.card-split-mode .card-link {
-    color: var(--color-link);
-    border-bottom: 1px solid var(--color-border);
-    padding-bottom: 1px;
-    transition: border-color 0.2s ease;
-}
-
-.card.card-split-mode .card-link:hover {
-    border-bottom-color: var(--color-link);
-}
-
 /* Responsive: on very narrow screens, force column direction */
 @media (max-width: 600px) {
     .split-vertical {
@@ -3294,11 +3473,6 @@ body.split-mode-active .share-btn:hover {
 @media (max-width: 768px) {
     .card.card-split-mode .card-content {
         padding: 32px 28px;
-    }
-    .card.card-split-mode .card-link {
-        display: inline-block;
-        padding: 4px 0;
-        margin: -4px 0;
     }
 }
 
@@ -3873,4 +4047,187 @@ body.split-mode-active .share-btn:hover {
 /* 2D polynomial default sizing */
 .viz-container[data-viz-type="polynomial"]:not([data-viz-size]):not([style*="height"]) {
     height: 320px;
+}
+
+/* ============================================
+   Print Layout
+   Reflows the viewport-locked reading page into a
+   paginated document: body text in a centered column,
+   [[note]] sidenotes floated into the paper margins.
+   preparePrintLayout() in app.js injects the inline
+   .print-sidenote / snapshot nodes; the rules here place them.
+   ============================================ */
+@media print {
+    /* Tunable page geometry (US Letter: 7.5in printable after margins). */
+    :root {
+        --print-gutter: 1.15in;     /* space reserved on each side for notes */
+        --print-note-width: 0.9in;  /* sidenote text width within the gutter */
+    }
+
+    @page {
+        margin: 0.5in;
+    }
+
+    /* Unlock the viewport-locked reading shell so content flows and paginates.
+       Scoped to the reading page so canvas-page printing is unaffected. */
+    html:has(body.reader-active),
+    body.reader-active {
+        overflow: visible !important;
+        height: auto !important;
+        background: #fff !important;
+    }
+
+    /* Hide everything on the reading page that isn't the article. */
+    body.reader-active #canvas,
+    body.reader-active #overlay-layer,
+    body.reader-active .connections-layer,
+    body.reader-active .settings-btn,
+    body.reader-active .edit-btn,
+    body.reader-active .share-btn,
+    body.reader-active #link-context-menu {
+        display: none !important;
+    }
+
+    body.reader-active #page-container {
+        position: static !important;
+        inset: auto !important;
+        overflow: visible !important;
+        background: #fff !important;
+    }
+
+    /* The reading card becomes a plain flowing block. */
+    .card.card-reader {
+        position: static !important;
+        width: auto !important;
+        height: auto !important;
+        transform: none !important;
+        filter: none !important;
+        box-shadow: none !important;
+    }
+
+    .card.card-reader .card-container {
+        display: block !important;
+        overflow: visible !important;
+        contain: none !important;
+        background: #fff !important;
+    }
+
+    /* Body text: centered column with wide gutters for the margins. */
+    .card.card-reader .card-content {
+        overflow: visible !important;
+        height: auto !important;
+        padding: 0 var(--print-gutter) !important;
+        position: relative;
+        font-size: 10.5pt;
+        line-height: 1.5;
+        color: #000;
+    }
+
+    /* Hide the on-screen margin columns/overlays, their inline proxies, and
+       all manipulation chrome — notes are re-injected as .print-sidenote. */
+    .card.card-reader .card-margin-left,
+    .card.card-reader .card-margin-right,
+    .card.card-reader .card-margin-top,
+    .card.card-reader .card-margin-bottom,
+    .card.card-reader .margin-inline-proxy,
+    .card.card-reader .margin-resize-handle,
+    .card.card-reader .card-page-number-absolute,
+    .card.card-reader .card-reading-stats,
+    .card.card-reader .card-top-handle,
+    .card.card-reader .card-drag-handle,
+    .card.card-reader .card-handle,
+    .card.card-reader .card-rotate-handle,
+    .card.card-reader .card-corner-fold {
+        display: none !important;
+    }
+
+    /* Table of contents: keep it floated inline as on the site, but smaller. */
+    .card.card-reader .toc {
+        float: left;
+        clear: left;
+        max-width: 2.3in;
+        margin: 0 14px 10px 0;
+        padding: 6px 8px;
+        font-size: 8pt;
+        line-height: 1.3;
+    }
+    .card.card-reader .toc-title {
+        font-size: 8.5pt;
+        margin-bottom: 6px;
+        padding-bottom: 5px;
+    }
+    .card.card-reader .toc-number { font-size: 8pt; }
+    .card.card-reader .toc-h2 > .toc-link { font-size: 8pt; }
+    .card.card-reader .toc-h3 > .toc-link { font-size: 7.5pt; }
+
+    /* Injected sidenotes float into the gutters, aligned to their reference. */
+    .print-sidenote {
+        width: var(--print-note-width);
+        font-size: 8.5pt;
+        line-height: 1.35;
+        text-align: left;
+        -webkit-hyphens: none;
+        hyphens: none;
+        break-inside: avoid;
+        color: #000;
+    }
+    .print-sidenote-left {
+        float: left;
+        clear: left;
+        margin-left: calc(-1 * var(--print-gutter));
+    }
+    .print-sidenote-right {
+        float: right;
+        clear: right;
+        margin-right: calc(-1 * var(--print-gutter));
+    }
+    .print-sidenote p { margin: 0 0 0.4em 0; text-align: left; }
+    .print-sidenote :last-child { margin-bottom: 0; }
+
+    /* Snapshotted visualizations: show the captured image, hide the live viz. */
+    .card.card-reader .viz-container.print-captured {
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+    }
+    .card.card-reader .viz-container.print-captured canvas,
+    .card.card-reader .viz-container.print-captured .viz-controls,
+    .card.card-reader .viz-container.print-captured .viz-3d-controls {
+        display: none !important;
+    }
+    .print-viz-img {
+        display: block;
+        max-width: 100%;
+        height: auto;
+        margin: 0 auto;
+    }
+    .print-viz-fallback {
+        border: 1px solid #bbb;
+        padding: 12px;
+        text-align: center;
+        font-style: italic;
+        color: #444;
+        break-inside: avoid;
+    }
+
+    /* Keep block elements from splitting awkwardly across pages. */
+    .card.card-reader h1,
+    .card.card-reader h2,
+    .card.card-reader h3 {
+        break-after: avoid;
+    }
+    .card.card-reader img,
+    .card.card-reader table,
+    .card.card-reader .quote-block,
+    .card.card-reader .code-block,
+    .card.card-reader pre,
+    .card.card-reader blockquote {
+        break-inside: avoid;
+    }
+
+    /* Links print as plain black text. */
+    .card.card-reader a {
+        color: #000 !important;
+        text-decoration: none !important;
+    }
 }

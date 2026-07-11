@@ -129,68 +129,6 @@ export const SettingsConfig = {
             context.updateConnectionsLayer?.();
         }
     },
-
-    showPreviews: {
-        default: false,
-        type: 'boolean',
-        storage: 'settings-showPreviews',
-        onSet(value, context) {
-            if (!value) {
-                context.clearPreviewCard?.();
-            }
-        }
-    },
-
-    readerMode: {
-        default: false,
-        type: 'boolean',
-        storage: 'settings-readerMode',
-        onSet(value, context) {
-            if (value) {
-                // Collect all canvas cards with their positions for split mode transition
-                const cardInfos = [];
-                if (context.cards?.size > 0) {
-                    context.cards.forEach(card => {
-                        const name = card.loadName || card.sourceFile;
-                        if (name) {
-                            const rect = card.element.getBoundingClientRect();
-                            cardInfos.push({
-                                cardName: name,
-                                x: rect.left,
-                                y: rect.top,
-                                width: rect.width,
-                                height: rect.height
-                            });
-                        }
-                    });
-                }
-                // Also collect editor cards
-                if (context.editorCards?.size > 0) {
-                    context.editorCards.forEach(editor => {
-                        const rect = editor.element.getBoundingClientRect();
-                        cardInfos.push({
-                            cardName: '__editor__',
-                            isEditor: true,
-                            filename: editor.filename || '',
-                            x: rect.left,
-                            y: rect.top,
-                            width: rect.width,
-                            height: rect.height
-                        });
-                    });
-                }
-                if (cardInfos.length > 0) {
-                    const firstCard = cardInfos.find(c => !c.isEditor);
-                    const initialName = firstCard ? firstCard.cardName : 'menu';
-                    context.enterSplitMode?.(initialName, true, cardInfos);
-                } else {
-                    context.enterSplitMode?.('menu');
-                }
-            } else {
-                context.exitSplitMode?.();
-            }
-        }
-    }
 };
 
 // ============================================
@@ -246,7 +184,7 @@ export const ActionsConfig = {
         label: 'Reset to Defaults',
         handler(context, button) {
             // Settings to skip onSet callbacks for (View Mode options that have disruptive side effects)
-            const skipOnSetFor = ['theme', 'readerMode'];
+            const skipOnSetFor = ['theme'];
 
             // Reset each setting to its default value
             Object.entries(SettingsConfig).forEach(([key, config]) => {
@@ -325,58 +263,6 @@ export const ActionsConfig = {
             }
         }
     },
-
-    scatterImage: {
-        label: 'Scatter Image',
-        async handler(context, button) {
-            button.disabled = true;
-
-            try {
-                const { scatterImage } = await import('./ImageScatter.js');
-                const specs = await scatterImage('images/koi.jpg', 12, 600);
-
-                // Remove previous scatter cards only after new specs are ready
-                const toRemove = [];
-                context.cards.forEach((card, id) => {
-                    if (card.element.dataset.scatterGroup) {
-                        toRemove.push(id);
-                    }
-                });
-                toRemove.forEach(id => {
-                    const card = context.cards.get(id);
-                    // Revoke blob URL to free memory
-                    const img = card.element.querySelector('.card-image');
-                    if (img && img.src.startsWith('blob:')) URL.revokeObjectURL(img.src);
-                    card.element.remove();
-                    context.cards.delete(id);
-                });
-
-                // Create new cards
-                const groupId = Date.now().toString();
-                specs.forEach(spec => {
-                    const card = context.createCard({
-                        x: spec.x,
-                        y: spec.y,
-                        width: spec.width,
-                        height: spec.height,
-                        rotation: spec.rotation,
-                        extra: { image: spec.dataUrl },
-                    });
-                    card.zIndex = spec.zIndex;
-                    card.element.style.zIndex = spec.zIndex;
-                    card.element.dataset.scatterGroup = groupId;
-                    const imgContainer = card.element.querySelector('.card-image-container');
-                    if (imgContainer) imgContainer.style.height = '100%';
-                });
-
-                button.disabled = false;
-            } catch (e) {
-                console.error('Scatter failed:', e);
-                button.textContent = 'Error - Retry';
-                button.disabled = false;
-            }
-        }
-    }
 };
 
 // ============================================
@@ -626,7 +512,6 @@ export class ControlsManager {
             updateConnectionsVisibility: () => paperCanvas.updateConnectionsVisibility?.(),
             updateConnectionsLayer: () => paperCanvas.updateConnectionsLayer?.(),
             updateAllCardMargins: (v) => paperCanvas.updateAllCardMargins?.(v),
-            clearPreviewCard: () => paperCanvas.clearPreviewCard?.(),
             enterSplitMode: (card, push, cardInfos) => paperCanvas.enterSplitMode?.(card, push, cardInfos),
             exitSplitMode: () => paperCanvas.exitSplitMode?.(),
             removeConnectionsForCard: (id) => paperCanvas.removeConnectionsForCard?.(id),

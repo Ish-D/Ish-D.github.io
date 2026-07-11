@@ -8,8 +8,6 @@ height: 640
 
 [[toggle(bind: theme, on: dark, off: light, label: Dark Mode)]]
 
-[[toggle(bind: readerMode, on: true, off: false, label: Reader Mode)]]
-
 ## Typography
 
 [[slider(bind: fontSize, min: 12, max: 22, step: 1, label: Font Size, suffix: px)]]
@@ -27,8 +25,6 @@ height: 640
 [[toggle(bind: showConnections, on: true, off: false, label: Show Connections)]]
 
 [[toggle(bind: connectionsAbove, on: true, off: false, label: ↳ Connections Above Cards)]]
-
-[[toggle(bind: showPreviews, on: true, off: false, label: Card Link Previews)]]
 
 ---
 

@@ -572,6 +572,18 @@ export class Base3DViz {
     }
 
     /**
+     * Return a PNG data URL of the current view. The renderer has no
+     * preserveDrawingBuffer, so we render synchronously and read the buffer
+     * back in the same tick before it is cleared. Used for print snapshots.
+     */
+    capture() {
+        if (!this.renderer || !this.scene || !this.camera) return null;
+        this.controls?.update();
+        this.renderer.render(this.scene, this.camera);
+        return this.renderer.domElement.toDataURL('image/png');
+    }
+
+    /**
      * Clean up all resources
      */
     dispose() {

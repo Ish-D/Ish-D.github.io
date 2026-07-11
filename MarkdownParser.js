@@ -192,6 +192,11 @@ export class MarkdownParser {
         return /\[\[link\(([^,)]+)(?:,\s*([^)]*))?\)\]\]/g;
     }
 
+    getCardTagPattern() {
+        // Overlay card: [[card(card, params)]]
+        return /\[\[card\(([^,)]+)(?:,\s*([^)]*))?\)\]\]/g;
+    }
+
     getShortLinkPattern() {
         // Shorthand link: [[Card]] or [[Card|display]]
         // Must not match [[type(...)]] patterns
@@ -1751,6 +1756,14 @@ export class MarkdownParser {
             }
         });
 
+        // Overlay card syntax: [[card(card, params)]] — spawns a floating card over the page
+        html = html.replace(this.getCardTagPattern(), (match, target, paramsStr) => {
+            const options = this.parseLinkOptions(paramsStr);
+            const display = options.display || target.trim();
+            const dataAttrs = this.optionsToDataAttrs(options);
+            return `<strong class="card-overlay-link" data-card="${target.trim()}" ${dataAttrs}>${display}</strong>`;
+        });
+
         // Summary: [[summary]]{text} - must run before shorthand links
         html = html.replace(this.getSummaryPattern(), (match, text) => {
             return `<span class="summary-inline">${text}</span>`;
@@ -1969,6 +1982,14 @@ export class MarkdownParser {
             } else {
                 return `<strong class="card-link" data-card="${trimmedTarget}" ${dataAttrs}>${display}</strong>`;
             }
+        });
+
+        // Overlay card syntax: [[card(card, params)]] — spawns a floating card over the page
+        html = html.replace(this.getCardTagPattern(), (match, target, paramsStr) => {
+            const options = this.parseLinkOptions(paramsStr);
+            const display = options.display || target.trim();
+            const dataAttrs = this.optionsToDataAttrs(options);
+            return `<strong class="card-overlay-link" data-card="${target.trim()}" ${dataAttrs}>${display}</strong>`;
         });
 
         // Summary: [[summary]]{text} - must run before shorthand links
