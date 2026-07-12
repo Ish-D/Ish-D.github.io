@@ -551,13 +551,17 @@ export class Card {
         });
 
         // Global mouse events
-        document.addEventListener('mousemove', this.onMouseMove.bind(this));
-        document.addEventListener('mouseup', this.onMouseUp.bind(this));
+        this._onMouseMove = this.onMouseMove.bind(this);
+        this._onMouseUp = this.onMouseUp.bind(this);
+        document.addEventListener('mousemove', this._onMouseMove);
+        document.addEventListener('mouseup', this._onMouseUp);
 
         // Global touch events
-        document.addEventListener('touchmove', this.onTouchMove.bind(this), { passive: false });
-        document.addEventListener('touchend', this.onTouchEnd.bind(this));
-        document.addEventListener('touchcancel', this.onTouchEnd.bind(this));
+        this._onTouchMove = this.onTouchMove.bind(this);
+        this._onTouchEnd = this.onTouchEnd.bind(this);
+        document.addEventListener('touchmove', this._onTouchMove, { passive: false });
+        document.addEventListener('touchend', this._onTouchEnd);
+        document.addEventListener('touchcancel', this._onTouchEnd);
 
         // Scroll synchronization for relative margin items
         const content = this.element.querySelector('.card-content');
@@ -2242,7 +2246,24 @@ export class Card {
             detail: { cardId: this.id }
         }));
 
+        this.destroy();
         this.element.remove();
+    }
+
+    /**
+     * Remove the global listeners and observers bound in bindEvents so a
+     * discarded card can be garbage-collected. Idempotent. Does not touch the
+     * DOM element — callers remove that separately.
+     */
+    destroy() {
+        if (this._destroyed) return;
+        this._destroyed = true;
+        document.removeEventListener('mousemove', this._onMouseMove);
+        document.removeEventListener('mouseup', this._onMouseUp);
+        document.removeEventListener('touchmove', this._onTouchMove);
+        document.removeEventListener('touchend', this._onTouchEnd);
+        document.removeEventListener('touchcancel', this._onTouchEnd);
+        this.marginResizeObserver?.disconnect();
     }
 
     /**

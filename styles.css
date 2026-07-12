@@ -1055,6 +1055,34 @@ sup.jump-link {
     margin: 0 auto;
 }
 
+/* About page: a draggable/rotatable collage of card pieces at the bottom of the
+   content. Pieces are real cards built in cards/about.js. Their edges spill into
+   the side margins, so the About content must not clip horizontally. The reader
+   base card hides card chrome on its descendants, so drag + rotate handles are
+   re-enabled here (scale/pin/delete stay hidden), and the image fills each card. */
+.about-page .card-content {
+    overflow: visible;
+}
+
+.about-scatter {
+    position: relative;
+    margin: 0.25rem auto 1.5rem;
+}
+
+.about-piece .card-image-container {
+    height: 100%;
+}
+
+.about-piece .card-image {
+    height: 100%;
+    max-width: none;
+}
+
+.card-reader .card.about-piece .card-drag-handle,
+.card-reader .card.about-piece .card-rotate-handle {
+    display: block !important;
+}
+
 .card-content blockquote {
     border-left: var(--blockquote-border-width) solid var(--blockquote-border-color);
     padding-left: var(--blockquote-padding);
@@ -2335,6 +2363,11 @@ sup.jump-link {
     flex-shrink: 0;
 }
 
+/* In a split pane, keep the toolbar clear of the pane's drag/close controls (top-right) */
+.split-pane .editor-toolbar {
+    padding-right: 76px;
+}
+
 .editor-toolbar-buttons {
     display: flex;
     align-items: center;
@@ -3253,6 +3286,13 @@ body.split-mode-active #page-container {
     cursor: default;
 }
 
+/* Home button carries an SVG icon; center it (prev/next use a text glyph) */
+.split-nav-home {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .split-pane-close,
 .split-pane-drag {
     width: 28px;
@@ -4081,9 +4121,11 @@ body.split-mode-active .share-btn:hover {
     body.reader-active #canvas,
     body.reader-active #overlay-layer,
     body.reader-active .connections-layer,
+    body.reader-active .reader-nav,
     body.reader-active .settings-btn,
     body.reader-active .edit-btn,
     body.reader-active .share-btn,
+    body.reader-active .about-scatter,
     body.reader-active #link-context-menu {
         display: none !important;
     }

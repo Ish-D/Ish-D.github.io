@@ -208,6 +208,59 @@
 }
 
 /* ============================================
+   Reader Navigation (home / back / forward)
+   ============================================ */
+
+.reader-nav {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1000;
+    display: none;
+    gap: 8px;
+}
+
+/* Shown only while reading a page; hidden in split mode (panes carry their own nav) */
+body.reader-active .reader-nav {
+    display: flex;
+}
+
+body.split-mode-active .reader-nav {
+    display: none;
+}
+
+.reader-nav-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-card-background);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.reader-nav-btn:hover:not(:disabled) {
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.reader-nav-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.reader-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+/* ============================================
    Settings Card Styles
    ============================================ */
 

@@ -10,7 +10,4 @@ height: 450
 }
 
 # Writing
-
-->A collection of my writings and ramblings.<-
-
 {{writing}}

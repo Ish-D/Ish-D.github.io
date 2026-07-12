@@ -20,9 +20,6 @@ date: 04-14-2026
 [[drop(L)]]arge language models (LLMs) have very quickly transitioned from niche research to a part of every day life. When I started at my current job in August, the company had just begun giving people Claude Code budgets and setting up internal LLM tooling. Within a few months, everyone was running any non-trivial task through Claude before anything else. 
 [[break]]
 [[tab]] The more I talk to friends and family across various industries the more everyone reflects on pre-AI work as some sort of archaic period. These tools span every domain now: there's diffusion-powered image generation in Photoshop's [[cite(https://helpx.adobe.com/photoshop/desktop/repair-retouch/remove-objects-fill-space/blend-subjects-with-harmonize.html)]]{harmonize} tool and [[cite(https://research.adobe.com/news/new-photoshop-feature-rotate-2d-objects-in-three-dimensions/)]]{2D -> 3D rotation feature}, a slew of LLM coding assistants[[cite(https://code.claude.com/docs/en/overview)]][[cite(https://openai.com/codex/)]][[cite(https://cursor.com/)]], or the increasingly popular [[cite(https://openclaw.ai/)]]{full blown LLM personal assistant}.
-
-[[tab]] (Overlay test: click this [[card(about, display: "pop-up card")]], scroll to watch it follow the page, then use its pin button to lock it on screen.)
-
 [[bigbreak]]
 ### The Road Ahead
 [[tab]] This series of posts is going to build up a state of the art LLM inference engine from scratch. This post is going to go into the core theory behind LLMs. I am working with the assumption that you are proficient with general programming principles and have some high-school level math background, but little to no knowledge about the internals of LLMs. This post is dedicated to *inference*,  I will go over some training details as they pertain to the overall architecture, but it is not the focus of this post.

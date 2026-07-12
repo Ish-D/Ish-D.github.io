@@ -171,6 +171,10 @@ class PaperCanvas {
         this.splitDeleteHandler = null;
         this.splitTagClickHandler = null;
 
+        // Reader navigation position, for back/forward/home button state
+        this.navIndex = 0;
+        this.navMax = 0;
+
         // Live-reload file watcher
         this.fileWatcher = new FileWatcherClient(this);
 
@@ -209,6 +213,13 @@ class PaperCanvas {
 
         // Custom right-click / long-press menu on card links
         this.bindContextMenu();
+
+        // Recover reader nav position from the entry the browser restored on reload
+        const restoredState = window.history.state;
+        if (restoredState && typeof restoredState.navIndex === 'number') {
+            this.navIndex = restoredState.navIndex;
+            this.navMax = restoredState.navIndex;
+        }
 
         // Route to the card named by the URL; default to the menu
         const urlInfo = this.getCardNameFromURL();
@@ -1810,7 +1821,6 @@ ${renderColumn(rightColumn)}
         let x, y;
         const jitter = options.jitter || 0;
 
-        // Special handling for 'about' card: position left of menu with scatter image right of menu
         // Determine position based on options
         if (typeof options.absX === 'number' && typeof options.absY === 'number') {
             // Absolute positioning
@@ -1926,6 +1936,11 @@ ${renderColumn(rightColumn)}
         shareBtn.addEventListener('click', () => {
             navigator.clipboard.writeText(window.location.href).catch(err => console.error('Failed to copy:', err));
         });
+
+        // Bind reader navigation buttons — drive the browser history stack
+        document.getElementById('nav-home')?.addEventListener('click', () => this.showCard('menu', true));
+        document.getElementById('nav-prev')?.addEventListener('click', () => window.history.back());
+        document.getElementById('nav-next')?.addEventListener('click', () => window.history.forward());
     }
 
     async loadDropcapMetrics() {
@@ -2871,6 +2886,7 @@ ${renderColumn(rightColumn)}
     clearAllCards() {
         this.cards.forEach((card, id) => {
             this.removeConnectionsForCard(id);
+            card.destroy();
             card.element.remove();
         });
         this.cards.clear();
@@ -3045,10 +3061,27 @@ ${renderColumn(rightColumn)}
 
         const url = `#/${cardName}`;
         if (pushHistory) {
-            window.history.pushState({ cardName }, '', url);
+            this.navIndex += 1;
+            this.navMax = this.navIndex;
+            window.history.pushState({ cardName, navIndex: this.navIndex }, '', url);
         } else {
-            window.history.replaceState({ cardName }, '', url);
+            window.history.replaceState({ cardName, navIndex: this.navIndex }, '', url);
         }
+        this.updateReaderNav();
+    }
+
+    /**
+     * Enable/disable the reader nav buttons based on history position:
+     * prev when something is behind us, next when a forward entry exists,
+     * home unless we're already on the menu.
+     */
+    updateReaderNav() {
+        const prev = document.getElementById('nav-prev');
+        const next = document.getElementById('nav-next');
+        const home = document.getElementById('nav-home');
+        if (prev) prev.disabled = !(this.navIndex > 0);
+        if (next) next.disabled = !(this.navIndex < this.navMax);
+        if (home) home.disabled = this.currentPage === 'menu';
     }
 
     /**
@@ -3712,7 +3745,7 @@ ${renderColumn(rightColumn)}
         // Split is ephemeral: don't touch the URL. Push one history entry (same URL) so the
         // browser back button exits the split.
         if (pushHistory) {
-            window.history.pushState({ split: true }, '', window.location.href);
+            window.history.pushState({ split: true, navIndex: this.navIndex }, '', window.location.href);
         }
     }
 
@@ -4078,9 +4111,18 @@ ${renderColumn(rightColumn)}
         controls.appendChild(closeBtn);
         pane.appendChild(controls);
 
-        // Prev/next navigation for this pane's own history (top-left)
+        // Editor panes have no page history and carry their own toolbar; skip page nav
+        if (node.editor) return;
+
+        // Home / prev / next navigation for this pane's own history (top-left)
         const nav = document.createElement('div');
         nav.className = 'split-pane-nav';
+
+        const homeBtn = document.createElement('button');
+        homeBtn.className = 'split-pane-nav-btn split-nav-home';
+        homeBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>';
+        homeBtn.title = 'Home';
+        homeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.paneNavigate(node, 'menu'); });
 
         const prevBtn = document.createElement('button');
         prevBtn.className = 'split-pane-nav-btn split-nav-prev';
@@ -4094,6 +4136,7 @@ ${renderColumn(rightColumn)}
         nextBtn.title = 'Forward';
         nextBtn.addEventListener('click', (e) => { e.stopPropagation(); this.paneGoForward(node); });
 
+        nav.appendChild(homeBtn);
         nav.appendChild(prevBtn);
         nav.appendChild(nextBtn);
         pane.appendChild(nav);
@@ -4227,13 +4270,15 @@ ${renderColumn(rightColumn)}
         await this.navigatePaneToCard(leaf, leaf.history[i], leaf.history, i);
     }
 
-    /** Enable/disable a pane's prev/next arrows based on its history position. */
+    /** Enable/disable a pane's home/prev/next buttons based on its history position. */
     updatePaneNavButtons(leaf) {
         if (!leaf || !leaf.element) return;
         const idx = leaf.historyIndex ?? 0;
         const len = leaf.history ? leaf.history.length : 0;
+        const home = leaf.element.querySelector('.split-nav-home');
         const prev = leaf.element.querySelector('.split-nav-prev');
         const next = leaf.element.querySelector('.split-nav-next');
+        if (home) home.disabled = leaf.cardName === 'menu';
         if (prev) prev.disabled = !(idx > 0);
         if (next) next.disabled = !(len > 0 && idx < len - 1);
     }
@@ -4618,6 +4663,11 @@ ${renderColumn(rightColumn)}
      * Handle browser back/forward navigation
      */
     handlePopState() {
+        // Resync reader nav position from the entry we landed on
+        const state = window.history.state;
+        if (state && typeof state.navIndex === 'number') {
+            this.navIndex = state.navIndex;
+        }
         // In split mode, back exits the split rather than navigating
         if (this.isSplitMode) { this.exitSplitMode(); return; }
         this.loadFromURL();

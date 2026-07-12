@@ -43,6 +43,15 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
     </button>
 
+    <!-- Reader navigation: home / back / forward -->
+    <nav class="reader-nav" id="reader-nav" aria-label="Page navigation">
+        <button class="reader-nav-btn" id="nav-home" title="Home">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg>
+        </button>
+        <button class="reader-nav-btn" id="nav-prev" title="Back">&#8249;</button>
+        <button class="reader-nav-btn" id="nav-next" title="Forward">&#8250;</button>
+    </nav>
+
     <!-- KaTeX JS -->
     <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
     <!-- KaTeX auto-render extension -->

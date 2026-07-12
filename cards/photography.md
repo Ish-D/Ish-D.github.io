@@ -5,7 +5,6 @@ height: 700
 ---
 
 # Photography
-[[summary]]{Some of my favorite frames.}
 [[bigbreak]]
 [[gallery(gap: 10)]]
 {
