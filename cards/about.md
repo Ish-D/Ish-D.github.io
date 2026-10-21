@@ -1,7 +1,5 @@
 ---
 name: About
-width: 400
-height: 400
 ---
 
 # About
@@ -12,5 +10,6 @@ I like pretty things. In pursuit of them, I've found I'm passionate about GPUs, 
 
 ---
 
+[[link(contact, display: "Contact Me")]]
 
-[[link(contact, display: "Contact Me", size: 400x480, rel: 350:0)]]
+[[viz(type: scatter, src: images/higuchi.png, pieces: 12, size: 350, height: 500, place: full)]]

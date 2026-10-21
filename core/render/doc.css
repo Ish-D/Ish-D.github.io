@@ -457,3 +457,9 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
 .figure-bar button:hover { background: var(--color-selection); }
 .figure-bar .sep { width: 1px; margin: 3px 3px; background: var(--color-border); }
 .figure-handle { position: absolute; z-index: 82; width: 18px; height: 18px; background: #c4452c; border: 2px solid var(--color-card-background); border-radius: 50%; cursor: nwse-resize; touch-action: none; }
+
+/* scatter figure */
+.scatter-piece { cursor: grab; touch-action: none; user-select: none; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25); }
+.scatter-piece.held { cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
+
+.figure-bar[hidden], .figure-handle[hidden], .insert-plus[hidden], .insert-menu[hidden] { display: none; }

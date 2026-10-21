@@ -176,6 +176,29 @@ function writingBlocks(node) {
     }));
 }
 
+/** Blocks for `{{tags}}`: each tag with the pages carrying it. */
+function tagBlocks(node) {
+    const meta = state.manifest?.metadata ?? {};
+    const byTag = new Map();
+    for (const [name, entry] of Object.entries(meta)) {
+        if (entry.encrypted || !entry.tags) continue;
+        for (const m of entry.tags.matchAll(/\[([^\],]+),\s*([^\]]+)\]/g)) {
+            const tag = m[1].trim();
+            if (!byTag.has(tag)) byTag.set(tag, new Set());
+            byTag.get(tag).add(name);
+        }
+    }
+    const text = (value) => ({ type: 'text', value, start: node.start, end: node.end });
+    return [...byTag.keys()].sort((a, b) => a.localeCompare(b)).map((tag) => {
+        const children = [text(`${tag}:  `)];
+        [...byTag.get(tag)].forEach((name, i) => {
+            if (i) children.push(text(', '));
+            children.push(syntheticLink(name, meta[name].name ?? name, node));
+        });
+        return { type: 'paragraph', start: node.start, end: node.end, children };
+    });
+}
+
 function buildEnv() {
     const narrow = document.documentElement.clientWidth < 600;
     const { marginPercent } = state.settings;
@@ -214,6 +237,7 @@ function buildEnv() {
         },
         generate: (node) => {
             if (node.name === 'macro' && node.args?.items[0]?.value === 'writing') return writingBlocks(node);
+            if (node.name === 'macro' && node.args?.items[0]?.value === 'tags') return tagBlocks(node);
             return null;
         },
     };
