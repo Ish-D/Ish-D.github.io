@@ -131,3 +131,28 @@ test('a group of edits in different places undoes and redoes exactly', () => {
         for (let i = 1; i < states.length; i++) { s.redo(); assert.equal(s.source, states[i], `redo to ${i} (run ${run})`); }
     }
 });
+
+import { shiftRange } from '../../core/edit/ranges.js';
+
+test('subscribers hear every change, including undo and reset', () => {
+    const s = createSession('abc', { parse, onChange() {} });
+    const kinds = [];
+    const stop = s.subscribe((c) => kinds.push(c.kind));
+    s.apply({ start: 1, end: 1, text: 'X' });
+    s.undo();
+    s.reset('new');
+    stop();
+    s.reset('later');
+    assert.deepEqual(kinds, ['edit', 'undo', 'reset']);
+});
+
+test('a range moves with edits before it, stays for edits after it, and is lost when touched', () => {
+    const range = { start: 20, end: 30 };
+    assert.deepEqual(shiftRange(range, { start: 5, end: 5, text: 'abcd' }), { start: 24, end: 34 });
+    assert.deepEqual(shiftRange(range, { start: 5, end: 10, text: '' }), { start: 15, end: 25 });
+    assert.deepEqual(shiftRange(range, { start: 40, end: 41, text: 'zz' }), range);
+    assert.deepEqual(shiftRange(range, { start: 30, end: 30, text: 'tail' }), range);
+    assert.deepEqual(shiftRange(range, { start: 20, end: 20, text: 'head' }), { start: 24, end: 34 });
+    assert.equal(shiftRange(range, { start: 25, end: 26, text: 'x' }), null);
+    assert.equal(shiftRange(range, { start: 15, end: 22, text: '' }), null);
+});

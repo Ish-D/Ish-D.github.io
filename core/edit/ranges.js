@@ -61,3 +61,19 @@ export function closeRange(doc, range) {
     }
     return current;
 }
+
+/**
+ * Where a source range sits after `edit` was applied somewhere in the text.
+ * An edit before the range moves it, one after leaves it, and one that
+ * touches it leaves nothing trustworthy, so the result is null.
+ * @param {{ start: number, end: number }} range
+ * @param {{ start: number, end: number, text: string }} edit
+ */
+export function shiftRange(range, edit) {
+    const delta = edit.text.length - (edit.end - edit.start);
+    if (edit.end <= range.start && !(edit.start === edit.end && edit.start === range.end && range.start === range.end)) {
+        return { start: range.start + delta, end: range.end + delta };
+    }
+    if (edit.start >= range.end) return { start: range.start, end: range.end };
+    return null;
+}

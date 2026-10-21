@@ -9,7 +9,7 @@
  * box over that slot after every layout.
  */
 
-import { expandToLines, closeRange } from './ranges.js';
+import { expandToLines, closeRange, shiftRange } from './ranges.js';
 import { createEditorBox, typographyOf } from './editor-box.js';
 
 const MAX_SETTLE_PASSES = 4;
@@ -29,6 +29,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     let timer = 0;
     let passes = 0;
     let burst = 0;
+    let committing = false;
 
     const overlay = document.createElement('div');
     overlay.className = 'editor-overlay';
@@ -79,11 +80,34 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         setEditing(request(height));
     };
 
+    /** Takes the box away without writing it back. */
+    const discard = () => {
+        if (!active) return;
+        clearTimeout(timer);
+        active.textarea.removeEventListener('blur', onBlur);
+        active.box.remove();
+        active = null;
+        setEditing(null);
+    };
+
+    // Something else changed the text (a drag, undo, a reload): keep the box
+    // over the same words, or let it go if they were touched.
+    const unsubscribe = session.subscribe((change) => {
+        if (!active || committing) return;
+        const moved = change.edit ? shiftRange(active.range, change.edit) : null;
+        if (!moved) return discard();
+        active.range.start = moved.start;
+        active.range.end = moved.end;
+    });
+
     const commitText = () => {
         if (!active) return;
         const { range, textarea } = active;
+        // the box must still be over the text it was opened on, or writing it back would land in the wrong place
+        if (session.source.slice(range.start, range.end) !== active.base) return discard();
         const text = textarea.value;
-        session.apply({ start: range.start, end: range.end, text }, { group: `edit-${active.burst}` });
+        committing = true;
+        try { session.apply({ start: range.start, end: range.end, text }, { group: `edit-${active.burst}` }); } finally { committing = false; }
         range.end = range.start + text.length;
         const closed = active.exact ? range : closeRange(session.doc, range);
         if (closed.start !== range.start || closed.end !== range.end) {
@@ -94,6 +118,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             textarea.setSelectionRange(caret, caret);
             active.repaint();
         }
+        active.base = session.source.slice(range.start, range.end);
         onSourceChange();
         passes = 0;
         reserve();
@@ -147,7 +172,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             textarea.addEventListener('blur', onBlur);
             overlay.appendChild(box);
             const drawn = measureDrawn(getLayout(), rendered);
-            active = { range: { ...closed }, exact, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
+            active = { range: { ...closed }, base: session.source.slice(closed.start, closed.end), exact, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
             passes = 0;
             reserve();
             textarea.focus({ preventScroll: true });
@@ -171,6 +196,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             if (!active) return;
             clearTimeout(timer);
             commitText();
+            if (!active) return;
             active.textarea.removeEventListener('blur', onBlur);
             active.box.remove();
             active = null;
@@ -178,6 +204,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         },
 
         dispose() {
+            unsubscribe();
             api.setEnabled(false);
             overlay.remove();
         },

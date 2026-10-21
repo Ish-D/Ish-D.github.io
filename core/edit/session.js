@@ -18,12 +18,14 @@ export function createSession(source, { parse, onChange = () => {} }) {
     /** Each entry is one undo step: a group of edits, kept in the order they were made. */
     let undoStack = [];
     let redoStack = [];
+    const listeners = new Set();
+    const notify = (change) => { onChange(change); for (const fn of listeners) fn(change); };
 
     const commit = (edit, kind) => {
         const result = applyEdit(text, edit);
         text = result.source;
         doc = parse(text);
-        onChange({ source: text, doc, edit, kind });
+        notify({ source: text, doc, edit, kind });
         return result;
     };
 
@@ -32,6 +34,9 @@ export function createSession(source, { parse, onChange = () => {} }) {
         get doc() { return doc; },
         get canUndo() { return undoStack.length > 0; },
         get canRedo() { return redoStack.length > 0; },
+
+        /** Hears every change to the text, whoever makes it. Returns an unsubscribe function. */
+        subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
         /**
          * @param {{ start: number, end: number, text: string }} edit
@@ -73,7 +78,7 @@ export function createSession(source, { parse, onChange = () => {} }) {
             doc = parse(text);
             undoStack = [];
             redoStack = [];
-            onChange({ source: text, doc, edit: null, kind: 'reset' });
+            notify({ source: text, doc, edit: null, kind: 'reset' });
         },
     };
 }
