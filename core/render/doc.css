@@ -213,19 +213,9 @@ aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left
     pointer-events: auto;
     hyphens: manual;
 }
-.editor-box::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: -14px;
-    width: 2px;
-    background: #c4452c;
-    opacity: 0.8;
-}
+.editor-box .ex { display: block; pointer-events: none; }
 .editor-mirror, .editor-input {
     box-sizing: border-box;
-    width: 100%;
     margin: 0;
     padding: 0;
     border: 0;
@@ -238,17 +228,26 @@ aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left
     word-break: normal;
     tab-size: 4;
 }
-.editor-mirror { position: absolute; inset: 0; pointer-events: none; color: var(--color-text-primary); overflow: hidden; }
+.editor-mirror { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; color: var(--color-text-primary); }
 .ed-syntax { color: var(--color-text-secondary); opacity: 0.7; }
 .editor-input {
     position: relative;
-    display: block;
-    resize: none;
-    overflow: hidden;
     outline: none;
     background: transparent;
     color: transparent;
     caret-color: var(--color-text-primary);
+    -webkit-user-modify: read-write-plaintext-only;
+}
+/* a thin rule beside the lines being edited */
+.editor-input::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -14px;
+    width: 2px;
+    background: #c4452c;
+    opacity: 0.8;
 }
 .editor-input::selection { background: var(--color-selection); color: transparent; }
 .editor-slot { visibility: hidden; }
@@ -576,3 +575,16 @@ body.resizing-margins { user-select: none; cursor: col-resize; }
 .move-grip[hidden] { display: none; }
 .figure-bar button.grip { cursor: grab; touch-action: none; }
 aside.note.moving, .obj.moving { opacity: 0.75; outline: 1px dashed #c4452c; outline-offset: 4px; z-index: 90; }
+
+/* figure padding */
+.figure-bar button.pill { width: auto; min-width: 56px; padding: 0 8px; font: 13px Georgia, serif; cursor: ew-resize; touch-action: none; }
+.pad-ring {
+    position: absolute;
+    z-index: 70;
+    box-sizing: border-box;
+    border: 1px dashed #c4452c;
+    opacity: 0.7;
+    pointer-events: none;
+}
+.pad-ring[hidden] { display: none; }
+@media print { .pad-ring { display: none; } }

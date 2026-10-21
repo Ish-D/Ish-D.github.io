@@ -10,7 +10,7 @@
  */
 
 import { expandToLines, closeRange, shiftRange } from './ranges.js';
-import { createEditorBox, typographyOf } from './editor-box.js';
+import { bandInsets, createEditorBox, typographyOf } from './editor-box.js';
 
 const MAX_SETTLE_PASSES = 4;
 const INPUT_DEBOUNCE_MS = 100;
@@ -22,8 +22,9 @@ const INPUT_DEBOUNCE_MS = 100;
  * @param {() => any} deps.getLayout            current layout
  * @param {(editing: { start: number, end: number, height: number, x?: number, width?: number } | null) => void} deps.setEditing   tells the app which region to reserve, then relayouts
  * @param {() => void} deps.onSourceChange      called after the session text changed
+ * @param {(text: string) => void} [deps.onLost]  called with typed text that could not be put back in the page
  */
-export function createEditor({ document, session, getLayout, setEditing, onSourceChange }) {
+export function createEditor({ document, session, getLayout, setEditing, onSourceChange, onLost = () => {} }) {
     let enabled = false;
     let active = null;
     let timer = 0;
@@ -48,10 +49,8 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     };
 
     const fit = () => {
-        const ta = active.textarea;
-        ta.style.height = 'auto';
-        const needed = Math.ceil(ta.scrollHeight);
-        ta.style.height = `${needed}px`;
+        const needed = Math.ceil(active.field.height);
+        active.box.style.height = `${needed}px`;
         return needed;
     };
 
@@ -69,10 +68,11 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         box.style.transformOrigin = note?.rotate ? `${-slot.x}px ${-slot.y}px` : '';
         box.style.transform = note?.rotate ? `rotate(${note.rotate}deg)` : '';
         active.slot = slot;
+        if (slot.bands) active.field.setBands(bandInsets(slot.bands, slot.x, slot.width), slot.lineHeight);
     };
 
-    /** The region to reserve in the layout: where the block was drawn, so it keeps clear of floats. */
-    const request = (height) => ({ start: active.range.start, end: active.range.end, height, x: active.x, width: active.width });
+    /** The region to reserve in the layout. */
+    const request = (height) => ({ start: active.range.start, end: active.range.end, height });
 
     const reserve = () => {
         const height = fit();
@@ -84,10 +84,22 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     const discard = () => {
         if (!active) return;
         clearTimeout(timer);
-        active.textarea.removeEventListener('blur', onBlur);
+        const typed = active.field.value;
+        const unsaved = typed !== active.base;
+        active.field.input.removeEventListener('blur', onBlur);
         active.box.remove();
         active = null;
         setEditing(null);
+        if (unsaved) onLost(typed);
+    };
+
+    /** After a reload or an undo: if the words being edited are still in the text exactly once, the box can follow them. */
+    const relocate = () => {
+        const at = session.source.indexOf(active.base);
+        if (at === -1 || at !== session.source.lastIndexOf(active.base)) return false;
+        active.range.start = at;
+        active.range.end = at + active.base.length;
+        return true;
     };
 
     // Something else changed the text (a drag, undo, a reload): keep the box
@@ -95,28 +107,27 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     const unsubscribe = session.subscribe((change) => {
         if (!active || committing) return;
         const moved = change.edit ? shiftRange(active.range, change.edit) : null;
-        if (!moved) return discard();
+        if (!moved) return relocate() || discard();
         active.range.start = moved.start;
         active.range.end = moved.end;
     });
 
     const commitText = () => {
         if (!active) return;
-        const { range, textarea } = active;
+        const { range, field } = active;
         // the box must still be over the text it was opened on, or writing it back would land in the wrong place
         if (session.source.slice(range.start, range.end) !== active.base) return discard();
-        const text = textarea.value;
+        const text = field.value;
         committing = true;
         try { session.apply({ start: range.start, end: range.end, text }, { group: `edit-${active.burst}` }); } finally { committing = false; }
         range.end = range.start + text.length;
         const closed = active.exact ? range : closeRange(session.doc, range);
         if (closed.start !== range.start || closed.end !== range.end) {
-            const caret = textarea.selectionStart + (range.start - closed.start);
+            const caret = field.selectionStart + (range.start - closed.start);
             range.start = closed.start;
             range.end = closed.end;
-            textarea.value = session.source.slice(range.start, range.end);
-            textarea.setSelectionRange(caret, caret);
-            active.repaint();
+            field.value = session.source.slice(range.start, range.end);
+            field.setSelectionRange(caret, caret);
         }
         active.base = session.source.slice(range.start, range.end);
         onSourceChange();
@@ -138,7 +149,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
 
     const onBlur = () => {
         setTimeout(() => {
-            if (active && document.activeElement !== active.textarea) api.close();
+            if (active && !active.field.hasFocus) api.close();
         }, 120);
     };
 
@@ -162,22 +173,19 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             const exact = !!from?.matches?.('aside.note');
             const closed = exact ? { start, end } : closeRange(session.doc, expandToLines(session.source, start, end));
             const rendered = from ?? document.querySelector(`[data-start="${closed.start}"]`);
-            const { box, textarea, repaint } = createEditorBox({
+            const field = createEditorBox({
                 document,
                 text: session.source.slice(closed.start, closed.end),
                 typography: typographyOf(rendered, document.defaultView),
             });
-            textarea.addEventListener('input', onInput);
-            textarea.addEventListener('keydown', onKey);
-            textarea.addEventListener('blur', onBlur);
-            overlay.appendChild(box);
-            const drawn = measureDrawn(getLayout(), rendered);
-            active = { range: { ...closed }, base: session.source.slice(closed.start, closed.end), exact, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
+            for (const type of ['input', 'keydown', 'blur']) field.input.addEventListener(type, { input: onInput, keydown: onKey, blur: onBlur }[type]);
+            overlay.appendChild(field.box);
+            active = { range: { ...closed }, base: session.source.slice(closed.start, closed.end), exact, box: field.box, field, burst: ++burst, height: 0, slot: null };
             passes = 0;
             reserve();
-            textarea.focus({ preventScroll: true });
-            const caret = caretFromHint(textarea.value, hint);
-            textarea.setSelectionRange(caret, caret);
+            field.focus({ preventScroll: true });
+            const caret = caretFromHint(field.value, hint);
+            field.setSelectionRange(caret, caret);
         },
 
         /**
@@ -197,7 +205,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             clearTimeout(timer);
             commitText();
             if (!active) return;
-            active.textarea.removeEventListener('blur', onBlur);
+            active.field.input.removeEventListener('blur', onBlur);
             active.box.remove();
             active = null;
             setEditing(null);
@@ -222,27 +230,6 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         },
     };
     return api;
-}
-
-/**
- * Where a text block's lines were drawn, so the editor can sit in the same
- * place beside a float: the left edge and width most of its lines share (a
- * drop cap shortens the first few). Centered and right-aligned text uses the whole measure.
- */
-function measureDrawn(layout, rendered) {
-    const start = Number(rendered?.dataset?.start);
-    const block = layout?.blocks.find(b => b.node?.start === start && b.lines);
-    if (!block || (block.align && block.align !== 'left' && block.align !== 'justify')) return {};
-    const counts = new Map();
-    for (const l of block.lines) {
-        if (l.overflow) continue;
-        const key = `${Math.round(l.x)}:${Math.round(l.width)}`;
-        const entry = counts.get(key) ?? { x: l.x, width: l.width, n: 0 };
-        entry.n++;
-        counts.set(key, entry);
-    }
-    const common = [...counts.values()].sort((a, b) => b.n - a.n || b.width - a.width)[0];
-    return common ? { x: common.x, width: common.width } : {};
 }
 
 /** Text around a point: the clicked text node's words near the offset. */

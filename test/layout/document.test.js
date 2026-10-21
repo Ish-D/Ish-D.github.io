@@ -292,3 +292,17 @@ test('a figure dragged into a margin pushes the notes there out of its way', () 
         assert.ok(n.y + n.height <= obj.rect.y + 1e-6 || n.y >= obj.rect.y + obj.rect.height - 1e-6);
     }
 });
+
+test('the editing slot lists what each line band would wrap around', () => {
+    const src = '[[image(a.png, place: left, width: 200, height: 200, wrap: box, pad: 10)]]\n\nSome text to wrap beside the picture and then edit it once it is open.\n';
+    const doc = parseText(src);
+    const para = doc.children.find(c => c.type === 'paragraph');
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator, editing: { start: para.start, end: para.end, height: 90 } }));
+    const slot = layout.blocks.find(b => b.type === 'editor');
+    assert.ok(slot && slot.bands && slot.lineHeight > 0);
+    assert.equal(slot.x, layout.geometry.text.x);
+    assert.ok(slot.bands[0].length > 0, 'the first line is beside the picture');
+    const [from, to] = slot.bands[0][0];
+    assert.ok(from <= slot.x + 1e-6 && to > slot.x + 150, 'the picture blocks its left side');
+    assert.equal(slot.bands.at(-1).length, 0, 'bands below the picture are clear');
+});

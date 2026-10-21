@@ -111,8 +111,15 @@ function flowEditing(scope, blocks, editing, atRoot) {
 
 function placeEditor(scope, editing) {
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
-    const height = editing.height ?? scope.styles.lineHeight * 2;
-    scope.out.push({ type: 'editor', start: editing.start, end: editing.end, x: editing.x ?? col.x, y: scope.y, width: editing.width ?? col.width, height });
+    const lineHeight = scope.styles.lineHeight;
+    const height = editing.height ?? lineHeight * 2;
+    // what the block's own lines would have wrapped around, line by line, so the editor can wrap the same way
+    const bands = [];
+    for (let i = 0, count = Math.ceil(height / lineHeight) + 6; i < count; i++) {
+        const top = scope.y + i * lineHeight;
+        bands.push(geometry.mergeIntervals(geometry.blockedOver(scope.shapes, top, top + lineHeight, col.x, col.x + col.width)));
+    }
+    scope.out.push({ type: 'editor', start: editing.start, end: editing.end, x: col.x, y: scope.y, width: col.width, height, lineHeight, bands });
     scope.y += height + scope.styles.paragraphGap;
     scope.maxY = Math.max(scope.maxY, scope.y);
 }

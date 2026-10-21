@@ -10,6 +10,7 @@ import { createStore } from '../runtime/store.js';
 import { attachScrub } from '../runtime/scrub.js';
 import { disposeFigures } from '../runtime/figures.js';
 import { pageUrl } from './urls.js';
+import { showToast } from './toast.js';
 
 /** Pages with a script that runs after they are drawn. */
 const PAGE_SCRIPTS = new Set(['llms_for_bozos_1']);
@@ -67,6 +68,10 @@ export function createPages(app) {
             getLayout: () => state.layout,
             setEditing: (editing) => { state.editing = editing; app.view.relayout(); },
             onSourceChange: () => app.saver.scheduleSave(),
+            onLost: (text) => {
+                navigator.clipboard?.writeText(text).catch(() => {});
+                showToast(document, 'The page changed under your edit, so it could not be put back. Your text is on the clipboard.', 7000);
+            },
         });
         state.editor.setEnabled(state.canEdit && wantsEdit());
     }

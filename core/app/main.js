@@ -69,6 +69,7 @@ app.vault.watchPageLifecycle();
 createFigureTools({
     document, root,
     getSession: () => state.session,
+    getLayout: () => state.layout,
     textWidth: () => state.layout?.geometry.text.width ?? 600,
     onEdited: () => app.saver.scheduleSave(),
 });
