@@ -212,3 +212,30 @@ test('generated blocks (tags, date, summary, contents) never receive an editor s
     assert.ok(Math.abs(slots[0].y - was.top) < 40, `slot at ${slots[0].y}, paragraph was at ${was.top}`);
     assert.ok(src.length > 0);
 });
+
+test('a vertical note is turned onto its strip and fits the strip width', () => {
+    const body = 'A fairly long side remark that needs a few lines of sideways text to say what it means.';
+    for (const side of ['left', 'right']) {
+        const doc = parseText(`Text with a note[[note(${side}, orient: vertical)]]{here}{${body}} and more.\n`);
+        const layout = layoutDocument(doc, makeEnv(1300, { hyphenator }));
+        const note = layout.notes[0];
+        assert.equal(note.rotate, side === 'left' ? -90 : 90);
+        assert.ok(note.width <= layout.geometry[side].width + 1e-6);
+        assert.ok(note.height >= 96);
+        assert.equal(note.box.width, note.height);
+        assert.equal(note.box.height, note.width);
+    }
+});
+
+test('a pinned note sits at its page offset, and other notes keep clear of it', () => {
+    const doc = parseText([
+        'First[[note(right)]]{a}{Anchored near the top.} paragraph.',
+        '',
+        'Second[[note(right, type: absolute, pos: 30)]]{b}{Pinned.} paragraph.',
+    ].join('\n'));
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator }));
+    const pinned = layout.notes.find(n => n.items.some(i => i.lines?.some(l => l.runs.some(r => /Pinned/.test(r.text ?? '')))));
+    assert.ok(pinned);
+    const other = layout.notes.find(n => n !== pinned);
+    assert.ok(other.y + other.height <= pinned.y + 1e-6 || other.y >= pinned.y + pinned.height - 1e-6);
+});

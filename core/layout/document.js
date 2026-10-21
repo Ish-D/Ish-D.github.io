@@ -143,6 +143,44 @@ function noteBody(node) {
     return node.groups[1]?.children ?? [];
 }
 
+/** Rotated notes read along the page edge: down on the right, up on the left. */
+function noteOrient(node) {
+    const given = argOf(node, 'orient');
+    if (given === 'vertical' || given === 'horizontal') return given;
+    return node.name === 'margin' && ['left', 'right'].includes(positionalArg(node) ?? 'right') ? 'vertical' : 'horizontal';
+}
+
+/** Page offset of a note pinned with `type: absolute, pos: n`, else null. */
+function notePin(node) {
+    if (argOf(node, 'type') !== 'absolute') return null;
+    const pos = parseValue(argOf(node, 'pos'));
+    return pos?.type === 'number' ? PAGE.topPad + pos.value : null;
+}
+
+const MIN_VERTICAL = 96;
+const MAX_VERTICAL = 720;
+
+/**
+ * Lays a note out for a strip. A vertical note is set as horizontal text of
+ * length L, then turned on its side; L is the shortest that fits the strip width.
+ */
+function layoutVariant(c, env, styles, strip, scale) {
+    if (!c.vertical) {
+        const body = layoutNoteBody(c.blocks, env, styles, strip.x, strip.width, scale);
+        return { height: body.height, body, scale, vertical: false };
+    }
+    let lo = MIN_VERTICAL;
+    let hi = MAX_VERTICAL;
+    let best = null;
+    while (lo <= hi) {
+        const mid = Math.round((lo + hi) / 2);
+        const body = layoutNoteBody(c.blocks, env, styles, 0, mid, scale);
+        if (body.height <= strip.width) { best = { body, length: mid }; hi = mid - 1; } else lo = mid + 1;
+    }
+    if (!best) best = { body: layoutNoteBody(c.blocks, env, styles, 0, MAX_VERTICAL, scale), length: MAX_VERTICAL };
+    return { height: best.length, body: best.body, scale, vertical: true, length: best.length, thickness: best.body.height };
+}
+
 function baselineIn(measurer, font, lineHeight) {
     const m = measurer.metrics(font);
     return (lineHeight - (m.ascent + m.descent)) / 2 + m.ascent;
@@ -171,24 +209,30 @@ function placeNotes(scope, env, styles, geom) {
 
     const bodyBaseline = baselineIn(env.measurer, styles.body, styles.lineHeight);
     const candidates = [
-        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), fixed: null })),
+        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), vertical: noteOrient(n.node) === 'vertical' })),
         ...scope.marginObjects.filter(m => !m.object).map(m => ({
             id: m, node: m.node, anchor: { x: 0, y: m.anchorY }, side: m.side === 'left' ? 'left' : m.side === 'right' ? 'right' : 'either',
-            blocks: m.node.groups[0]?.children ?? [], fixed: m.fixedY,
+            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), vertical: noteOrient(m.node) === 'vertical',
         })),
     ];
 
+    const pinned = [];
     for (const c of candidates) {
         if (c.blocks.length === 0) continue;
+        if (c.pin !== null) {
+            const side = c.side === 'left' ? 'left' : 'right';
+            const laid = layoutVariant(c, env, styles, strips[side], 1);
+            pinned.push({ c, side, y: c.pin, laid });
+            continue;
+        }
         const variants = styles.note.variants
             .filter((v, i, all) => all.findIndex(o => o.scale === v.scale) === i)
             .map(v => {
                 const sideForWidth = c.side === 'left' ? 'left' : 'right';
-                const strip = strips[sideForWidth];
-                const body = layoutNoteBody(c.blocks, env, styles, strip.x, strip.width, v.scale);
-                return { height: body.height, cost: v.cost, tag: { ...v, body, side: sideForWidth } };
+                const laid = layoutVariant(c, env, styles, strips[sideForWidth], v.scale);
+                return { height: laid.height, cost: v.cost, tag: { ...v, laid, side: sideForWidth } };
             });
-        const noteBaseline = baselineIn(env.measurer, variants[0].tag.body.styles.note?.font ?? styles.note.font, styles.note.lineHeight);
+        const noteBaseline = baselineIn(env.measurer, variants[0].tag.laid.body.styles.note?.font ?? styles.note.font, styles.note.lineHeight);
         items.push({
             id: c.id,
             anchorY: c.anchor.y + bodyBaseline - noteBaseline,
@@ -199,6 +243,7 @@ function placeNotes(scope, env, styles, geom) {
     }
 
     const obstacles = { left: scope.bleeds.slice(), right: scope.bleeds.slice() };
+    for (const pin of pinned) obstacles[pin.side].push([pin.y - styles.note.gap, pin.y + pin.laid.height + styles.note.gap]);
     const solved = solveMargins(items, {
         lo: PAGE.topPad,
         hi: Math.max(scope.y, scope.maxY ?? 0) + 400,
@@ -209,19 +254,32 @@ function placeNotes(scope, env, styles, geom) {
 
     const placed = [];
     const inline = new Set();
+    const emit = (c, side, y, laid) => {
+        const strip = strips[side];
+        if (!laid.vertical) {
+            const items = laid.body.scope.out.map(it => translateItem(it, 0, y));
+            placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, scale: laid.scale, items });
+            return;
+        }
+        // set horizontally in a box of length x thickness, then turned onto the strip
+        const { length, thickness } = laid;
+        const turn = side === 'left' ? -90 : 90;
+        const box = turn === 90
+            ? { x: strip.x + thickness, y, width: length, height: thickness }
+            : { x: strip.x, y: y + length, width: length, height: thickness };
+        placed.push({
+            node: c.node, side, x: strip.x, y, width: thickness, height: length, anchor: c.anchor, scale: laid.scale,
+            rotate: turn, box, items: laid.body.scope.out,
+        });
+    };
+    for (const pin of pinned) emit(pin.c, pin.side, pin.y, pin.laid);
     for (const p of solved.placements) {
         const c = bodies.get(p.id);
         if (p.breakIn) { inline.add(c.node); continue; }
         const item = items.find(i => i.id === p.id);
         const v = item.variants[p.variant];
-        const strip = strips[p.side];
-        const body = v.tag.side === p.side ? v.tag.body : layoutNoteBody(c.blocks, env, styles, strip.x, strip.width, v.tag.scale);
-        const dy = p.y;
-        const translated = body.scope.out.map(it => translateItem(it, 0, dy));
-        placed.push({
-            node: c.node, side: p.side, x: strip.x, y: dy, width: strip.width, height: v.height,
-            anchor: c.anchor, scale: v.tag.scale, items: translated,
-        });
+        const laid = v.tag.side === p.side ? v.tag.laid : layoutVariant(c, env, styles, strips[p.side], v.tag.scale);
+        emit(c, p.side, p.y, laid);
     }
     return { placed, inline };
 }

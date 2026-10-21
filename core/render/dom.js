@@ -99,8 +99,16 @@ export function renderLayout(root, layout, ctx) {
             aside.dataset.start = String(body.innerStart);
             aside.dataset.end = String(body.innerEnd);
         }
-        place(aside, note.x, note.y, note.width, note.height);
-        for (const item of note.items) renderItem(env, aside, item, note.x, note.y);
+        if (note.rotate) {
+            const { box } = note;
+            place(aside, box.x, box.y, box.width, box.height);
+            aside.style.transformOrigin = '0 0';
+            aside.style.transform = `rotate(${note.rotate}deg)`;
+            for (const item of note.items) renderItem(env, aside, item, 0, 0);
+        } else {
+            place(aside, note.x, note.y, note.width, note.height);
+            for (const item of note.items) renderItem(env, aside, item, note.x, note.y);
+        }
         doc.appendChild(aside);
     });
 

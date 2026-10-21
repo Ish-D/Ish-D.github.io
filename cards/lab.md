@@ -39,3 +39,7 @@ After the columns the page returns to one measure. This picture floats to the ri
 [[drawing(drawings/kv-cache.svg, place: block, width: 360, caption: "The cache keeps every past key and value; a new token only adds a row.")]]
 
 The drawing above is an SVG file inlined into the page, so its strokes take the text color and its fills take the page color in both themes.
+
+## Margin ergonomics
+
+A note can lie on its side [[note(left, orient: vertical)]]{}{Set sideways, reading bottom to top on the left and top to bottom on the right.} and one can be pinned to a fixed place on the page.[[note(right, type: absolute, pos: 120)]]{}{Pinned 120px from the top of the page, whatever the text does.}
