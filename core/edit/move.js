@@ -12,6 +12,7 @@ import { argValue, createPreview } from './args.js';
 import { makeDraggable } from './drag.js';
 import { parseValue } from '../layout/values.js';
 import { PAGE } from '../layout/document.js';
+import { followHover } from './hover.js';
 
 const number = (text) => {
     const v = parseValue(text);
@@ -59,9 +60,9 @@ export const figureArgs = (node) => ({ place: argValue(node, 'place'), dx: argVa
 /**
  * A grip above a margin note while editing; dragging it moves the note, and
  * the page re-flows around it on every move.
- * @param {{ document: Document, root: HTMLElement, getSession: () => any, getLayout: () => any, onEdited: () => void }} deps
+ * @param {{ document: Document, hover: ReturnType<typeof import('./hover.js').createHover>, getSession: () => any, getLayout: () => any, onEdited: () => void }} deps
  */
-export function createNoteMover({ document, root, getSession, getLayout, onEdited }) {
+export function createNoteMover({ document, hover, getSession, getLayout, onEdited }) {
     const grip = document.createElement('div');
     grip.className = 'move-grip';
     grip.title = 'Drag to move this note';
@@ -71,24 +72,28 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
 
     let hovered = null;
     let shownFor = null;   // the source the note's offsets belong to
-    let hideTimer = 0;
     let drag = null;
     const hide = () => { if (!drag) { grip.hidden = true; hovered = null; } };
 
-    root.addEventListener('mousemove', (e) => {
-        if (!document.body.classList.contains('editing') || drag) return;
-        const aside = e.target.closest?.('aside.note[data-note]');
-        if (!aside) return;
-        const note = getLayout()?.notes[Number(aside.dataset.note)];
-        if (!note) return;
-        clearTimeout(hideTimer);
-        hovered = note;
-        shownFor = getSession()?.source ?? null;
-        const r = aside.getBoundingClientRect();
-        grip.hidden = false;
-        grip.style.left = `${r.left + scrollX - 2}px`;
-        grip.style.top = `${r.top + scrollY - 24}px`;
-        hideTimer = setTimeout(hide, 2500);
+    followHover({
+        hover,
+        overlays: [grip],
+        pick: (el) => {
+            if (drag) return hovered;
+            const aside = el.closest?.('aside.note[data-note]');
+            const note = aside && getLayout()?.notes[Number(aside.dataset.note)];
+            return note ? { note, aside } : null;
+        },
+        show: ({ note, aside }) => {
+            if (drag) return;
+            hovered = note;
+            shownFor = getSession()?.source ?? null;
+            const r = aside.getBoundingClientRect();
+            grip.hidden = false;
+            grip.style.left = `${r.left + scrollX - 2}px`;
+            grip.style.top = `${r.top + scrollY - 24}px`;
+        },
+        hide,
     });
 
     const show = (dx, dy) => drag.preview.show(noteMoveChanges(drag.from, { ...drag.page, dx, dy }));
@@ -98,7 +103,6 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
             const session = getSession();
             const layout = getLayout();
             if (!hovered || !session || session.source !== shownFor) { hide(); return; }
-            clearTimeout(hideTimer);
             drag = {
                 preview: createPreview(session, hovered.node.start, NOTES),
                 from: { y: hovered.y, x: hovered.x, width: hovered.width, anchorY: hovered.anchor.y },
@@ -127,5 +131,5 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
         },
     });
 
-    return { dispose() { grip.remove(); clearTimeout(hideTimer); } };
+    return { dispose() { grip.remove(); } };
 }

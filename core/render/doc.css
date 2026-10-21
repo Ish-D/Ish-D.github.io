@@ -651,3 +651,6 @@ aside.note.moving, .obj.moving { opacity: 0.75; outline: 1px dashed #c4452c; out
     .inspector { top: auto; bottom: 0; right: 0; left: 0; width: auto; max-height: 45vh; border-radius: 10px 10px 0 0; }
 }
 @media print { .fig-frame, .inspector { display: none; } }
+
+/* Whatever else happens, none of the editor's overlays show outside editing. */
+body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .fig-frame, .figure-bar, .figure-handle, .pad-ring, .inspector, .snap-guides, .editor-overlay) { display: none !important; }

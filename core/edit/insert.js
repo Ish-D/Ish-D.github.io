@@ -3,6 +3,8 @@
  * Choosing an item adds its source after that block.
  */
 
+import { followHover } from './hover.js';
+
 export const SNIPPETS = [
     { label: 'Paragraph', text: 'New paragraph.' },
     { label: 'Heading', text: '## Heading' },
@@ -27,9 +29,9 @@ export function insertion(_source, at, snippet) {
 }
 
 /**
- * @param {{ document: Document, root: HTMLElement, getSession: () => any, onInserted: (range: { start: number, end: number }) => void }} deps
+ * @param {{ document: Document, hover: ReturnType<typeof import('./hover.js').createHover>, getSession: () => any, onInserted: (range: { start: number, end: number }) => void }} deps
  */
-export function createInserter({ document, root, getSession, onInserted }) {
+export function createInserter({ document, hover, getSession, onInserted }) {
     const plus = document.createElement('button');
     plus.className = 'insert-plus';
     plus.type = 'button';
@@ -42,21 +44,26 @@ export function createInserter({ document, root, getSession, onInserted }) {
     document.body.append(plus, menu);
 
     let target = null;
-    let hideTimer = 0;
 
     const hide = () => { plus.hidden = true; menu.hidden = true; target = null; };
 
-    root.addEventListener('mousemove', (e) => {
-        if (!document.body.classList.contains('editing') || !menu.hidden) return;
-        const el = e.target.closest?.('[data-start][data-end]');
-        if (!el || el.closest('.editor-overlay') || el.closest('aside.note')) return;
-        clearTimeout(hideTimer);
-        target = el;
-        const r = el.getBoundingClientRect();
-        plus.hidden = false;
-        plus.style.left = `${Math.max(4, r.left - 34) + scrollX}px`;
-        plus.style.top = `${r.bottom + scrollY - 12}px`;
-        hideTimer = setTimeout(() => { if (menu.hidden) hide(); }, 2500);
+    followHover({
+        hover,
+        overlays: [plus, menu],
+        pick: (el) => {
+            if (!menu.hidden) return target;   // the menu is open: stay where it is
+            const block = el.closest?.('[data-start][data-end]');
+            return block && !block.closest('.editor-overlay') && !block.closest('aside.note') ? block : null;
+        },
+        show: (el) => {
+            if (el === target) return;
+            target = el;
+            const r = el.getBoundingClientRect();
+            plus.hidden = false;
+            plus.style.left = `${Math.max(4, r.left - 34) + scrollX}px`;
+            plus.style.top = `${r.bottom + scrollY - 12}px`;
+        },
+        hide: () => { if (menu.hidden) hide(); },
     });
 
     plus.addEventListener('click', () => {
@@ -84,5 +91,5 @@ export function createInserter({ document, root, getSession, onInserted }) {
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hide(); });
 
-    return { dispose() { plus.remove(); menu.remove(); clearTimeout(hideTimer); } };
+    return { hide, dispose() { plus.remove(); menu.remove(); } };
 }

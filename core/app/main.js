@@ -13,6 +13,7 @@ import { createSelection } from '../edit/selection.js';
 import { createInserter } from '../edit/insert.js';
 import { createNoteMover } from '../edit/move.js';
 import { createHoverOutline } from '../edit/outline.js';
+import { createHover } from '../edit/hover.js';
 import { createState } from './state.js';
 import { createSettings } from './settings.js';
 import { createNavigation } from './navigation.js';
@@ -67,6 +68,15 @@ settings.subscribe((key) => { if (key !== 'theme') app.view.relayout(); });
 
 installInteractions(app);
 app.vault.watchPageLifecycle();
+
+// leaving the editor leaves nothing of it behind
+new MutationObserver(() => {
+    if (document.body.classList.contains('editing')) return;
+    app.selection.clear();
+    app.hoverOutline.clear();
+    app.inserter.hide();
+    state.editor?.close();
+}).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 app.selection = createSelection({
     document, root,
     getSession: () => state.session,
@@ -75,15 +85,16 @@ app.selection = createSelection({
     onEdited: () => app.saver.scheduleSave(),
     openSource: (start, end) => state.editor?.open(start, end),
 });
-app.hoverOutline = createHoverOutline({ document, root, getLayout: () => state.layout });
+app.hover = createHover({ document, root, active: () => document.body.classList.contains('editing') });
+app.hoverOutline = createHoverOutline({ document, getLayout: () => state.layout, hover: app.hover });
 createNoteMover({
-    document, root,
+    document, hover: app.hover,
     getSession: () => state.session,
     getLayout: () => state.layout,
     onEdited: () => app.saver.scheduleSave(),
 });
-createInserter({
-    document, root,
+app.inserter = createInserter({
+    document, hover: app.hover,
     getSession: () => state.session,
     onInserted: (range) => state.editor?.open(range.start, range.end),
 });

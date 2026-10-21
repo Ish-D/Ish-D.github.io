@@ -5,6 +5,7 @@
  */
 
 import { contours, rowsOfLines, toPath } from '../layout/contour.js';
+import { followHover } from './hover.js';
 
 const SELECTABLE = '.blk[data-start], .codeblock[data-start], .mathblock[data-start], .obj[data-start], aside.note[data-start]';
 const PAD = 4;
@@ -16,9 +17,9 @@ function findBlock(layout, start) {
 }
 
 /**
- * @param {{ document: Document, root: HTMLElement, getLayout: () => any }} deps
+ * @param {{ document: Document, getLayout: () => any, hover: ReturnType<typeof import('./hover.js').createHover> }} deps
  */
-export function createHoverOutline({ document, root, getLayout }) {
+export function createHoverOutline({ document, getLayout, hover }) {
     const NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('class', 'hover-outline');
@@ -41,15 +42,15 @@ export function createHoverOutline({ document, root, getLayout }) {
         return toPath([[[x - PAD, y - PAD], [x - PAD, y + r.height + PAD], [x + r.width + PAD, y + r.height + PAD], [x + r.width + PAD, y - PAD]]]);
     }
 
-    root.addEventListener('mouseover', (e) => {
-        if (!document.body.classList.contains('editing')) return;
-        const el = e.target.closest?.(SELECTABLE);
-        if (!el || el.closest('.editor-overlay')) return;
-        path.setAttribute('d', outlineOf(el));
-        svg.hidden = false;
-    });
-    root.addEventListener('mouseout', (e) => {
-        if (!e.relatedTarget?.closest?.(SELECTABLE)) clear();
+    followHover({
+        hover,
+        delay: 0,
+        pick: (target) => {
+            const el = target.closest?.(SELECTABLE);
+            return el && !el.closest('.editor-overlay') ? el : null;
+        },
+        show: (el) => { path.setAttribute('d', outlineOf(el)); svg.hidden = false; },
+        hide: clear,
     });
 
     return { clear, dispose() { svg.remove(); } };
