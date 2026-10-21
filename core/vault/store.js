@@ -18,7 +18,8 @@
 import { AuthError, ConflictError, NetworkError } from './github.js';
 import { randomId } from './crypto.js';
 import { createMemoryKV } from './kv.js';
-import { contentHash, scaffold, titleOf } from './pages.js';
+import { merge3 } from './merge.js';
+import { contentHash, scaffold, titleOf, withTitle } from './pages.js';
 
 const INDEX_ID = 'index';
 const INDEX_PATH = 'store/index.json';
@@ -74,7 +75,7 @@ export function createPrivateStore({
 
     /** @type {Map<string, Meta>} */
     const metas = new Map();
-    /** @type {Map<string, { id: string, text: string, base: { sha: string, text: string | null } | null, attempted: string | null, dirty: boolean, notBefore: number }>} */
+    /** @type {Map<string, { id: string, text: string, base: { sha: string, text: string | null } | null, sent: string[], dirty: boolean, notBefore: number }>} */
     const docs = new Map();
     /** id → sha of the item file to remove, or null when unknown */
     const deletions = new Map();
@@ -119,12 +120,14 @@ export function createPrivateStore({
     }
 
     async function persistPending(doc) {
-        const record = {
-            sealed: await session.sealText(doc.id, doc.text),
+        if (!doc.dirty) return;
+        const seal = (text) => session.sealText(doc.id, text);
+        await kv.set(`pending:${doc.id}`, {
+            sealed: await seal(doc.text),
             baseSha: doc.base?.sha ?? null,
-            sealedBase: doc.base?.text != null ? await session.sealText(doc.id, doc.base.text) : null,
-        };
-        await kv.set(`pending:${doc.id}`, record);
+            sealedBase: doc.base?.text != null ? await seal(doc.base.text) : null,
+            sealedSent: await Promise.all(doc.sent.map(seal)),
+        });
     }
 
     // -----------------------------------------------------------------------
@@ -174,61 +177,63 @@ export function createPrivateStore({
         branchReady = true;
     }
 
-    /** The file changed under us. Decides whether to retry, adopt, or keep both. */
-    async function onConflict(doc, sentSha, sentText, attempt) {
-        const remote = await github.getFile(itemPath(doc.id), { ref: branch });
-        if (!remote) return { sha: undefined };
-        // The file is unchanged: only the branch moved under the request.
-        if (remote.sha === sentSha && attempt < 3) return { sha: remote.sha };
-        const remoteText = await session.openText(doc.id, JSON.parse(remote.text));
-        // Our own earlier write that never got an answer, or the same text saved twice.
-        if (remoteText === doc.attempted || remoteText === doc.base?.text || remoteText === sentText) {
-            doc.base = { sha: remote.sha, text: remoteText };
-            return remoteText === sentText ? { done: true } : { sha: remote.sha };
-        }
-
+    /** Keeps both versions: the remote text stays, and what was being written becomes a new page. */
+    async function keepBoth(doc, remoteText) {
         const copyId = randomId();
         const now = clock();
-        const title = metas.get(doc.id)?.title ?? titleOf(doc.text);
-        metas.set(copyId, { title: `${title} (conflicted copy)`, created: now, updated: now, rev: 1 });
-        docs.set(copyId, { id: copyId, text: doc.text, base: null, attempted: null, dirty: true, notBefore: 0 });
-        await persistPending(docs.get(copyId));
+        const title = `${titleOf(doc.text)} (conflicted copy)`;
+        metas.set(copyId, { title, created: now, updated: now, rev: 1, indexedAt: now });
+        const copy = { id: copyId, text: withTitle(doc.text, title), base: null, sent: [], dirty: true, notBefore: 0 };
+        docs.set(copyId, copy);
+        await persistPending(copy);
         indexDirty = true;
-
         doc.text = remoteText;
-        doc.base = { sha: remote.sha, text: remoteText };
-        doc.attempted = null;
         doc.dirty = false;
+        doc.sent = [];
         await kv.delete(`pending:${doc.id}`);
-        await kv.set(`blob:${doc.id}`, { sha: remote.sha, sealed: JSON.parse(remote.text) });
         emit({ type: 'conflict', id: doc.id, copyId, text: remoteText });
-        return { done: true };
     }
 
-    async function saveDoc(doc) {
-        const text = doc.text;
-        const sealed = await session.sealText(doc.id, text);
-        const body = JSON.stringify(sealed);
-        let sha = doc.base?.sha;
-        doc.attempted = text;
-        for (let attempt = 0; ; attempt++) {
-            try {
-                const res = await github.putFile(itemPath(doc.id), body, { branch, sha, message: `Update ${doc.id}` });
-                doc.base = { sha: res.sha, text };
-                await kv.set(`blob:${doc.id}`, { sha: res.sha, sealed });
-                break;
-            } catch (e) {
-                if (!(e instanceof ConflictError)) throw e;
-                const outcome = await onConflict(doc, sha, text, attempt);
-                if (outcome.done && !docs.get(doc.id)?.dirty) return;
-                if (outcome.done && doc.text !== text) return;
-                if (outcome.done) break;
-                sha = outcome.sha;
-            }
-        }
+    /**
+     * A write was refused because the file changed. Looks at what is there now.
+     * @returns {Promise<'saved' | 'copied' | 'retry'>}
+     */
+    async function resolveConflict(doc, sentSha) {
+        const remote = await github.getFile(itemPath(doc.id), { ref: branch });
+        if (!remote) { doc.base = null; return 'retry'; }
+        // The file did not change; the branch moved under the request.
+        if (remote.sha === sentSha) return 'retry';
 
-        const meta = metas.get(doc.id);
+        const sealed = JSON.parse(remote.text);
+        const remoteText = await session.openText(doc.id, sealed);
+        const adopt = async () => {
+            doc.base = { sha: remote.sha, text: remoteText };
+            await kv.set(`blob:${doc.id}`, { sha: remote.sha, sealed });
+        };
+
+        if (remoteText === doc.text) { await adopt(); return 'saved'; }
+        // An earlier write of ours that went through but never got an answer.
+        if (doc.sent.includes(remoteText)) { await adopt(); return 'retry'; }
+
+        const merged = doc.base?.text != null ? merge3(doc.base.text, doc.text, remoteText) : null;
+        if (merged?.clean) {
+            await adopt();
+            if (merged.text !== doc.text) {
+                doc.text = merged.text;
+                emit({ type: 'merged', id: doc.id, text: merged.text });
+            }
+            return merged.text === remoteText ? 'saved' : 'retry';
+        }
+        await keepBoth(doc, remoteText);
+        await kv.set(`blob:${doc.id}`, { sha: remote.sha, sealed });
+        doc.base = { sha: remote.sha, text: remoteText };
+        return 'copied';
+    }
+
+    async function finishSave(doc, text) {
         doc.notBefore = clock() + minInterval;
+        doc.sent = [];
+        const meta = metas.get(doc.id);
         if (meta) {
             const title = titleOf(text);
             if (title !== meta.title || clock() - (meta.indexedAt ?? 0) > INDEX_REFRESH_MS) {
@@ -240,6 +245,28 @@ export function createPrivateStore({
         if (doc.text === text) {
             doc.dirty = false;
             await kv.delete(`pending:${doc.id}`);
+        }
+    }
+
+    async function saveDoc(doc) {
+        for (let attempt = 0; ; attempt++) {
+            const text = doc.text;
+            const sealed = await session.sealText(doc.id, text);
+            const sha = doc.base?.sha;
+            if (!doc.sent.includes(text)) doc.sent = [...doc.sent, text].slice(-3);
+            await persistPending(doc);
+            try {
+                const res = await github.putFile(itemPath(doc.id), JSON.stringify(sealed), { branch, sha, message: `Update ${doc.id}` });
+                doc.base = { sha: res.sha, text };
+                await kv.set(`blob:${doc.id}`, { sha: res.sha, sealed });
+                await finishSave(doc, text);
+                return;
+            } catch (e) {
+                if (!(e instanceof ConflictError) || attempt >= 6) throw e;
+                const outcome = await resolveConflict(doc, sha);
+                if (outcome === 'copied') return;
+                if (outcome === 'saved') { await finishSave(doc, doc.text); return; }
+            }
         }
     }
 
@@ -318,7 +345,7 @@ export function createPrivateStore({
             if (existing?.base?.sha === remote.sha) return { doc: existing, stale: false };
             const sealed = JSON.parse(remote.text);
             const text = await session.openText(id, sealed);
-            const doc = { id, text, base: { sha: remote.sha, text }, attempted: null, dirty: false, notBefore: 0 };
+            const doc = { id, text, base: { sha: remote.sha, text }, sent: [], dirty: false, notBefore: 0 };
             docs.set(id, doc);
             await kv.set(`blob:${id}`, { sha: remote.sha, sealed });
             return { doc, stale: false, changed: !!existing };
@@ -329,7 +356,7 @@ export function createPrivateStore({
             const cached = await kv.get(`blob:${id}`);
             if (!cached) throw e;
             const text = await session.openText(id, cached.sealed);
-            const doc = { id, text, base: { sha: cached.sha, text }, attempted: null, dirty: false, notBefore: 0 };
+            const doc = { id, text, base: { sha: cached.sha, text }, sent: [], dirty: false, notBefore: 0 };
             docs.set(id, doc);
             return { doc, stale: true };
         } finally {
@@ -355,9 +382,10 @@ export function createPrivateStore({
                 try {
                     const text = await session.openText(id, record.sealed);
                     const baseText = record.sealedBase ? await session.openText(id, record.sealedBase) : null;
+                    const sent = await Promise.all((record.sealedSent ?? []).map(sealed => session.openText(id, sealed)));
                     docs.set(id, {
                         id, text, base: record.baseSha ? { sha: record.baseSha, text: baseText } : null,
-                        attempted: null, dirty: true, notBefore: 0,
+                        sent, dirty: true, notBefore: 0,
                     });
                 } catch { await kv.delete(key); }
             }
@@ -404,7 +432,7 @@ export function createPrivateStore({
             const meta = { title: titleOf(body), created: now, updated: now, rev: 1, indexedAt: now };
             if (slug) meta.slug = slug;
             metas.set(id, meta);
-            const doc = { id, text: body, base: null, attempted: null, dirty: true, notBefore: 0 };
+            const doc = { id, text: body, base: null, sent: [], dirty: true, notBefore: 0 };
             docs.set(id, doc);
             indexDirty = true;
             await serial(async () => { await persistPending(doc); await persistIndex(); });

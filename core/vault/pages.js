@@ -26,6 +26,16 @@ export function titleOf(text) {
     return heading ? heading[1].trim() : 'Untitled';
 }
 
+/** The text with its front-matter `name:` set (added when missing). */
+export function withTitle(text, title) {
+    const match = FRONT.exec(text);
+    if (!match) return `---\nname: ${title}\n---\n\n${text}`;
+    const lines = match[1].split(/\r?\n/);
+    const at = lines.findIndex(line => /^name\s*:/.test(line));
+    if (at >= 0) lines[at] = `name: ${title}`; else lines.unshift(`name: ${title}`);
+    return `---\n${lines.join('\n')}\n---\n${text.slice(match[0].length)}`;
+}
+
 /** The manifest fields a page declares. */
 export function manifestEntry(text) {
     const { name, date, tags } = frontMatter(text);
