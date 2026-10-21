@@ -12,6 +12,7 @@ import { argValue, createPreview, directiveAt, updateArgs } from './args.js';
 import { makeDraggable } from './drag.js';
 import { FIGURES, removalOf } from './figure-props.js';
 import { figureArgs, figureMoveChanges } from './move.js';
+import { columnOf } from './guides.js';
 import { createInspector } from './inspector.js';
 import { shiftRange } from './ranges.js';
 
@@ -22,10 +23,10 @@ const px = (v) => `${Math.round(v)}px`;
 const isPixels = (text) => !!text && /^\d+(\.\d+)?(px)?$/.test(text);
 
 /**
- * @param {{ document: Document, root: HTMLElement, getSession: () => any, getLayout: () => any,
+ * @param {{ document: Document, root: HTMLElement, snapper: ReturnType<typeof import('./snapper.js').createSnapper>, getSession: () => any, getLayout: () => any,
  *           textWidth: () => number, onEdited: () => void, openSource: (start: number, end: number) => void }} deps
  */
-export function createSelection({ document, root, getSession, getLayout, textWidth, onEdited, openSource }) {
+export function createSelection({ document, root, snapper, getSession, getLayout, textWidth, onEdited, openSource }) {
     const make = (tag, className, props = {}) => Object.assign(document.createElement(tag), { className }, props);
     const frame = make('div', 'fig-frame', { hidden: true });
     const bar = make('div', 'figure-bar', { hidden: true });
@@ -48,11 +49,16 @@ export function createSelection({ document, root, getSession, getLayout, textWid
         const target = node();
         if (!target) return null;
         const el = element();
-        const rect = el?.getBoundingClientRect() ?? { width: 0, height: 0 };
+        const box = (el?.querySelector('.obj-body') ?? el)?.getBoundingClientRect() ?? { left: 0, top: 0, width: 0, height: 0 };
+        const rect = { x: box.left + scrollX, y: box.top + scrollY, width: box.width, height: box.height };
+        const layout = getLayout();
+        const column = columnOf(layout, rect);
         return {
             kind, start: target.start, preview: createPreview(current.session, target.start, FIGURES),
             args: figureArgs(target), width: argValue(target, 'width'), height: argValue(target, 'height'),
-            size: { width: rect.width, height: rect.height },
+            size: { width: rect.width, height: rect.height }, column,
+            unit: { em: layout.styles.size, basis: column.width },
+            snap: snapper.begin(rect, { ignoreObject: target.start }),
         };
     }
 
@@ -61,6 +67,7 @@ export function createSelection({ document, root, getSession, getLayout, textWid
         drag = null;
         bar.style.transform = '';
         if (!op) return;
+        op.snap.end();
         if (next) op.preview.show(next);
         if (op.preview.changed) onEdited();
         reposition();
@@ -182,30 +189,36 @@ export function createSelection({ document, root, getSession, getLayout, textWid
 
     // ----- dragging -----
 
+    // the grip moves the figure; the page re-flows around it as it goes
+    const moveChanges = (dx, dy, free) => {
+        const snapped = drag.snap.move(dx, dy, free);
+        return figureMoveChanges(drag.args, { dx: snapped.dx, dy: snapped.dy }, { ...drag.unit, placement: snapped.placement });
+    };
     makeDraggable(grip, {
         onStart() { drag = begin('move'); },
-        onMove(dx, dy) {
+        onMove(dx, dy, e) {
             if (!drag) return;
             bar.style.transform = `translate(${dx}px, ${dy}px)`;
-            drag.preview.show(figureMoveChanges(drag.args, { dx, dy }));
+            drag.preview.show(moveChanges(dx, dy, e.altKey));
         },
-        onDrop(dx, dy) { if (drag) finish(figureMoveChanges(drag.args, { dx, dy })); },
-        onCancel() { if (drag) { drag.preview.cancel(); drag = null; bar.style.transform = ''; reposition(); } },
+        onDrop(dx, dy, e) { if (drag) finish(moveChanges(dx, dy, e.altKey)); },
+        onCancel() { if (drag) { drag.snap.end(); drag.preview.cancel(); drag = null; bar.style.transform = ''; reposition(); } },
     });
 
-    // the corner: new width; a height in pixels follows the width
-    const resized = (next) => {
-        const percent = /%$/.test(drag.width ?? '');
+    // the corner: a new width, pulled to a guide or a simple share of the column; a height in pixels follows
+    const resized = (dx, free) => {
+        const { width, fraction } = drag.snap.resize(Math.max(40, drag.size.width + dx), free, drag.column);
+        const percent = fraction !== null || /%$/.test(drag.width ?? '');
         return [
-            { key: 'width', value: percent ? `${Math.round(next / textWidth() * 100)}%` : px(next) },
-            ...(isPixels(drag.height) ? [{ key: 'height', value: px(next * drag.size.height / drag.size.width) }] : []),
+            { key: 'width', value: fraction !== null ? `${Math.round(fraction * 10000) / 100}%` : percent ? `${Math.round(width / drag.column.width * 10000) / 100}%` : px(width) },
+            ...(isPixels(drag.height) ? [{ key: 'height', value: px(width * drag.size.height / drag.size.width) }] : []),
         ];
     };
     makeDraggable(handle, {
         onStart() { drag = begin('resize'); },
-        onMove(dx) { if (drag) { drag.preview.show(resized(Math.max(40, drag.size.width + dx))); reposition(); } },
-        onDrop(dx) { if (drag) finish(resized(Math.max(40, drag.size.width + dx))); },
-        onCancel() { if (drag) { drag.preview.cancel(); drag = null; reposition(); } },
+        onMove(dx, dy, e) { if (drag) { drag.preview.show(resized(dx, e.altKey)); reposition(); } },
+        onDrop(dx, dy, e) { if (drag) finish(resized(dx, e.altKey)); },
+        onCancel() { if (drag) { drag.snap.end(); drag.preview.cancel(); drag = null; reposition(); } },
     });
 
     document.addEventListener('keydown', (e) => {

@@ -306,3 +306,18 @@ test('the editing slot lists what each line band would wrap around', () => {
     assert.ok(from <= slot.x + 1e-6 && to > slot.x + 150, 'the picture blocks its left side');
     assert.equal(slot.bands.at(-1).length, 0, 'bands below the picture are clear');
 });
+
+test('a note nudged with dy sits that far from where its anchor puts it', () => {
+    const plain = layoutDocument(parseText('Text[[note(right)]]{a}{Body of the note.} more.\n'), makeEnv(1300, { hyphenator })).notes[0];
+    const nudged = layoutDocument(parseText('Text[[note(right, dy: 3em)]]{a}{Body of the note.} more.\n'), makeEnv(1300, { hyphenator })).notes[0];
+    const em = layoutDocument(parseText('x\n'), makeEnv(1300, { hyphenator })).styles.size;
+    assert.ok(Math.abs(nudged.y - plain.y - 3 * em) < 1e-6);
+    assert.equal(nudged.baseY, plain.baseY);
+});
+
+test('columns leave a region behind for alignment guides', () => {
+    const layout = layoutDocument(parseText('[[columns(2, gap: 40)]]\n{\nSome words to fill the first column of a pair of columns.\n}\n'), makeEnv(1300, { hyphenator }));
+    const region = layout.blocks.find(b => b.type === 'region');
+    assert.equal(region.columns.length, 2);
+    assert.ok(Math.abs(region.columns[1].x - region.columns[0].x - region.columns[0].width - 40) < 1e-6);
+});

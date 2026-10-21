@@ -14,6 +14,9 @@ import { createInserter } from '../edit/insert.js';
 import { createNoteMover } from '../edit/move.js';
 import { createHoverOutline } from '../edit/outline.js';
 import { createHover } from '../edit/hover.js';
+import { createPrefs } from '../edit/prefs.js';
+import { createSnapOverlay } from '../edit/snap-overlay.js';
+import { createSnapper } from '../edit/snapper.js';
 import { createState } from './state.js';
 import { createSettings } from './settings.js';
 import { createNavigation } from './navigation.js';
@@ -77,8 +80,14 @@ new MutationObserver(() => {
     app.inserter.hide();
     state.editor?.close();
 }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+app.prefs = createPrefs(localStorage);
+app.snapper = createSnapper({
+    getLayout: () => state.layout,
+    prefs: app.prefs,
+    overlay: createSnapOverlay({ document, window, originX: () => 0 }),
+});
 app.selection = createSelection({
-    document, root,
+    document, root, snapper: app.snapper,
     getSession: () => state.session,
     getLayout: () => state.layout,
     textWidth: () => state.layout?.geometry.text.width ?? 600,
@@ -88,7 +97,7 @@ app.selection = createSelection({
 app.hover = createHover({ document, root, active: () => document.body.classList.contains('editing') });
 app.hoverOutline = createHoverOutline({ document, getLayout: () => state.layout, hover: app.hover });
 createNoteMover({
-    document, hover: app.hover,
+    document, hover: app.hover, snapper: app.snapper,
     getSession: () => state.session,
     getLayout: () => state.layout,
     onEdited: () => app.saver.scheduleSave(),

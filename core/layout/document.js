@@ -161,6 +161,11 @@ function notePin(node) {
 
 /** Widest a margin note gets, in note-text ems. */
 const NOTE_MAX_EM = 17;
+/** How far a note has been moved from where its anchor puts it (`dy: 1.5em`), in px. */
+function noteNudge(node, styles) {
+    return resolveLength(parseValue(argOf(node, 'dy')), { em: styles.size, fallback: 0 });
+}
+
 /** Height cap from `maxh: 120px` or `maxh: 20%` (of the window height), else null. */
 function noteCap(node, env) {
     const value = parseValue(argOf(node, 'maxh'));
@@ -230,14 +235,15 @@ function placeNotes(scope, env, styles, geom) {
 
     const bodyBaseline = baselineIn(env.measurer, styles.body, styles.lineHeight);
     const candidates = [
-        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), cap: noteCap(n.node, env), vertical: noteOrient(n.node) === 'vertical' })),
+        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), dy: noteNudge(n.node, styles), cap: noteCap(n.node, env), vertical: noteOrient(n.node) === 'vertical' })),
         ...scope.marginObjects.filter(m => !m.object).map(m => ({
             id: m, node: m.node, anchor: { x: 0, y: m.anchorY }, side: m.side === 'left' ? 'left' : m.side === 'right' ? 'right' : 'either',
-            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), cap: noteCap(m.node, env), vertical: noteOrient(m.node) === 'vertical',
+            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), dy: noteNudge(m.node, styles), cap: noteCap(m.node, env), vertical: noteOrient(m.node) === 'vertical',
         })),
     ];
 
     const pinned = [];
+    const bases = new Map();   // where each note sits before any nudge
     const inlineNow = new Set();
     for (const c of candidates) {
         if (c.blocks.length === 0) continue;
@@ -256,9 +262,11 @@ function placeNotes(scope, env, styles, geom) {
             });
         if (variants[variants.length - 1].height > MAX_NOTE_HEIGHT && !c.vertical && c.cap === null) { inlineNow.add(c.node); continue; }
         const noteBaseline = baselineIn(env.measurer, variants[0].tag.laid.body.styles.note?.font ?? styles.note.font, styles.note.lineHeight);
+        const baseY = c.anchor.y + bodyBaseline - noteBaseline;
+        bases.set(c.id, baseY);
         items.push({
             id: c.id,
-            anchorY: c.anchor.y + bodyBaseline - noteBaseline,
+            anchorY: baseY + c.dy,
             side: c.side,
             variants,
         });
@@ -293,7 +301,7 @@ function placeNotes(scope, env, styles, geom) {
         for (const [id, at] of laid.body.scope.anchors) anchors.set(id, { x: strip.x, y: y + (laid.vertical ? 0 : at.y) });
         if (!laid.vertical) {
             const items = laid.body.scope.out.map(it => translateItem(it, 0, y));
-            placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, scale: laid.scale, items, overflow: laid.overflow, clipped: laid.clipped });
+            placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, baseY: bases.get(c.id), scale: laid.scale, items, overflow: laid.overflow, clipped: laid.clipped });
             return;
         }
         // set horizontally in a box of length x thickness, then turned onto the strip
@@ -303,7 +311,7 @@ function placeNotes(scope, env, styles, geom) {
             ? { x: strip.x + thickness, y, width: length, height: thickness }
             : { x: strip.x, y: y + length, width: length, height: thickness };
         placed.push({
-            node: c.node, side, x: strip.x, y, width: thickness, height: length, anchor: c.anchor, scale: laid.scale,
+            node: c.node, side, x: strip.x, y, width: thickness, height: length, anchor: c.anchor, baseY: bases.get(c.id), scale: laid.scale,
             rotate: turn, box, items: laid.body.scope.out,
         });
     };

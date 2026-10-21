@@ -7,7 +7,7 @@ const THRESHOLD = 3;
 
 /**
  * @param {HTMLElement} handle
- * @param {{ onStart?: () => void, onMove: (dx: number, dy: number) => void, onDrop: (dx: number, dy: number) => void, onCancel?: () => void }} hooks
+ * @param {{ onStart?: () => void, onMove: (dx: number, dy: number, e: PointerEvent) => void, onDrop: (dx: number, dy: number, e: PointerEvent) => void, onCancel?: () => void }} hooks
  * @returns {() => void} removes the listeners
  */
 export function makeDraggable(handle, { onStart, onMove, onDrop, onCancel }) {
@@ -31,14 +31,14 @@ export function makeDraggable(handle, { onStart, onMove, onDrop, onCancel }) {
             body().classList.add('dragging-item');
             onStart?.();
         }
-        onMove(dx, dy);
+        onMove(dx, dy, e);
     };
     const up = (e) => {
         if (!drag) return;
         const { moved, x, y } = drag;
         drag = null;
         body().classList.remove('dragging-item');
-        if (moved) onDrop(e.clientX - x, e.clientY - y); else onCancel?.();
+        if (moved) onDrop(e.clientX - x, e.clientY - y, e); else onCancel?.();
     };
     const cancel = () => {
         if (!drag) return;

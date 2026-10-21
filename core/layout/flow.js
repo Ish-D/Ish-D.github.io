@@ -689,6 +689,8 @@ function flowColumns(scope, node) {
     scope.marginObjects.push(...best.marginObjects);
     scope.bleeds.push(...best.bleeds);
     const used = Math.max(height, ...best.shapes.map(s => s.bounds.y1 - top));
+    // where the columns are, for alignment guides when editing
+    scope.out.push({ type: 'region', kind: 'columns', x: scope.x, y: top, width: scope.width, height: used, columns: mk(top + used).map(({ x, width }) => ({ x, width })) });
     scope.y = top + used + styles.paragraphGap;
     scope.columnIndex = 0;
 }

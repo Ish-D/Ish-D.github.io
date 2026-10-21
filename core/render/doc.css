@@ -654,3 +654,11 @@ aside.note.moving, .obj.moving { opacity: 0.75; outline: 1px dashed #c4452c; out
 
 /* Whatever else happens, none of the editor's overlays show outside editing. */
 body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .fig-frame, .figure-bar, .figure-handle, .pad-ring, .inspector, .snap-guides, .editor-overlay) { display: none !important; }
+
+/* alignment guides while dragging */
+.snap-guides { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 85; }
+.snap-guides[hidden] { display: none; }
+.snap-faint { stroke: var(--color-text-secondary); stroke-width: 1; stroke-dasharray: 2 5; opacity: 0.45; }
+.snap-hit { stroke: #c4452c; stroke-width: 1; }
+.snap-label { fill: #c4452c; font: 11px Georgia, serif; paint-order: stroke; stroke: var(--color-card-background); stroke-width: 3px; stroke-linejoin: round; }
+@media print { .snap-guides { display: none; } }

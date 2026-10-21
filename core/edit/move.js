@@ -10,46 +10,57 @@
 
 import { argValue, createPreview } from './args.js';
 import { makeDraggable } from './drag.js';
-import { parseValue } from '../layout/values.js';
+import { parseValue, resolveLength } from '../layout/values.js';
 import { PAGE } from '../layout/document.js';
 import { followHover } from './hover.js';
 
-const number = (text) => {
-    const v = parseValue(text);
-    return v?.type === 'number' ? v.value : 0;
-};
+/** px of a length written as 12, 12px, 4% (of `basis`) or 1.5em. */
+const pixels = (text, { em, basis }) => resolveLength(parseValue(text), { em, basis, fallback: 0 });
+
+const round2 = (v) => Math.round(v * 100) / 100;
 
 /**
- * @param {{ node: any, y: number, x: number, width: number, anchorY: number }} note   where the note is now
- * @param {{ dx: number, dy: number, pageWidth: number, lineHeight: number, topPad: number }} drop
+ * How far to move a margin note, as a nudge from where its anchor puts it
+ * (`dy: 1.5em`), so it keeps its place in the text when the page is reflowed
+ * at another size. A note dropped beside its anchor goes back to following it.
+ * @param {{ y: number, x: number, width: number, baseY: number }} note   where the note is now, and where its anchor puts it
+ * @param {{ dx: number, dy: number, pageWidth: number, lineHeight: number, em: number }} drop
  * @returns {Array<{ key: string | number, value: string | null }>}
  */
-export function noteMoveChanges(note, { dx, dy, pageWidth, lineHeight, topPad }) {
+export function noteMoveChanges(note, { dx, dy, pageWidth, lineHeight, em }) {
     const y = note.y + dy;
     const side = note.x + note.width / 2 + dx < pageWidth / 2 ? 'left' : 'right';
-    const changes = [{ key: 0, value: side }];
-    if (Math.abs(y - note.anchorY) <= lineHeight) {
-        changes.push({ key: 'type', value: null }, { key: 'pos', value: null });
-    } else {
-        changes.push({ key: 'type', value: 'absolute' }, { key: 'pos', value: String(Math.max(0, Math.round(y - topPad))) });
-    }
-    return changes;
+    const nudge = y - note.baseY;
+    const follows = Math.abs(nudge) <= lineHeight * 0.5;
+    return [
+        { key: 0, value: side },
+        { key: 'dy', value: follows ? null : `${round2(nudge / em)}em` },
+        // an older note pinned with type/pos now follows its anchor like the rest
+        { key: 'type', value: null },
+        { key: 'pos', value: null },
+    ];
 }
 
 /**
+ * Offsets for a figure moved by hand, kept in units that survive a change of
+ * screen: across as a share of the text column, down in lines of type.
  * @param {{ place: string | undefined, dx: string | undefined, dy: string | undefined }} args   the figure's current arguments
  * @param {{ dx: number, dy: number }} drag   how far it was dragged, in px
+ * @param {{ em: number, basis: number, placement?: string | null }} unit
  */
-export function figureMoveChanges(args, drag) {
-    const here = { dx: number(args.dx), dy: number(args.dy) };
+export function figureMoveChanges(args, drag, { em, basis, placement = null }) {
     // a figure placed on the right is measured from the right edge
-    const sign = args.place === 'right' ? -1 : 1;
-    const dx = Math.round(here.dx + sign * drag.dx);
-    const dy = Math.round(here.dy + drag.dy);
-    return [
-        { key: 'dx', value: dx === 0 ? null : String(dx) },
-        { key: 'dy', value: dy === 0 ? null : String(dy) },
+    const sign = (placement ?? args.place) === 'right' ? -1 : 1;
+    const dx = placement ? 0 : pixels(args.dx, { em, basis }) + sign * drag.dx;
+    const dy = pixels(args.dy, { em, basis }) + drag.dy;
+    const across = round2((dx / basis) * 100);
+    const down = round2(dy / em);
+    const changes = [
+        { key: 'dx', value: across === 0 ? null : `${across}%` },
+        { key: 'dy', value: down === 0 ? null : `${down}em` },
     ];
+    if (placement) changes.unshift({ key: 'place', value: placement });
+    return changes;
 }
 
 const NOTES = ['note', 'margin'];
@@ -60,9 +71,9 @@ export const figureArgs = (node) => ({ place: argValue(node, 'place'), dx: argVa
 /**
  * A grip above a margin note while editing; dragging it moves the note, and
  * the page re-flows around it on every move.
- * @param {{ document: Document, hover: ReturnType<typeof import('./hover.js').createHover>, getSession: () => any, getLayout: () => any, onEdited: () => void }} deps
+ * @param {{ document: Document, hover: ReturnType<typeof import('./hover.js').createHover>, snapper: ReturnType<typeof import('./snapper.js').createSnapper>, getSession: () => any, getLayout: () => any, onEdited: () => void }} deps
  */
-export function createNoteMover({ document, hover, getSession, getLayout, onEdited }) {
+export function createNoteMover({ document, hover, snapper, getSession, getLayout, onEdited }) {
     const grip = document.createElement('div');
     grip.className = 'move-grip';
     grip.title = 'Drag to move this note';
@@ -96,7 +107,12 @@ export function createNoteMover({ document, hover, getSession, getLayout, onEdit
         hide,
     });
 
-    const show = (dx, dy) => drag.preview.show(noteMoveChanges(drag.from, { ...drag.page, dx, dy }));
+    /** Previews the note at the pointer's position, pulled to a guide when one is near. */
+    const preview = (dx, dy, free) => {
+        const snapped = drag.snap.move(dx, dy, free);
+        drag.preview.show(noteMoveChanges(drag.from, { ...drag.page, dx: snapped.dx, dy: snapped.dy }));
+        return snapped;
+    };
 
     makeDraggable(grip, {
         onStart() {
@@ -105,26 +121,29 @@ export function createNoteMover({ document, hover, getSession, getLayout, onEdit
             if (!hovered || !session || session.source !== shownFor) { hide(); return; }
             drag = {
                 preview: createPreview(session, hovered.node.start, NOTES),
-                from: { y: hovered.y, x: hovered.x, width: hovered.width, anchorY: hovered.anchor.y },
-                page: { pageWidth: layout.width, lineHeight: layout.styles.lineHeight, topPad: PAGE.topPad },
+                from: { y: hovered.y, x: hovered.x, width: hovered.width, baseY: hovered.baseY ?? hovered.anchor.y },
+                page: { pageWidth: layout.width, lineHeight: layout.styles.lineHeight, em: layout.styles.size },
+                snap: snapper.begin({ x: hovered.x, y: hovered.y, width: hovered.width, height: hovered.height }, { ignoreNote: hovered, axes: 'y' }),
             };
         },
-        onMove(dx, dy) {
+        onMove(dx, dy, e) {
             if (!drag) return;
             grip.style.transform = `translate(${dx}px, ${dy}px)`;
-            show(dx, dy);
+            preview(dx, dy, e.altKey);
         },
-        onDrop(dx, dy) {
+        onDrop(dx, dy, e) {
             if (!drag) return;
-            show(dx, dy);
-            const { preview } = drag;
+            preview(dx, dy, e.altKey);
+            const { preview: edit, snap } = drag;
             drag = null;
+            snap.end();
             grip.style.transform = '';
             hide();
-            if (preview.changed) onEdited();
+            if (edit.changed) onEdited();
         },
         onCancel() {
             drag?.preview.cancel();
+            drag?.snap.end();
             drag = null;
             grip.style.transform = '';
             hide();

@@ -5,19 +5,18 @@ import { createSession } from '../../core/edit/session.js';
 import { updateArgs } from '../../core/edit/args.js';
 import { noteMoveChanges, figureMoveChanges } from '../../core/edit/move.js';
 
-const geom = { pageWidth: 1000, lineHeight: 28, topPad: 32 };
-const note = { y: 400, x: 740, width: 240, anchorY: 400 };
+const geom = { pageWidth: 1000, lineHeight: 28, em: 20 };
+const note = { y: 400, x: 740, width: 240, baseY: 400 };
 
-test('dropping a note away from its anchor pins it at that height', () => {
+test('a note dropped away from its anchor is nudged by that much, in em', () => {
     assert.deepEqual(noteMoveChanges(note, { ...geom, dx: 0, dy: 300 }), [
-        { key: 0, value: 'right' }, { key: 'type', value: 'absolute' }, { key: 'pos', value: '668' },
+        { key: 0, value: 'right' }, { key: 'dy', value: '15em' }, { key: 'type', value: null }, { key: 'pos', value: null },
     ]);
+    assert.equal(noteMoveChanges(note, { ...geom, dx: 0, dy: -50 })[1].value, '-2.5em');
 });
 
-test('dropping a note beside its anchor lets it follow the text again', () => {
-    assert.deepEqual(noteMoveChanges(note, { ...geom, dx: 0, dy: 10 }), [
-        { key: 0, value: 'right' }, { key: 'type', value: null }, { key: 'pos', value: null },
-    ]);
+test('a note dropped beside its anchor goes back to following the text', () => {
+    assert.equal(noteMoveChanges(note, { ...geom, dx: 0, dy: 10 })[1].value, null);
 });
 
 test('the side follows the half of the page the note is dropped on', () => {
@@ -25,10 +24,21 @@ test('the side follows the half of the page the note is dropped on', () => {
     assert.equal(noteMoveChanges({ ...note, x: 20 }, { ...geom, dx: 600, dy: 0 })[0].value, 'right');
 });
 
-test('a figure takes offsets from where it was, right-placed ones measured from the right edge', () => {
-    assert.deepEqual(figureMoveChanges({ place: 'left' }, { dx: 40, dy: -12 }), [{ key: 'dx', value: '40' }, { key: 'dy', value: '-12' }]);
-    assert.deepEqual(figureMoveChanges({ place: 'right', dx: '10' }, { dx: 40, dy: 0 }), [{ key: 'dx', value: '-30' }, { key: 'dy', value: null }]);
-    assert.deepEqual(figureMoveChanges({ place: 'left', dx: '40', dy: '5' }, { dx: -40, dy: -5 }), [{ key: 'dx', value: null }, { key: 'dy', value: null }]);
+const unit = { em: 20, basis: 400 };
+
+test('a figure takes offsets in units that survive a change of screen: share of the column across, em down', () => {
+    assert.deepEqual(figureMoveChanges({ place: 'left' }, { dx: 40, dy: -10 }, unit), [{ key: 'dx', value: '10%' }, { key: 'dy', value: '-0.5em' }]);
+    assert.deepEqual(figureMoveChanges({ place: 'left', dx: '10%', dy: '1em' }, { dx: 20, dy: 20 }, unit), [{ key: 'dx', value: '15%' }, { key: 'dy', value: '2em' }]);
+    assert.deepEqual(figureMoveChanges({ place: 'left', dx: '40', dy: '5' }, { dx: -40, dy: -5 }, unit), [{ key: 'dx', value: null }, { key: 'dy', value: null }]);
+});
+
+test('right-placed figures are measured from the right edge', () => {
+    assert.equal(figureMoveChanges({ place: 'right', dx: '4%' }, { dx: 40, dy: 0 }, unit)[0].value, '-6%');
+});
+
+test('snapping to a placement saves the placement and drops the sideways offset', () => {
+    const changes = figureMoveChanges({ place: 'gutter', dx: '12%' }, { dx: 5, dy: 20 }, { ...unit, placement: 'center' });
+    assert.deepEqual(changes, [{ key: 'place', value: 'center' }, { key: 'dx', value: null }, { key: 'dy', value: '1em' }]);
 });
 
 test('argument changes are applied to the directive and skip what is already there', () => {
