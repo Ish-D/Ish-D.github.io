@@ -1,7 +1,7 @@
 // Offscreen WebKit screenshots of a page served from a directory.
 //
 //   webshot --root DIR --path "/?page=x" --out shot.png [--width 1280] [--height 900]
-//           [--ready JS] [--settle 0.6] [--eval JS] [--retina]
+//           [--ready JS] [--settle 0.6] [--eval JS] [--retina] [--writable]
 //
 // The directory is served over app://local/, so root-relative URLs, fetch()
 // and ES modules behave as they do on a server. Console output and script
@@ -24,6 +24,7 @@ struct Options {
     var steps: [(Double, String)] = []
     var retina = false
     var timeout = 40.0
+    var writable = false
 }
 
 func parseOptions() -> Options {
@@ -47,6 +48,7 @@ func parseOptions() -> Options {
         case "--delay2": o.delay2 = Double(it.next() ?? "") ?? o.delay2
         case "--timeout": o.timeout = Double(it.next() ?? "") ?? o.timeout
         case "--retina": o.retina = true
+        case "--writable": o.writable = true
         default: break
         }
     }
@@ -64,9 +66,38 @@ let mimeTypes: [String: String] = [
 ]
 
 final class FileSchemeHandler: NSObject, WKURLSchemeHandler {
+    func reply(_ task: WKURLSchemeTask, _ url: URL, status: Int, body: Data = Data(), type: String = "text/plain") {
+        let response = HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: ["Content-Type": type, "Content-Length": String(body.count)])!
+        task.didReceive(response)
+        task.didReceive(body)
+        task.didFinish()
+    }
+
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url else { return }
         var path = url.path.removingPercentEncoding ?? url.path
+        // --writable: behave like the dev server (saves cards, reports /api/dev)
+        if options.writable {
+            if path == "/api/dev" { return reply(urlSchemeTask, url, status: 200, body: Data("{\"save\":true}".utf8), type: "application/json") }
+            if urlSchemeTask.request.httpMethod == "PUT", path.hasPrefix("/cards/"), path.hasSuffix(".md") {
+                var body = urlSchemeTask.request.httpBody ?? Data()
+                if body.isEmpty, let stream = urlSchemeTask.request.httpBodyStream {
+                    stream.open()
+                    var buffer = [UInt8](repeating: 0, count: 65536)
+                    while stream.hasBytesAvailable {
+                        let n = stream.read(&buffer, maxLength: buffer.count)
+                        if n <= 0 { break }
+                        body.append(buffer, count: n)
+                    }
+                    stream.close()
+                }
+                let target = rootURL.appendingPathComponent(String(path.dropFirst()))
+                let temp = target.appendingPathExtension("tmp")
+                try? body.write(to: temp)
+                _ = try? FileManager.default.replaceItemAt(target, withItemAt: temp)
+                return reply(urlSchemeTask, url, status: 204)
+            }
+        }
         if path.hasSuffix("/") { path += "index.html" }
         let fileURL = rootURL.appendingPathComponent(String(path.dropFirst())).standardizedFileURL
         guard fileURL.path.hasPrefix(rootURL.path), let data = try? Data(contentsOf: fileURL) else {

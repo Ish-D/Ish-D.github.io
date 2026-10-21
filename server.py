@@ -15,6 +15,8 @@ import os
 import sys
 import json
 import re
+import shutil
+import time
 import asyncio
 import threading
 from pathlib import Path
@@ -29,6 +31,17 @@ pending_updates = {}  # file_name -> asyncio.Task for debouncing
 loop = None  # asyncio event loop for WebSocket server
 
 
+def keep_history(target, keep=40):
+    """Copy the card being overwritten to cards/.history/<card>/, newest `keep` kept, so a bad save can be undone."""
+    if not target.exists():
+        return
+    folder = Path('cards') / '.history' / target.relative_to('cards').with_suffix('')
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(target, folder / (time.strftime('%Y%m%d-%H%M%S') + f'-{int(time.time() * 1000) % 1000:03d}.md'))
+    for old in sorted(folder.glob('*.md'))[:-keep]:
+        old.unlink()
+
+
 class SPAHandler(http.server.SimpleHTTPRequestHandler):
     """SPA handler that serves index.html for all non-file routes."""
 
@@ -38,7 +51,7 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         # local development: always revalidate, so a changed script never runs against an old stylesheet
-        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('Cache-Control', 'no-store')
         super().end_headers()
 
     def is_loopback(self):
@@ -64,6 +77,7 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             return
         temp = target.with_name(target.name + '.tmp')
         temp.write_bytes(self.rfile.read(length))
+        keep_history(target)
         os.replace(temp, target)
         self.send_response(204)
         self.end_headers()

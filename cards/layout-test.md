@@ -10,8 +10,7 @@ name: Layout test
 
 [[columns(2, gap: 56)]]
 {
-[[drawing(drawings/moon.svg, place: gutter, width: 220, height: 220, wrap: circle, pad: 18, caption: Moon over water)]]
-[[drop(T)]]he foreword to a book is the part written last and read first. It has to say what the pages could not, in a voice that sounds as though it never struggled to find one. Most of what makes it good is what it leaves out: a few plain sentences, set with care, on a page that has room to breathe.[[note(right)]]{}{Click here, in the margin, and the note opens where it stands. Drag the grip above it to put it somewhere else.}
+[[drawing(drawings/moon.svg, place: gutter, width: 220, height: 220, wrap: circle, pad: 18, caption: Moon over water, dy[[drop(T)]]he foreword to a book is the part written last and read first. It has to say what the pages could not, in a voice that sounds as though it never struggled to find one. Most of what makes it good is what it leaves out: a few plain sentences, set with care, on a page that has room to breathe.[[note(right)]]{}{Click here, in the margin, and the note opens where it stands. Drag the grip above it to put it somewhere else.}omewhere else.}
 
 A typewritten page earns its calm from limits. There is one typeface, one size and one measure, and a margin that stays the same all the way down. Nothing competes with the line. When a figure does appear, it is placed the way a printer would place it, with the text given space to turn around it instead of running over it.
 
