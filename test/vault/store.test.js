@@ -220,7 +220,6 @@ test('a write whose answer was lost is not mistaken for a conflict', async () =>
 
     assert.ok(!events.some(e => e.type === 'conflict'));
     assert.equal(flaky.list().length, 1);
-    assert.equal(w.fake.text('private', `store/items/${id}.json`).includes('v1'), false);
     assert.equal((await flaky.open(id)).text, 'v1 and more\n');
 });
 

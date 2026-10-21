@@ -514,3 +514,5 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
 .lightbox-caption { color: #ddd; font: 15px Georgia, serif; text-align: center; min-height: 1.2em; }
 @keyframes lightbox-in { from { opacity: 0; } to { opacity: 1; } }
 @media print { .reading-stats, .lightbox { display: none; } }
+
+.reading-stats { padding: 1px 6px; background: color-mix(in srgb, var(--color-card-background) 85%, transparent); border-radius: 3px; }
