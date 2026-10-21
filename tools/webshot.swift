@@ -1,6 +1,6 @@
 // Offscreen WebKit screenshots of a page served from a directory.
 //
-//   webshot --root DIR --path "/v2.html?page=x" --out shot.png [--width 1280] [--height 900]
+//   webshot --root DIR --path "/?page=x" --out shot.png [--width 1280] [--height 900]
 //           [--ready JS] [--settle 0.6] [--eval JS] [--retina]
 //
 // The directory is served over app://local/, so root-relative URLs, fetch()
