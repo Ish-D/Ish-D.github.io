@@ -4,10 +4,35 @@
  * second device that changes the repository behind the client's back.
  */
 
-import { createHash } from 'node:crypto';
+/** Content hash standing in for git's blob id (cyrb53 over the bytes, plus the length). */
+function blobSha(bytes) {
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (const b of bytes) {
+        h1 = Math.imul(h1 ^ b, 2654435761);
+        h2 = Math.imul(h2 ^ b, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    const hex = (n) => (n >>> 0).toString(16).padStart(8, '0');
+    return `${hex(h2)}${hex(h1)}${bytes.length.toString(16).padStart(8, '0')}`;
+}
 
-const blobSha = (bytes) => createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 const asBytes = (content) => (typeof content === 'string' ? new TextEncoder().encode(content) : content);
+
+function toBase64(bytes) {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(binary);
+}
+
+function fromBase64(text) {
+    const binary = atob(text);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
+
 const wrap60 = (b64) => b64.replace(/(.{60})/g, '$1\n');
 
 export function createFakeGitHub({ owner = 'me', repo = 'site', token = 'tok', inlineLimit = 1_000_000 } = {}) {
@@ -77,7 +102,7 @@ export function createFakeGitHub({ owner = 'me', repo = 'site', token = 'tok', i
                     return json(200, {
                         type: 'file', name: path.split('/').pop(), path, sha: file.sha, size: file.bytes.length,
                         encoding: 'base64',
-                        content: file.bytes.length > inlineLimit ? '' : wrap60(Buffer.from(file.bytes).toString('base64')),
+                        content: file.bytes.length > inlineLimit ? '' : wrap60(toBase64(file.bytes)),
                     });
                 }
                 const dir = `${path.replace(/\/$/, '')}/`;
@@ -100,7 +125,7 @@ export function createFakeGitHub({ owner = 'me', repo = 'site', token = 'tok', i
                 fake.maxInFlight = Math.max(fake.maxInFlight, fake.inFlight);
                 await new Promise(r => setTimeout(r, 2));
                 fake.inFlight--;
-                const bytes = new Uint8Array(Buffer.from(body.content, 'base64'));
+                const bytes = fromBase64(body.content);
                 const sha = fake.write(branch, path, bytes);
                 return json(existing ? 200 : 201, { content: { sha, path }, commit: { sha: heads.get(branch) } });
             }
@@ -128,7 +153,7 @@ export function createFakeGitHub({ owner = 'me', repo = 'site', token = 'tok', i
         if ((m = /^\/git\/blobs\/(.+)$/.exec(rest)) && method === 'GET') {
             for (const files of branches.values()) {
                 for (const f of files.values()) {
-                    if (f.sha === m[1]) return json(200, { encoding: 'base64', content: wrap60(Buffer.from(f.bytes).toString('base64')) });
+                    if (f.sha === m[1]) return json(200, { encoding: 'base64', content: wrap60(toBase64(f.bytes)) });
                 }
             }
             return json(404, { message: 'Not Found' });

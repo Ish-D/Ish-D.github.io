@@ -17,6 +17,7 @@ import { attachScrub, bindVars } from '../runtime/scrub.js';
 import { mountFigures, disposeFigures, hasFigure } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
 import { createTocRail } from './toc.js';
+import { createPersonal } from './personal.js';
 import '../figures/index.js';
 
 const root = document.getElementById('root');
@@ -44,8 +45,39 @@ const state = {
     settings: loadSettings(),
     scriptRan: false,
     toc: null,
+    vaultPage: null,
+    publicSource: '',
 };
 const persist = new Map();
+
+function toast(text) {
+    document.querySelector('.toast')?.remove();
+    const el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 4500);
+}
+
+const SAVE_TEXT = { saved: 'saved', pending: 'unsaved', saving: 'saving…', offline: 'offline, will retry' };
+
+const personal = createPersonal({
+    toast,
+    openPage: (name) => openPage(name),
+    onChange(event) {
+        if (event.type === 'status') {
+            if (state.vaultPage) setStatus(event.state === 'error' ? (event.message || 'could not save') : SAVE_TEXT[event.state]);
+        } else if (event.type === 'unlocked' || event.type === 'locked') {
+            state.canEdit = state.canSave || personal.unlocked || new URLSearchParams(location.search).has('edit');
+            if (!personal.unlocked) state.editor?.setEnabled(false);
+            // a draft may exist for the page on screen, and a private page may now be readable
+            if (state.page && (state.page.startsWith('~') || personal.unlocked)) openPage(state.page, { push: false, keepScroll: true });
+            else buildChrome();
+        } else if ((event.type === 'merged' || event.type === 'conflict') && event.id === state.vaultPage?.id) {
+            state.session?.reset(event.text);
+        }
+    },
+});
 const measurer = createCanvasMeasurer();
 const math = createMathService({ document, katex: window.katex, fontSize: state.settings.fontSize });
 const images = createImageSizes(() => scheduleLayout());
@@ -335,18 +367,42 @@ function useSession(source) {
     state.editor.setEnabled(state.canEdit && new URLSearchParams(location.search).has('edit'));
 }
 
-async function openPage(name, { push = true, hash = '' } = {}) {
-    let source;
+/** Source for a page: a vault page, a draft of a public page, or the public file. */
+async function loadSource(name) {
+    if (name.startsWith('~')) {
+        if (!personal.unlocked) return { source: null };
+        try {
+            const page = await personal.store.open(name.slice(1));
+            return { source: page.text, vaultPage: { id: page.id, slug: page.meta.slug } };
+        } catch {
+            return { source: null };
+        }
+    }
+    if (personal.unlocked) {
+        const id = personal.store.findBySlug(name);
+        if (id) {
+            try {
+                const page = await personal.store.open(id);
+                return { source: page.text, vaultPage: { id, slug: name } };
+            } catch { /* fall back to the public page */ }
+        }
+    }
     try {
         const res = await fetch(`/cards/${name}.md`, { cache: 'no-cache' });
-        source = res.ok ? await res.text() : null;
+        return { source: res.ok ? await res.text() : null };
     } catch {
-        source = null;
+        return { source: null };
     }
+}
+
+async function openPage(name, { push = true, hash = '', keepScroll = false } = {}) {
+    const { source, vaultPage = null } = await loadSource(name);
     if (state.docEl) disposeFigures(state.docEl);
     persist.clear();
     state.scriptRan = false;
     state.page = name;
+    state.vaultPage = vaultPage;
+    state.publicSource = vaultPage ? '' : (source ?? '');
     state.store = createStore();
     state.detachScrub?.();
     state.detachScrub = attachScrub(root, state.store);
@@ -356,15 +412,16 @@ async function openPage(name, { push = true, hash = '' } = {}) {
         state.editor = null;
         state.session = null;
         state.fallbackDoc = source === null
-            ? messageDoc('Not found', `There is no page called "${name}".`)
-            : messageDoc('Private page', 'This page is encrypted. Personal mode is not wired into this version yet.');
+            ? messageDoc('Not found', name.startsWith('~') ? 'There is nothing here.' : `There is no page called "${name}".`)
+            : messageDoc('Private page', 'This page is encrypted with the old scheme.');
     } else {
         useSession(source);
     }
     const title = currentDoc().frontmatter?.entries?.name?.value;
     document.title = title ? `${title} · ish` : 'ish';
     if (push) history.pushState({ page: name }, '', `?page=${encodeURIComponent(name)}${hash}`);
-    window.scrollTo(0, 0);
+    if (!keepScroll) window.scrollTo(0, 0);
+    buildChrome();
     layoutAndRender();
     runCardScript(name);
     if (hash) scrollToAnchor(hash.slice(1), false);
@@ -375,6 +432,7 @@ async function openPage(name, { push = true, hash = '' } = {}) {
 // ---------------------------------------------------------------------------
 
 let saveTimer = 0;
+let vaultTimer = 0;
 
 function setStatus(text) {
     state.saveStatus = text;
@@ -382,7 +440,27 @@ function setStatus(text) {
     if (el) el.textContent = text;
 }
 
+/** Edits go to the vault, not the dev server, for vault pages and for public pages when not running locally. */
+const savesToVault = () => !!state.vaultPage || (!state.canSave && personal.unlocked);
+
+async function pushToVault() {
+    const source = state.session?.source;
+    if (source == null || !personal.unlocked) return;
+    if (!state.vaultPage) {
+        const slug = state.page;
+        state.vaultPage = { id: await personal.store.adopt(slug, state.publicSource), slug };
+        buildChrome();
+    }
+    personal.store.edit(state.vaultPage.id, source);
+}
+
 function scheduleSave() {
+    if (savesToVault()) {
+        setStatus('unsaved');
+        clearTimeout(vaultTimer);
+        vaultTimer = setTimeout(pushToVault, 300);
+        return;
+    }
     if (!state.canSave) return;
     setStatus('unsaved');
     clearTimeout(saveTimer);
@@ -517,6 +595,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function buildChrome() {
+    document.querySelector('.chrome')?.remove();
     const chrome = document.createElement('div');
     chrome.className = 'chrome';
     const row = document.createElement('div');
@@ -546,35 +625,67 @@ function buildChrome() {
     theme.append('Dark mode', toggle);
 
     panel.append(slider('Font size', 'fontSize', 14, 26), slider('Margins', 'marginPercent', 0, 40), theme);
-    button.onclick = () => panel.classList.toggle('open');
+    personal.watchHold(button);
+    button.onclick = () => { if (!personal.consumeHold()) panel.classList.toggle('open'); };
 
     if (state.canEdit) {
         const status = document.createElement('span');
         status.className = 'status';
+        status.textContent = state.saveStatus;
         const pencil = document.createElement('button');
         pencil.textContent = '✎︎';
         pencil.title = 'Edit this page';
+        pencil.classList.toggle('on', !!state.editor?.enabled);
         pencil.onclick = () => {
             const on = !state.editor?.enabled;
             state.editor?.setEnabled(on);
             pencil.classList.toggle('on', on);
         };
-        row.append(status, pencil);
+        row.append(status);
+        if (state.vaultPage?.slug) {
+            const publish = document.createElement('button');
+            publish.textContent = '↑';
+            publish.title = 'Publish this page';
+            publish.onclick = () => personal.publish(state.vaultPage.id);
+            row.append(publish);
+        }
+        row.append(pencil);
+    }
+    if (personal.unlocked) {
+        const pages = document.createElement('button');
+        pages.textContent = '≡';
+        pages.title = 'Backstage';
+        pages.onclick = () => personal.openPanel();
+        row.append(pages);
     }
     row.append(button);
     chrome.append(row, panel);
     document.body.appendChild(chrome);
 }
 
+document.addEventListener('visibilitychange', async () => {
+    if (!personal.unlocked) return;
+    if (document.hidden) {
+        personal.store.flush().catch(() => {});
+        return;
+    }
+    if (state.vaultPage && !state.editor?.active) {
+        const fresh = await personal.store.refresh(state.vaultPage.id).catch(() => null);
+        if (fresh && fresh.text !== state.session?.source) state.session.reset(fresh.text);
+    }
+});
+addEventListener('pagehide', () => personal.store?.flush().catch(() => {}));
+addEventListener('online', () => personal.store?.retry().catch(() => {}));
+
 async function start() {
     const themeParam = new URLSearchParams(location.search).get('theme');
     if (themeParam === 'light' || themeParam === 'dark') state.settings.theme = themeParam;
     applyTheme();
     await Promise.all([loadFonts(document, undefined, { katex: !!window.katex }), fetchManifest(), probeDev()]);
-    buildChrome();
     document.fonts.addEventListener('loadingdone', () => { math.invalidate(); scheduleLayout(); });
     await openPage(pageFromLocation(), { push: false, hash: location.hash });
+    personal.restore();
 }
 
-window.__v2 = { state, relayout: scheduleLayout, openPage };
+window.__v2 = { state, relayout: scheduleLayout, openPage, personal };
 start();
