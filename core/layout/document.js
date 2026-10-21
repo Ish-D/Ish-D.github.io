@@ -96,7 +96,7 @@ export function layoutDocument(doc, env) {
         styles,
         blocks: items,
         notes: notes.placed,
-        anchors: scope.anchors,
+        anchors: new Map([...scope.anchors, ...(notes.anchors ?? [])]),
         outline: env.outline.map(({ level, number, id, text }) => ({ level, number, id, text })),
         diagnostics,
         overflow: scope.overflow,
@@ -270,8 +270,10 @@ function placeNotes(scope, env, styles, geom) {
 
     const placed = [];
     const inline = new Set();
+    const anchors = new Map();
     const emit = (c, side, y, laid) => {
         const strip = strips[side];
+        for (const [id, at] of laid.body.scope.anchors) anchors.set(id, { x: strip.x, y: y + (laid.vertical ? 0 : at.y) });
         if (!laid.vertical) {
             const items = laid.body.scope.out.map(it => translateItem(it, 0, y));
             placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, scale: laid.scale, items, overflow: laid.overflow, clipped: laid.clipped });
@@ -297,7 +299,7 @@ function placeNotes(scope, env, styles, geom) {
         const laid = v.tag.side === p.side ? v.tag.laid : layoutVariant(c, env, styles, strips[p.side], v.tag.scale);
         emit(c, p.side, p.y, laid);
     }
-    return { placed, inline };
+    return { placed, inline, anchors };
 }
 
 export function translateItem(item, dx, dy) {

@@ -12,6 +12,7 @@ import { AuthError, createGitHub, GitHubError, NetworkError } from '../vault/git
 import { createPrivateStore, PublishConflict } from '../vault/store.js';
 import { createIdbKV } from '../vault/kv.js';
 import { slugify } from '../vault/pages.js';
+import { decryptLegacyCard, isLegacyEncrypted } from '../vault/legacy.js';
 
 const KNOCK_WORD = 'backstage';
 const KNOCK_HASH = '#backstage';
@@ -310,6 +311,32 @@ export function createPersonal(host) {
         title.input.focus();
     }
 
+    /** Brings a card encrypted by the old site into the vault, re-encrypted. */
+    function importForm() {
+        const name = field('Old card name', { type: 'text', placeholder: 'journal' });
+        const password = field('Its old password', { type: 'password' });
+        const form = h('form', { class: 'vault-form', onsubmit: async (e) => {
+            e.preventDefault();
+            try {
+                working(form, 'Decrypting…');
+                const res = await fetchImpl(`/cards/${encodeURIComponent(name.input.value.trim())}.md`, { cache: 'no-cache' });
+                const source = res.ok ? await res.text() : '';
+                if (!isLegacyEncrypted(source)) throw new Error('There is no encrypted card with that name.');
+                const text = await decryptLegacyCard(source, password.input.value);
+                const id = await store.create({ text });
+                close();
+                host.openPage(`~${id}`);
+                host.toast('Imported. The old file is still public; delete it once you are happy with the copy.');
+            } catch (err) {
+                failed(form, describe(err));
+            }
+        } },
+        name.row, password.row,
+        h('div', { class: 'vault-actions' }, button('Back', openPanel), button('Import', null, { primary: true, submit: true })));
+        show('Import an old private page', form);
+        name.input.focus();
+    }
+
     /** Publishes a page to the public site, asking before it overwrites something it did not write. */
     api.publish = async (id) => {
         try {
@@ -348,6 +375,7 @@ export function createPersonal(host) {
             h('div', { class: 'vault-list' }, rows.length ? rows : h('p', { class: 'vault-note' }, 'No pages yet.')),
             h('div', { class: 'vault-actions' },
                 button('New page', newPageForm, { primary: true }),
+                button('Import old page', importForm),
                 button('Lock', () => api.lock()),
                 button('Forget this device', () => api.lock({ forget: true }))),
             h('p', { class: 'vault-status' }, stateText));

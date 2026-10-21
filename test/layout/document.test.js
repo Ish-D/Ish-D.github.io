@@ -255,3 +255,11 @@ test('maxh caps a note until it is expanded', () => {
     assert.equal(open.clipped, false);
     assert.equal(open.overflow, true);
 });
+
+test('anchors inside a note resolve to the note position', () => {
+    const doc = parseText('Text[[note(right)]]{x}{[[anchor(inside)]]A note with a target.} more.\n');
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator }));
+    const at = layout.anchors.get('inside');
+    assert.ok(at, 'anchor missing');
+    assert.ok(at.y >= layout.notes[0].y && at.y <= layout.notes[0].y + layout.notes[0].height);
+});
