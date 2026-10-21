@@ -15,6 +15,7 @@ import { parseValue, resolveLength } from './values.js';
 import * as geometry from './geometry.js';
 import { createStyles } from './style.js';
 import { flowGenerated } from './generated.js';
+import { parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
 
 /** @typedef {import('../types.js').Block} Block */
 
@@ -597,6 +598,12 @@ function citationOf(node) {
     return cite ? [{ type: 'text', value: `— ${cite.replace(/^["']|["']$/g, '')}`, start: node.start, end: node.end }] : null;
 }
 
+/** A drawing made of inline strokes is as big as its view box. */
+function sketchSize(node) {
+    if (node.name !== 'drawing' || positionalArg(node)) return null;
+    return parseView(argOf(node, 'view')) ?? DEFAULT_VIEW;
+}
+
 function flowCenter(scope, node) {
     const sub = fork(scope, { align: 'center' });
     flowBlocks(sub, node.groups[0]?.children ?? []);
@@ -699,7 +706,7 @@ function flowObject(scope, node) {
 
     const isFloat = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
     const basis = place.kind === 'span' ? scope.width : place.kind === 'full' ? scope.page.width : col.width;
-    const natural = env.objects?.natural?.(node) ?? null;
+    const natural = env.objects?.natural?.(node) ?? sketchSize(node);
     const size = resolveSize(p, { basis, em }, natural, { defaultWidth: isFloat ? 0.5 : 1 });
 
     const caption = captionOf(scope, node, size.width);

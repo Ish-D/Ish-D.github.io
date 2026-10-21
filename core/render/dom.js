@@ -6,6 +6,7 @@
  * are single-line boxes; spacing adjustments arrive as `word-spacing`.
  */
 
+import { parseStrokes, parseView, strokesSvg, DEFAULT_VIEW } from '../runtime/strokes.js';
 import { resolveLength, listItems } from '../layout/values.js';
 
 const FAMILY_CSS = {
@@ -454,6 +455,17 @@ function renderObject(env, item, ox, oy) {
         img.style.width = '100%';
         img.style.height = '100%';
         body.appendChild(img);
+    } else if (item.name === 'drawing' && !(positionalValue(item.node, 0) ?? argValue(item.node, 'src'))) {
+        // strokes drawn by hand, stored in the directive's body
+        body.classList.add('drawing', 'sketch-body');
+        const svg = strokesSvg(document, parseStrokes(item.node.groups?.[0]?.text), parseView(argValue(item.node, 'view')) ?? DEFAULT_VIEW);
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        body.appendChild(svg);
+        if (item.node.groups?.[0]) {
+            wrap.dataset.sketch = String(item.node.groups[0].innerStart);
+            wrap.dataset.sketchEnd = String(item.node.groups[0].innerEnd);
+        }
     } else if (item.name === 'drawing') {
         body.classList.add('drawing');
         const asset = env.ctx.drawing?.(positionalValue(item.node, 0) ?? argValue(item.node, 'src') ?? '');

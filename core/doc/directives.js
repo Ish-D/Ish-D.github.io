@@ -38,6 +38,7 @@ export const directives = Object.freeze({
     summary: spec(true, ['inline']),
     code: spec(true, ['raw']),
     gallery: spec(true, ['raw']),
+    drawing: spec(true, ['raw']),
 
     // Widgets, links and placeholders
     viz: spec(true),

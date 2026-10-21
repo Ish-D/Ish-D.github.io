@@ -18,6 +18,8 @@ import { mountFigures, disposeFigures, hasFigure } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
 import { createTocRail } from './toc.js';
 import { createPersonal } from './personal.js';
+import { openSketchPad } from '../edit/sketchpad.js';
+import { parseStrokes, parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
 import '../figures/index.js';
 
 const root = document.getElementById('root');
@@ -47,6 +49,7 @@ const state = {
     toc: null,
     vaultPage: null,
     expandedNotes: new Set(),
+    sketching: false,
     publicSource: '',
 };
 const persist = new Map();
@@ -83,6 +86,7 @@ const measurer = createCanvasMeasurer();
 const math = createMathService({ document, katex: window.katex, fontSize: state.settings.fontSize });
 const images = createImageSizes(() => scheduleLayout());
 const drawings = createSvgAssets(() => scheduleLayout());
+const hasDrawingSource = (node) => !!(node.args?.items.find(a => a.key === null) ?? node.args?.items.find(a => a.key === 'src'));
 const drawingUrl = (node) => assetUrl(node.args?.items.find(a => a.key === null)?.value ?? node.args?.items.find(a => a.key === 'src')?.value ?? '');
 
 const varText = (name) => {
@@ -199,7 +203,7 @@ function buildEnv() {
         objects: {
             natural: (node) => {
                 if (node.name === 'image') return images.get(displayUrl(imageSrc(node)));
-                if (node.name === 'drawing') return drawings.get(drawingUrl(node));
+                if (node.name === 'drawing') return hasDrawingSource(node) ? drawings.get(drawingUrl(node)) : null;
                 return null;
             },
             mask: () => null,
@@ -325,7 +329,7 @@ let layoutQueued = false;
 function scheduleLayout() {
     if (layoutQueued) return;
     layoutQueued = true;
-    nextFrame(() => { layoutQueued = false; layoutAndRender(); });
+    nextFrame(() => { layoutQueued = false; if (!state.sketching) layoutAndRender(); });
 }
 
 // ---------------------------------------------------------------------------
@@ -538,6 +542,13 @@ function pageFromLocation() {
 // ---------------------------------------------------------------------------
 
 root.addEventListener('click', (e) => {
+    const sketch = state.editor?.enabled && e.target.closest?.('[data-sketch]');
+    if (sketch && !sketch.querySelector('.sketch-pad')) {
+        e.preventDefault();
+        startSketch(sketch);
+        return;
+    }
+    if (e.target.closest?.('.sketch-pad')) return;
     if (state.editor?.enabled && !e.metaKey && !e.ctrlKey && state.editor.handleClick(e.target, { x: e.clientX, y: e.clientY })) {
         e.preventDefault();
         return;
@@ -573,6 +584,29 @@ root.addEventListener('click', (e) => {
         scrollToAnchor(jump.dataset.jump);
     }
 });
+
+/** Opens the drawing surface on a sketch figure; the strokes are written back as text. */
+function startSketch(figure) {
+    const start = Number(figure.dataset.sketch);
+    const end = Number(figure.dataset.sketchEnd);
+    const source = state.session.source;
+    const header = source.slice(source.lastIndexOf('[[', start), start);
+    const view = parseView(/view:\s*([0-9.]+\s*[x×]\s*[0-9.]+)/.exec(header)?.[1]) ?? DEFAULT_VIEW;
+    state.editor.close();
+    state.sketching = true;
+    openSketchPad({
+        document, figure, view, strokes: parseStrokes(source.slice(start, end)),
+        onDone(text) {
+            state.sketching = false;
+            const body = text ? `\n${text}\n` : '';
+            if (state.session.source.slice(start, end) !== body) {
+                state.session.apply({ start, end, text: body }, { group: `sketch-${Date.now()}` });
+                scheduleSave();
+            }
+            scheduleLayout();
+        },
+    });
+}
 
 /** Hovering a note or its marker highlights the other. */
 function linkNotes(e, on) {

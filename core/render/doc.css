@@ -383,3 +383,22 @@ aside.note.clipped { overflow: hidden; -webkit-mask-image: linear-gradient(#000 
     cursor: pointer;
 }
 aside.note.clipped .note-more { -webkit-mask-image: none; }
+
+/* sketches */
+.sketch-body svg { overflow: visible; color: var(--color-text-primary); }
+body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outline-offset: 4px; cursor: crosshair; }
+.sketch-pad { position: absolute; inset: 0; z-index: 70; background: var(--color-card-background); outline: 1px solid var(--color-border); cursor: crosshair; }
+.sketch-pad svg { width: 100%; height: 100%; display: block; color: var(--color-text-primary); }
+.sketch-bar { position: absolute; top: -36px; right: 0; display: flex; gap: 4px; }
+.sketch-bar button {
+    min-width: 30px;
+    height: 28px;
+    padding: 0 8px;
+    font: 14px Georgia, serif;
+    color: var(--color-text-primary);
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 3px;
+    cursor: pointer;
+}
+.sketch-bar button.on { color: #fff; background: #c4452c; border-color: #c4452c; }
