@@ -70,8 +70,14 @@ export function installInteractions(app) {
         const other = marker ? 'aside.note' : '.mk';
         state.docEl.querySelectorAll(`${other}[data-note="${hovered.dataset.note}"]`).forEach(el => el.classList.toggle('on', on));
     };
-    root.addEventListener('mouseover', (e) => linkNotes(e, true));
-    root.addEventListener('mouseout', (e) => linkNotes(e, false));
+    /** Pointing at a contents entry brings its text forward. */
+    const pointAtContents = (e, on) => {
+        const hit = e.target.closest?.('.toc-hit');
+        if (!hit || !state.docEl) return;
+        state.docEl.querySelectorAll(`.toc-text[data-toc="${hit.dataset.jump}"]`).forEach(el => el.classList.toggle('hot', on));
+    };
+    root.addEventListener('mouseover', (e) => { linkNotes(e, true); pointAtContents(e, true); });
+    root.addEventListener('mouseout', (e) => { linkNotes(e, false); pointAtContents(e, false); });
 
     window.addEventListener('popstate', () => {
         const route = routeFromLocation(location);

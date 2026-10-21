@@ -106,7 +106,9 @@ body {
     pointer-events: none;
 }
 .toc-hit { position: absolute; display: block; pointer-events: auto; cursor: pointer; }
-.toc-hit:hover { background: var(--color-selection); }
+/* contents entries are a little quiet until pointed at */
+.toc-text { opacity: 0.8; transition: opacity 0.12s ease; }
+.toc-text.hot { opacity: 1; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
 aside.note { position: absolute; color: var(--color-text-primary); }
 aside.note a { color: inherit; }
@@ -207,20 +209,48 @@ aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left
 .editor-box {
     position: absolute;
     box-sizing: border-box;
-    padding: 8px 12px;
-    font: 14px/1.55 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
     color: var(--color-text-primary);
-    background: var(--code-background);
-    border: 1px solid var(--color-border);
-    border-left: 3px solid #c4452c;
-    border-radius: 3px;
-    resize: none;
-    overflow: hidden;
     pointer-events: auto;
-    outline: none;
+    hyphens: manual;
+}
+.editor-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -14px;
+    width: 2px;
+    background: #c4452c;
+    opacity: 0.8;
+}
+.editor-mirror, .editor-input {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    line-height: inherit;
+    letter-spacing: inherit;
+    text-align: inherit;
     white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
     tab-size: 4;
 }
+.editor-mirror { position: absolute; inset: 0; pointer-events: none; color: var(--color-text-primary); overflow: hidden; }
+.ed-syntax { color: var(--color-text-secondary); opacity: 0.7; }
+.editor-input {
+    position: relative;
+    display: block;
+    resize: none;
+    overflow: hidden;
+    outline: none;
+    background: transparent;
+    color: transparent;
+    caret-color: var(--color-text-primary);
+}
+.editor-input::selection { background: var(--color-selection); color: transparent; }
 .editor-slot { visibility: hidden; }
 body.editing .blk:hover, body.editing .obj:hover, body.editing .codeblock:hover, body.editing .mathblock:hover, body.editing aside.note:hover {
     outline: 1px dashed var(--color-border);

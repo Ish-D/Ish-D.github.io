@@ -10,6 +10,7 @@
  */
 
 import { expandToLines, closeRange } from './ranges.js';
+import { createEditorBox, typographyOf } from './editor-box.js';
 
 const MAX_SETTLE_PASSES = 4;
 const INPUT_DEBOUNCE_MS = 100;
@@ -19,7 +20,7 @@ const INPUT_DEBOUNCE_MS = 100;
  * @param {Document} deps.document
  * @param {ReturnType<import('./session.js').createSession>} deps.session
  * @param {() => any} deps.getLayout            current layout
- * @param {(editing: { start: number, end: number, height: number } | null) => void} deps.setEditing   tells the app which region to reserve, then relayouts
+ * @param {(editing: { start: number, end: number, height: number, x?: number, width?: number } | null) => void} deps.setEditing   tells the app which region to reserve, then relayouts
  * @param {() => void} deps.onSourceChange      called after the session text changed
  */
 export function createEditor({ document, session, getLayout, setEditing, onSourceChange }) {
@@ -41,7 +42,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     const fit = () => {
         const ta = active.textarea;
         ta.style.height = 'auto';
-        const needed = Math.ceil(ta.scrollHeight + 2);
+        const needed = Math.ceil(ta.scrollHeight);
         ta.style.height = `${needed}px`;
         return needed;
     };
@@ -51,18 +52,21 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         if (!active || !layout) return;
         const slot = slotOf(layout);
         if (slot) {
-            const ta = active.textarea;
-            ta.style.left = `${slot.x}px`;
-            ta.style.top = `${slot.y}px`;
-            ta.style.width = `${slot.width}px`;
+            const box = active.box;
+            box.style.left = `${slot.x}px`;
+            box.style.top = `${slot.y}px`;
+            box.style.width = `${slot.width}px`;
             active.slot = slot;
         }
     };
 
+    /** The region to reserve in the layout: where the block was drawn, so it keeps clear of floats. */
+    const request = (height) => ({ start: active.range.start, end: active.range.end, height, x: active.x, width: active.width });
+
     const reserve = () => {
         const height = fit();
         active.height = height;
-        setEditing({ start: active.range.start, end: active.range.end, height });
+        setEditing(request(height));
     };
 
     const commitText = () => {
@@ -78,6 +82,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             range.end = closed.end;
             textarea.value = session.source.slice(range.start, range.end);
             textarea.setSelectionRange(caret, caret);
+            active.repaint();
         }
         onSourceChange();
         passes = 0;
@@ -116,19 +121,22 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
          * Opens the editor on a source range (widened to whole lines).
          * `hint` is the text around the click, used to put the caret there.
          */
-        open(start, end, hint = '') {
+        open(start, end, hint = '', from = null) {
             api.close();
             const range = expandToLines(session.source, start, end);
             const closed = closeRange(session.doc, range);
-            const textarea = document.createElement('textarea');
-            textarea.className = 'editor-box';
-            textarea.spellcheck = true;
-            textarea.value = session.source.slice(closed.start, closed.end);
+            const rendered = from ?? document.querySelector(`[data-start="${closed.start}"]`);
+            const { box, textarea, repaint } = createEditorBox({
+                document,
+                text: session.source.slice(closed.start, closed.end),
+                typography: typographyOf(rendered, document.defaultView),
+            });
             textarea.addEventListener('input', onInput);
             textarea.addEventListener('keydown', onKey);
             textarea.addEventListener('blur', onBlur);
-            overlay.appendChild(textarea);
-            active = { range: { ...closed }, textarea, burst: ++burst, height: 0, slot: null };
+            overlay.appendChild(box);
+            const drawn = measureDrawn(getLayout(), rendered);
+            active = { range: { ...closed }, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
             passes = 0;
             reserve();
             textarea.focus({ preventScroll: true });
@@ -144,7 +152,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             if (!enabled) return false;
             const el = target.closest?.('[data-start]');
             if (!el || el.closest?.('.editor-overlay')) return false;
-            api.open(Number(el.dataset.start), Number(el.dataset.end), hintAt(document, point));
+            api.open(Number(el.dataset.start), Number(el.dataset.end), hintAt(document, point), el);
             return true;
         },
 
@@ -153,7 +161,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             clearTimeout(timer);
             commitText();
             active.textarea.removeEventListener('blur', onBlur);
-            active.textarea.remove();
+            active.box.remove();
             active = null;
             setEditing(null);
         },
@@ -171,11 +179,32 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             if (Math.abs(needed - active.height) > 1 && passes < MAX_SETTLE_PASSES) {
                 passes++;
                 active.height = needed;
-                setEditing({ start: active.range.start, end: active.range.end, height: needed });
+                setEditing(request(needed));
             }
         },
     };
     return api;
+}
+
+/**
+ * Where a text block's lines were drawn, so the editor can sit in the same
+ * place beside a float: the left edge and width most of its lines share (a
+ * drop cap shortens the first few). Centered and right-aligned text uses the whole measure.
+ */
+function measureDrawn(layout, rendered) {
+    const start = Number(rendered?.dataset?.start);
+    const block = layout?.blocks.find(b => b.node?.start === start && b.lines);
+    if (!block || (block.align && block.align !== 'left' && block.align !== 'justify')) return {};
+    const counts = new Map();
+    for (const l of block.lines) {
+        if (l.overflow) continue;
+        const key = `${Math.round(l.x)}:${Math.round(l.width)}`;
+        const entry = counts.get(key) ?? { x: l.x, width: l.width, n: 0 };
+        entry.n++;
+        counts.set(key, entry);
+    }
+    const common = [...counts.values()].sort((a, b) => b.n - a.n || b.width - a.width)[0];
+    return common ? { x: common.x, width: common.width } : {};
 }
 
 /** Text around a point: the clicked text node's words near the offset. */

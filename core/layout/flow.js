@@ -112,7 +112,7 @@ function flowEditing(scope, blocks, editing, atRoot) {
 function placeEditor(scope, editing) {
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
     const height = editing.height ?? scope.styles.lineHeight * 2;
-    scope.out.push({ type: 'editor', start: editing.start, end: editing.end, x: col.x, y: scope.y, width: col.width, height });
+    scope.out.push({ type: 'editor', start: editing.start, end: editing.end, x: editing.x ?? col.x, y: scope.y, width: editing.width ?? col.width, height });
     scope.y += height + scope.styles.paragraphGap;
     scope.maxY = Math.max(scope.maxY, scope.y);
 }
@@ -211,6 +211,7 @@ function placeText(scope, spans, { kind, node, lineHeight, align, indent = 0, af
         spans,
         lines,
         lineHeight,
+        align,
         top: startY,
         bottom,
         x: scope.x,

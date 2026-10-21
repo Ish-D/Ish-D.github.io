@@ -27,6 +27,9 @@ export function parseTags(text) {
     return out;
 }
 
+/** The summary under the title is set smaller than the body. */
+const SUMMARY_SCALE = 0.82;
+
 const synthetic = (type, props, start, end) => ({ type, start, end, ...props });
 const textNode = (value, start, end) => synthetic('text', { value }, start, end);
 
@@ -68,8 +71,12 @@ export function flowGenerated(scope, node) {
                 scope.y += styles.lineHeight * 0.5;
                 const para = synthetic('paragraph', { centered: true, children: group.children }, node.start, node.end);
                 const saved = scope.inlineFlags;
-                scope.inlineFlags = { ...saved, italic: true };
+                const savedStyles = scope.styles;
+                const font = small(SUMMARY_SCALE, { style: 'italic' });
+                scope.inlineFlags = { ...saved, italic: true, font };
+                scope.styles = { ...styles, lineHeight: Math.round(font.size * 1.55) };
                 flowBlocks(scope, [para]);
+                scope.styles = savedStyles;
                 scope.inlineFlags = saved;
             }
             return true;
@@ -129,17 +136,19 @@ function flowToc(scope, node) {
     const indentOf = (level) => (level === 3 ? columns[2] : 0);
     const gap = Math.round(font.size * 0.3);
     const items = [];
-    const flowIn = (x, width, top, text) => {
+    const flowIn = (x, width, top, text, id) => {
+        const from = sub.out.length;
         const inner = { ...sub, x, width, y: top, columns: [{ x, width, top, bottom: Infinity }] };
         flowBlocks(inner, [synthetic('paragraph', { children: [textNode(text, node.start, node.end)] }, node.start, node.end)]);
-        return inner.y - styles.paragraphGap; // inner shares sub's output list
+        for (let i = from; i < sub.out.length; i++) sub.out[i].tocId = id; // inner shares sub's output list
+        return inner.y - styles.paragraphGap;
     };
     for (const entry of outline) {
         const level = entry.level === 3 ? 3 : 2;
         const x = sub.x + indentOf(level);
         const startY = sub.y;
-        flowIn(x, columns[level], startY, entry.number);
-        const end = flowIn(x + columns[level], sub.width - indentOf(level) - columns[level], startY, entry.node.children.map(c => c.value ?? '').join(''));
+        flowIn(x, columns[level], startY, entry.number, entry.id);
+        const end = flowIn(x + columns[level], sub.width - indentOf(level) - columns[level], startY, entry.node.children.map(c => c.value ?? '').join(''), entry.id);
         sub.y = end + gap;
         items.push({ id: entry.id, level: entry.level, top: startY, bottom: end });
     }

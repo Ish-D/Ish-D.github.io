@@ -238,6 +238,8 @@ function renderTextBlock(env, item, ox, oy) {
     const { document } = env.ctx;
     const el = document.createElement(item.type === 'heading' ? `h${Math.min(6, item.level)}` : 'p');
     el.className = `blk blk-${item.type}`;
+    if (item.align) el.dataset.align = item.align;
+    if (item.tocId) { el.dataset.toc = item.tocId; el.classList.add('toc-text'); }
     if (item.id) el.id = item.id;
     if (item.node) {
         el.dataset.start = String(item.node.start);
