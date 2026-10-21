@@ -1,22 +1,17 @@
 /**
- * Edit-mode tools on figures: a small bar to choose where the figure sits and
- * how text wraps it, and a corner handle to resize. Every change is an edit to
- * the directive's arguments in the source.
+ * Edit-mode tools on figures: a grip to drag the figure, buttons for where it
+ * sits and how text wraps it, and a corner handle to resize. Every change is
+ * an edit to the directive's arguments in the source.
  */
 
-import { setArg, removeArg } from '../doc/edit.js';
-import { walk } from '../doc/walk.js';
+import { argValue, directiveAt, updateArgs } from './args.js';
+import { makeDraggable } from './drag.js';
+import { figureArgs, figureMoveChanges } from './move.js';
 
 const PLACES = [['left', '◧', 'Float left'], ['block', '▭', 'Own line'], ['right', '◨', 'Float right'], ['full', '⟷', 'Full width']];
 const WRAPS = [['none', '□', 'No wrap'], ['box', '▣', 'Wrap around the box'], ['circle', '○', 'Wrap around a circle'], ['ellipse', '⬭', 'Wrap around an ellipse']];
 
 const px = (v) => `${Math.round(v)}px`;
-
-function directiveAt(session, start) {
-    let found = null;
-    walk(session.doc, (n) => { if (n.type === 'directive' && n.start === start) { found = n; return false; } return undefined; });
-    return found;
-}
 
 /**
  * @param {{ document: Document, root: HTMLElement, getSession: () => any, textWidth: () => number, onEdited: () => void }} deps
@@ -31,6 +26,7 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
     document.body.append(bar, handle);
 
     let figure = null;
+    let busy = false;
     let hideTimer = 0;
 
     const directive = () => {
@@ -38,14 +34,16 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
         return session && figure ? directiveAt(session, Number(figure.dataset.start)) : null;
     };
 
-    const apply = (build) => {
+    function hide() {
+        if (busy) return;
+        bar.hidden = handle.hidden = true;
+        figure = null;
+    }
+
+    const change = (changes) => {
         const node = directive();
-        if (!node) return;
-        const edit = build(node);
-        if (!edit) return;
-        getSession().apply(edit, { group: `figure-${Date.now()}` });
+        if (node && updateArgs(getSession(), node.start, changes)) onEdited();
         hide();
-        onEdited();
     };
 
     const button = (label, title, onclick) => {
@@ -53,20 +51,20 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
         b.type = 'button';
         b.textContent = label;
         b.title = title;
-        b.onclick = onclick;
+        if (onclick) b.onclick = onclick;
         return b;
     };
-    const divider = () => Object.assign(document.createElement('span'), { className: 'sep' });
-    bar.append(
-        ...PLACES.map(([value, label, title]) => button(label, title, () => apply(n => setArg(n, 'place', value)))),
-        divider(),
-        ...WRAPS.map(([value, label, title]) => button(label, title, () => apply(n => (value === 'none' ? removeArg(n, 'wrap') : setArg(n, 'wrap', value))))),
-    );
+    const sep = () => Object.assign(document.createElement('span'), { className: 'sep' });
 
-    function hide() {
-        bar.hidden = handle.hidden = true;
-        figure = null;
-    }
+    const grip = button('⠿', 'Drag to move the figure');
+    grip.classList.add('grip');
+    bar.append(
+        grip,
+        sep(),
+        ...PLACES.map(([value, label, title]) => button(label, title, () => change([{ key: 'place', value }]))),
+        sep(),
+        ...WRAPS.map(([value, label, title]) => button(label, title, () => change([{ key: 'wrap', value: value === 'none' ? null : value }]))),
+    );
 
     function show(el) {
         clearTimeout(hideTimer);
@@ -81,49 +79,60 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
     }
 
     root.addEventListener('mousemove', (e) => {
-        if (!document.body.classList.contains('editing') || drag) return;
+        if (!document.body.classList.contains('editing') || busy) return;
         const el = e.target.closest?.('.obj[data-start]');
         if (el && !el.querySelector('.sketch-pad') && el !== figure) show(el);
         else if (el) { clearTimeout(hideTimer); hideTimer = setTimeout(hide, 3000); }
     });
     bar.addEventListener('mouseenter', () => clearTimeout(hideTimer));
 
-    // corner drag: new width, height follows when it is a fixed size
-    let drag = null;
+    // drag the whole figure; the text re-flows around its new place on release
+    makeDraggable(grip, {
+        onStart() { busy = true; clearTimeout(hideTimer); },
+        onMove(dx, dy) { figure.style.transform = `translate(${dx}px, ${dy}px)`; },
+        onDrop(dx, dy) {
+            const node = directive();
+            const el = figure;
+            busy = false;
+            if (node) {
+                el.style.transform = '';
+                change(figureMoveChanges(figureArgs(node), { dx, dy }));
+            }
+        },
+        onCancel() { busy = false; if (figure) figure.style.transform = ''; },
+    });
+
+    // corner drag: new width; a height in pixels follows the width
+    let resize = null;
     handle.addEventListener('pointerdown', (e) => {
         const node = directive();
         if (!node) return;
         e.preventDefault();
         try { handle.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+        busy = true;
         const rect = figure.getBoundingClientRect();
-        drag = { node, startX: e.clientX, width: rect.width, height: rect.height, el: figure };
+        resize = { node, startX: e.clientX, width: rect.width, height: rect.height, el: figure };
     });
     handle.addEventListener('pointermove', (e) => {
-        if (!drag) return;
-        const width = Math.max(40, drag.width + e.clientX - drag.startX);
-        drag.next = width;
-        drag.el.style.width = px(width);
-        drag.el.style.height = px(width * drag.height / drag.width);
+        if (!resize) return;
+        const width = Math.max(40, resize.width + e.clientX - resize.startX);
+        resize.next = width;
+        resize.el.style.width = px(width);
+        resize.el.style.height = px(width * resize.height / resize.width);
     });
     handle.addEventListener('pointerup', () => {
-        if (!drag) return;
-        const { node, next, height, width, el } = drag;
-        drag = null;
+        if (!resize) return;
+        const { node, next, height, width, el } = resize;
+        resize = null;
+        busy = false;
         el.style.width = el.style.height = '';
-        if (next === undefined) return;
-        const session = getSession();
-        const arg = (key) => node.args?.items.find(a => a.key === key)?.value;
-        const percent = /%$/.test(arg('width') ?? '');
-        const group = `figure-${Date.now()}`;
-        session.apply(setArg(node, 'width', percent ? `${Math.round(next / textWidth() * 100)}%` : px(next)), { group });
-        // a height in pixels scales with the width
-        const h = arg('height');
-        if (h && /^\d+(\.\d+)?(px)?$/.test(h)) {
-            const fresh = directiveAt(session, node.start);
-            if (fresh) session.apply(setArg(fresh, 'height', px(next * height / width)), { group });
-        }
-        hide();
-        onEdited();
+        if (next === undefined) return hide();
+        const percent = /%$/.test(argValue(node, 'width') ?? '');
+        const h = argValue(node, 'height');
+        change([
+            { key: 'width', value: percent ? `${Math.round(next / textWidth() * 100)}%` : px(next) },
+            ...(h && /^\d+(\.\d+)?(px)?$/.test(h) ? [{ key: 'height', value: px(next * height / width) }] : []),
+        ]);
     });
 
     return { dispose() { bar.remove(); handle.remove(); clearTimeout(hideTimer); } };

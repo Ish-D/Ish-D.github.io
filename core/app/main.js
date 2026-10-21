@@ -11,6 +11,7 @@ import { loadFonts, createMathService, createImageSizes, createSvgAssets } from 
 import { createCanvasMeasurer } from '../text/measure.js';
 import { createFigureTools } from '../edit/figure-tools.js';
 import { createInserter } from '../edit/insert.js';
+import { createNoteMover } from '../edit/move.js';
 import { createState } from './state.js';
 import { createSettings } from './settings.js';
 import { createNavigation } from './navigation.js';
@@ -69,6 +70,12 @@ createFigureTools({
     document, root,
     getSession: () => state.session,
     textWidth: () => state.layout?.geometry.text.width ?? 600,
+    onEdited: () => app.saver.scheduleSave(),
+});
+createNoteMover({
+    document, root,
+    getSession: () => state.session,
+    getLayout: () => state.layout,
     onEdited: () => app.saver.scheduleSave(),
 });
 createInserter({

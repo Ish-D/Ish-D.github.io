@@ -34,9 +34,16 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     overlay.className = 'editor-overlay';
     document.body.appendChild(overlay);
 
+    /** The editor slot in the layout and, when it sits in a margin note, that note. */
     const slotOf = (layout) => {
         const find = (items) => items.find(i => i.type === 'editor');
-        return find(layout.blocks) ?? layout.notes.map(n => find(n.items)).find(Boolean) ?? null;
+        const inPage = find(layout.blocks);
+        if (inPage) return { slot: inPage, note: null };
+        for (const note of layout.notes) {
+            const slot = find(note.items);
+            if (slot) return { slot, note };
+        }
+        return { slot: null, note: null };
     };
 
     const fit = () => {
@@ -50,14 +57,17 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     const place = () => {
         const layout = getLayout();
         if (!active || !layout) return;
-        const slot = slotOf(layout);
-        if (slot) {
-            const box = active.box;
-            box.style.left = `${slot.x}px`;
-            box.style.top = `${slot.y}px`;
-            box.style.width = `${slot.width}px`;
-            active.slot = slot;
-        }
+        const { slot, note } = slotOf(layout);
+        if (!slot) return;
+        const box = active.box;
+        // a note set on its side is edited on its side: the box turns with it
+        const origin = note?.rotate ? note.box : { x: 0, y: 0 };
+        box.style.left = `${origin.x + slot.x}px`;
+        box.style.top = `${origin.y + slot.y}px`;
+        box.style.width = `${slot.width}px`;
+        box.style.transformOrigin = note?.rotate ? `${-slot.x}px ${-slot.y}px` : '';
+        box.style.transform = note?.rotate ? `rotate(${note.rotate}deg)` : '';
+        active.slot = slot;
     };
 
     /** The region to reserve in the layout: where the block was drawn, so it keeps clear of floats. */
@@ -75,7 +85,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         const text = textarea.value;
         session.apply({ start: range.start, end: range.end, text }, { group: `edit-${active.burst}` });
         range.end = range.start + text.length;
-        const closed = closeRange(session.doc, range);
+        const closed = active.exact ? range : closeRange(session.doc, range);
         if (closed.start !== range.start || closed.end !== range.end) {
             const caret = textarea.selectionStart + (range.start - closed.start);
             range.start = closed.start;
@@ -123,8 +133,9 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
          */
         open(start, end, hint = '', from = null) {
             api.close();
-            const range = expandToLines(session.source, start, end);
-            const closed = closeRange(session.doc, range);
+            // a note's text is edited as it is, not widened to the paragraph that holds the note
+            const exact = !!from?.matches?.('aside.note');
+            const closed = exact ? { start, end } : closeRange(session.doc, expandToLines(session.source, start, end));
             const rendered = from ?? document.querySelector(`[data-start="${closed.start}"]`);
             const { box, textarea, repaint } = createEditorBox({
                 document,
@@ -136,7 +147,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
             textarea.addEventListener('blur', onBlur);
             overlay.appendChild(box);
             const drawn = measureDrawn(getLayout(), rendered);
-            active = { range: { ...closed }, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
+            active = { range: { ...closed }, exact, x: drawn.x, width: drawn.width, box, textarea, repaint, burst: ++burst, height: 0, slot: null };
             passes = 0;
             reserve();
             textarea.focus({ preventScroll: true });
@@ -150,7 +161,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
          */
         handleClick(target, point = null) {
             if (!enabled) return false;
-            const el = target.closest?.('[data-start]');
+            const el = target.closest?.('aside.note[data-start]') ?? target.closest?.('[data-start]');
             if (!el || el.closest?.('.editor-overlay')) return false;
             api.open(Number(el.dataset.start), Number(el.dataset.end), hintAt(document, point), el);
             return true;

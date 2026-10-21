@@ -556,3 +556,23 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
 .margin-handle:hover::after, .margin-handle.dragging::after { background: var(--color-border); }
 body.resizing-margins { user-select: none; cursor: col-resize; }
 @media print { .margin-handle { display: none; } }
+
+/* moving things */
+.move-grip {
+    position: absolute;
+    z-index: 83;
+    width: 22px;
+    height: 20px;
+    font: 15px/20px Georgia, serif;
+    text-align: center;
+    color: var(--color-text-secondary);
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+.move-grip[hidden] { display: none; }
+.figure-bar button.grip { cursor: grab; touch-action: none; }
+aside.note.moving, .obj.moving { opacity: 0.75; outline: 1px dashed #c4452c; outline-offset: 4px; z-index: 90; }

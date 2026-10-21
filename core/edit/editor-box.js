@@ -33,17 +33,18 @@ const BODY_FALLBACK = { fontFamily: 'inherit', fontSize: '16px', fontWeight: 'no
  */
 export function typographyOf(el, view) {
     const block = el?.closest?.('.blk, .codeblock, aside.note') ?? null;
-    const source = block ?? el?.ownerDocument?.querySelector('.blk-paragraph') ?? null;
+    // a note's type is that of the lines inside it
+    const source = block?.querySelector?.('.blk') ?? block ?? el?.ownerDocument?.querySelector('.blk-paragraph') ?? null;
     if (!source) return BODY_FALLBACK;
     const cs = view.getComputedStyle(source);
-    const align = block?.dataset?.align;
+    const align = source?.dataset?.align;
     return {
         fontFamily: cs.fontFamily,
         fontSize: cs.fontSize,
         fontWeight: cs.fontWeight,
         fontStyle: cs.fontStyle,
         lineHeight: cs.lineHeight,
-        textAlign: align === 'center' ? 'center' : align === 'right' ? 'right' : block?.classList.contains('blk-paragraph') ? 'justify' : 'left',
+        textAlign: align === 'center' ? 'center' : align === 'right' ? 'right' : source?.classList?.contains('blk-paragraph') && !block?.matches?.('aside.note') ? 'justify' : 'left',
     };
 }
 

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <defs><clipPath id="disc"><circle cx="120" cy="120" r="108"/></clipPath></defs>
+  <circle cx="120" cy="120" r="108" fill="#fff"/>
+  <g transform="translate(26 4) scale(.8)">
+    <path d="M168 52a72 72 0 1 0 0 136a56 56 0 1 1 0-136z" fill="#000"/>
+  </g>
+  <g stroke-width="1.6">
+    <path d="M178 70l3.6 9l9 3.6l-9 3.6l-3.6 9l-3.6-9l-9-3.6l9-3.6z" fill="#fff"/>
+    <path d="M162 138l2.4 6l6 2.4l-6 2.4l-2.4 6l-2.4-6l-6-2.4l6-2.4z" fill="#fff"/>
+    <circle cx="196" cy="108" r="2.2" fill="#000"/>
+    <circle cx="150" cy="54" r="1.8" fill="#000"/>
+  </g>
+  <g clip-path="url(#disc)" stroke-width="1.8">
+    <path d="M10 186q15-10 30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+    <path d="M-5 202q15-10 30 0t30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+    <path d="M10 218q15-10 30 0t30 0t30 0t30 0t30 0t30 0t30 0"/>
+  </g>
+</svg>
