@@ -263,3 +263,21 @@ test('anchors inside a note resolve to the note position', () => {
     assert.ok(at, 'anchor missing');
     assert.ok(at.y >= layout.notes[0].y && at.y <= layout.notes[0].y + layout.notes[0].height);
 });
+
+test('a rule right after the contents box lines up with the top of the box', () => {
+    const doc = parseText('# Title\n\n[[toc]]\n---\n## One\n\nText.\n\n## Two\n\nMore.\n');
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator }));
+    const toc = layout.blocks.find(b => b.type === 'toc');
+    const rule = layout.blocks.find(b => b.type === 'rule');
+    assert.ok(toc && rule);
+    assert.equal(rule.y, toc.rect.y);
+    assert.ok(rule.x >= toc.rect.x + toc.rect.width);
+});
+
+test('a note too tall for the margin is set in the body', () => {
+    const long = 'word '.repeat(600);
+    const doc = parseText(`Text[[note(right)]]{x}{${long}} more.\n\nShort[[note(right)]]{y}{Fits fine.} text.\n`);
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator }));
+    assert.equal(layout.notes.length, 1);
+    assert.ok(layout.blocks.some(b => b.type === 'paragraph' && b.lines?.some(l => l.runs.some(r => /word word/.test(r.text ?? '')))));
+});

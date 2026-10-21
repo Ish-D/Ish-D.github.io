@@ -118,6 +118,7 @@ function placeEditor(scope, editing) {
 }
 
 function flowBlock(scope, block, siblings, index) {
+    if (block.type !== 'rule' && !(block.type === 'directive' && block.name === 'toc')) scope.ruleTop = null;
     switch (block.type) {
         case 'heading': return flowHeading(scope, block);
         case 'paragraph': return flowParagraph(scope, block);
@@ -433,7 +434,8 @@ function flowCode(scope, text, lang, node) {
 
 function flowRule(scope) {
     const r = scope.styles.rule;
-    scope.y += r.before;
+    // a rule straight after the contents box lines up with the top of that box
+    if (scope.ruleTop != null) { scope.y = scope.ruleTop; scope.ruleTop = null; } else scope.y += r.before;
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
     // a rule runs beside a float rather than through it
     const blocked = geometry.blockedOver(scope.shapes, scope.y, scope.y + 1, col.x, col.x + col.width);

@@ -41,10 +41,14 @@ export function flowGenerated(scope, node) {
 
     const centered = (children, font) => {
         const para = synthetic('paragraph', { centered: true, children }, node.start, node.end);
-        const saved = scope.inlineFlags;
-        scope.inlineFlags = { ...saved, font };
+        const savedFlags = scope.inlineFlags;
+        const savedStyles = scope.styles;
+        scope.inlineFlags = { ...savedFlags, font };
+        // a small line sets its own rhythm instead of borrowing the body's
+        scope.styles = { ...styles, lineHeight: Math.round(font.size * 1.6), paragraphGap: 0 };
         flowBlocks(scope, [para]);
-        scope.inlineFlags = saved;
+        scope.styles = savedStyles;
+        scope.inlineFlags = savedFlags;
     };
 
     switch (node.name) {
@@ -61,6 +65,7 @@ export function flowGenerated(scope, node) {
         case 'summary': {
             const group = node.groups[0];
             if (group?.children?.length) {
+                scope.y += styles.lineHeight * 0.5;
                 const para = synthetic('paragraph', { centered: true, children: group.children }, node.start, node.end);
                 const saved = scope.inlineFlags;
                 scope.inlineFlags = { ...saved, italic: true };
@@ -118,18 +123,27 @@ function flowToc(scope, node) {
         x: scope.x + pad.x, width: width - 2 * pad.x, y: scope.y + pad.y, styles: tocStyles, align: 'left',
     });
     sub.diagnostics = scope.diagnostics;
+    // numbers sit in their own column per level, titles hang beside them
+    const numberWidth = (level) => Math.max(0, ...outline.filter(o => o.level === level).map(o => env.measurer.width(o.number, font))) + font.size * 0.7;
+    const columns = { 2: numberWidth(2), 3: numberWidth(3) };
+    const indentOf = (level) => (level === 3 ? columns[2] : 0);
+    const gap = Math.round(font.size * 0.3);
     const items = [];
+    const flowIn = (x, width, top, text) => {
+        const inner = { ...sub, x, width, y: top, columns: [{ x, width, top, bottom: Infinity }] };
+        flowBlocks(inner, [synthetic('paragraph', { children: [textNode(text, node.start, node.end)] }, node.start, node.end)]);
+        return inner.y - styles.paragraphGap; // inner shares sub's output list
+    };
     for (const entry of outline) {
-        const indent = entry.level === 3 ? 18 : 0;
-        const label = `${entry.number}  ${entry.node.children.map(c => c.value ?? '').join('')}`;
-        const para = synthetic('paragraph', { children: [textNode(label, node.start, node.end)] }, node.start, node.end);
+        const level = entry.level === 3 ? 3 : 2;
+        const x = sub.x + indentOf(level);
         const startY = sub.y;
-        const inner = { ...sub, x: sub.x + indent, width: sub.width - indent, columns: [{ x: sub.x + indent, width: sub.width - indent, top: startY, bottom: Infinity }] };
-        flowBlocks(inner, [para]);
-        sub.y = inner.y;
-        sub.out = inner.out;
-        items.push({ id: entry.id, level: entry.level, top: startY, bottom: inner.y });
+        flowIn(x, columns[level], startY, entry.number);
+        const end = flowIn(x + columns[level], sub.width - indentOf(level) - columns[level], startY, entry.node.children.map(c => c.value ?? '').join(''));
+        sub.y = end + gap;
+        items.push({ id: entry.id, level: entry.level, top: startY, bottom: end });
     }
+    sub.y += styles.paragraphGap - gap;
     const height = sub.y - scope.y + pad.y - styles.paragraphGap;
     const rect = { x: scope.x, y: scope.y, width, height };
     scope.shapes.push({
@@ -139,5 +153,6 @@ function flowToc(scope, node) {
     });
     scope.out.push({ type: 'toc', rect, items });
     for (const item of sub.out) scope.out.push(item);
+    scope.ruleTop = rect.y;
     scope.maxY = Math.max(scope.maxY, rect.y + height);
 }

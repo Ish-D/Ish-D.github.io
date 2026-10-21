@@ -167,6 +167,9 @@ function noteCap(node, env) {
     return resolveLength(value, { basis: env.viewportHeight ?? 800, fallback: null });
 }
 
+/** A note farther than this from its anchor, or taller than MAX_NOTE_HEIGHT, is set in the body instead. */
+const MAX_DISPLACEMENT_LINES = 6;
+const MAX_NOTE_HEIGHT = 480;
 const MIN_VERTICAL = 96;
 const MAX_VERTICAL = 720;
 
@@ -235,6 +238,7 @@ function placeNotes(scope, env, styles, geom) {
     ];
 
     const pinned = [];
+    const inlineNow = new Set();
     for (const c of candidates) {
         if (c.blocks.length === 0) continue;
         if (c.pin !== null) {
@@ -250,6 +254,7 @@ function placeNotes(scope, env, styles, geom) {
                 const laid = layoutVariant(c, env, styles, strips[sideForWidth], v.scale);
                 return { height: laid.height, cost: v.cost, tag: { ...v, laid, side: sideForWidth } };
             });
+        if (variants[variants.length - 1].height > MAX_NOTE_HEIGHT && !c.vertical && c.cap === null) { inlineNow.add(c.node); continue; }
         const noteBaseline = baselineIn(env.measurer, variants[0].tag.laid.body.styles.note?.font ?? styles.note.font, styles.note.lineHeight);
         items.push({
             id: c.id,
@@ -267,11 +272,11 @@ function placeNotes(scope, env, styles, geom) {
         hi: Math.max(scope.y, scope.maxY ?? 0) + 400,
         gap: styles.note.gap,
         obstacles,
-        maxDisplacement: styles.lineHeight * 12,
+        maxDisplacement: styles.lineHeight * MAX_DISPLACEMENT_LINES,
     });
 
     const placed = [];
-    const inline = new Set();
+    const inline = new Set(inlineNow);
     const anchors = new Map();
     const emit = (c, side, y, laid) => {
         const strip = strips[side];

@@ -125,9 +125,9 @@ aside.note a { color: inherit; }
 .blk-heading:hover .heading-link, .heading-link:focus { opacity: 0.6; }
 .heading-link:hover { opacity: 1; }
 
-.mk.on::after, .note.on {
-    background: var(--color-selection);
-}
+.mk.on::after { background: var(--color-selection); }
+/* hovering a marker marks its note with a thin rule, not a fill */
+aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left: -8px; width: 2px; background: #c4452c; }
 
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { from { background: var(--color-selection); } to { background: transparent; } }

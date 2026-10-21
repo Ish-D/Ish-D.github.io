@@ -61,11 +61,14 @@ export function installInteractions(app) {
         }
     });
 
-    /** Hovering a note or its marker highlights the other. */
+    /** Hovering a note lights its marker; hovering a marker marks its note. */
     const linkNotes = (e, on) => {
-        const index = (e.target.closest?.('.mk[data-note]') ?? e.target.closest?.('aside.note'))?.dataset.note;
-        if (index === undefined) return;
-        state.docEl?.querySelectorAll(`[data-note="${index}"]`).forEach(el => el.classList.toggle('on', on));
+        const marker = e.target.closest?.('.mk[data-note]');
+        const note = marker ? null : e.target.closest?.('aside.note');
+        const hovered = marker ?? note;
+        if (!hovered || !state.docEl) return;
+        const other = marker ? 'aside.note' : '.mk';
+        state.docEl.querySelectorAll(`${other}[data-note="${hovered.dataset.note}"]`).forEach(el => el.classList.toggle('on', on));
     };
     root.addEventListener('mouseover', (e) => linkNotes(e, true));
     root.addEventListener('mouseout', (e) => linkNotes(e, false));
