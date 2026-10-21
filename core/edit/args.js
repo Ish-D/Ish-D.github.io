@@ -5,14 +5,19 @@
 import { setArg, removeArg } from '../doc/edit.js';
 import { walk } from '../doc/walk.js';
 
-/** The directive that starts at `start`, or null. */
-export function directiveAt(session, start) {
+/**
+ * The directive that starts at `start`, or null. Offsets go stale as soon as
+ * the source changes, so callers that hold one name the kinds of directive
+ * they expect and a stale offset that lands on something else finds nothing.
+ * @param {string[]} [names]
+ */
+export function directiveAt(session, start, names) {
     let found = null;
     walk(session.doc, (n) => {
         if (n.type === 'directive' && n.start === start) { found = n; return false; }
         return undefined;
     });
-    return found;
+    return found && (!names || names.includes(found.name)) ? found : null;
 }
 
 /** Current value text of argument `key` (a name, or the index of a positional one), or undefined. */
@@ -27,10 +32,10 @@ export function argValue(node, key) {
  * the argument already has is skipped.
  * @returns {boolean} whether anything changed
  */
-export function updateArgs(session, start, changes, group = `args-${Date.now()}`) {
+export function updateArgs(session, start, changes, group = `args-${Date.now()}`, names) {
     let changed = false;
     for (const { key, value } of changes) {
-        const node = directiveAt(session, start);
+        const node = directiveAt(session, start, names);
         if (!node) break;
         const current = argValue(node, key);
         if ((value ?? undefined) === current) continue;
@@ -49,7 +54,7 @@ export function updateArgs(session, start, changes, group = `args-${Date.now()}`
  * step. If the source is changed by anything else mid-drag the preview stops
  * touching it.
  */
-export function createPreview(session, start) {
+export function createPreview(session, start, names) {
     const original = session.source;
     const group = `drag-${Date.now()}`;
     let last = original;
@@ -60,7 +65,7 @@ export function createPreview(session, start) {
         /** @returns {boolean} false once the source has changed under the drag */
         show(changes) {
             if (lost || session.source !== last) { lost = true; return false; }
-            updateArgs(session, start, changes, group);
+            updateArgs(session, start, changes, group, names);
             last = session.source;
             return true;
         },

@@ -51,6 +51,8 @@ export function figureMoveChanges(args, drag) {
     ];
 }
 
+const NOTES = ['note', 'margin'];
+
 /** Current dx/dy/place of a figure directive, as text. */
 export const figureArgs = (node) => ({ place: argValue(node, 'place'), dx: argValue(node, 'dx'), dy: argValue(node, 'dy') });
 
@@ -68,6 +70,7 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
     document.body.appendChild(grip);
 
     let hovered = null;
+    let shownFor = null;   // the source the note's offsets belong to
     let hideTimer = 0;
     let drag = null;
     const hide = () => { if (!drag) { grip.hidden = true; hovered = null; } };
@@ -80,6 +83,7 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
         if (!note) return;
         clearTimeout(hideTimer);
         hovered = note;
+        shownFor = getSession()?.source ?? null;
         const r = aside.getBoundingClientRect();
         grip.hidden = false;
         grip.style.left = `${r.left + scrollX - 2}px`;
@@ -93,10 +97,10 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
         onStart() {
             const session = getSession();
             const layout = getLayout();
-            if (!hovered || !session) return;
+            if (!hovered || !session || session.source !== shownFor) { hide(); return; }
             clearTimeout(hideTimer);
             drag = {
-                preview: createPreview(session, hovered.node.start),
+                preview: createPreview(session, hovered.node.start, NOTES),
                 from: { y: hovered.y, x: hovered.x, width: hovered.width, anchorY: hovered.anchor.y },
                 page: { pageWidth: layout.width, lineHeight: layout.styles.lineHeight, topPad: PAGE.topPad },
             };

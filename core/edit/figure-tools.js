@@ -12,6 +12,9 @@ import { figureArgs, figureMoveChanges } from './move.js';
 const PLACES = [['left', '◧', 'Float left'], ['block', '▭', 'Own line'], ['right', '◨', 'Float right'], ['full', '⟷', 'Full width']];
 const WRAPS = [['none', '□', 'No wrap'], ['box', '▣', 'Wrap around the box'], ['circle', '○', 'Wrap around a circle'], ['ellipse', '⬭', 'Wrap around an ellipse']];
 
+/** Directives that draw a figure. */
+const FIGURES = ['image', 'viz', 'drawing', 'figure', 'gallery', 'embed'];
+
 const px = (v) => `${Math.round(v)}px`;
 const isPixels = (text) => !!text && /^\d+(\.\d+)?(px)?$/.test(text);
 
@@ -28,12 +31,14 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
     document.body.append(bar, handle);
 
     let figure = null;     // the figure under the pointer
+    let shownFor = null;   // the source the figure's offsets belong to
     let drag = null;       // a move or resize in progress
     let hideTimer = 0;
 
     const directive = () => {
         const session = getSession();
-        return session && figure ? directiveAt(session, Number(figure.dataset.start)) : null;
+        // offsets read off the page are only good for the source they were read from
+        return session && figure && session.source === shownFor ? directiveAt(session, Number(figure.dataset.start), FIGURES) : null;
     };
 
     function hide() {
@@ -44,7 +49,7 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
 
     const apply = (changes) => {
         const node = directive();
-        if (node && updateArgs(getSession(), node.start, changes)) onEdited();
+        if (node && updateArgs(getSession(), node.start, changes, undefined, FIGURES)) onEdited();
         hide();
     };
 
@@ -71,6 +76,7 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
     function show(el) {
         clearTimeout(hideTimer);
         figure = el;
+        shownFor = getSession()?.source ?? null;
         const r = el.getBoundingClientRect();
         bar.hidden = handle.hidden = false;
         bar.style.left = `${r.left + scrollX}px`;
@@ -96,7 +102,7 @@ export function createFigureTools({ document, root, getSession, textWidth, onEdi
         clearTimeout(hideTimer);
         const rect = figure.getBoundingClientRect();
         return {
-            kind, start: node.start, preview: createPreview(session, node.start),
+            kind, start: node.start, preview: createPreview(session, node.start, FIGURES),
             args: figureArgs(node), width: argValue(node, 'width'), height: argValue(node, 'height'),
             size: { width: rect.width, height: rect.height },
         };

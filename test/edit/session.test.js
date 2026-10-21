@@ -110,3 +110,24 @@ test('caretFromHint finds the clicked spot in the source text', () => {
     assert.equal(caretFromHint(src, ''), src.length);
     assert.equal(caretFromHint(src, 'nothing here \u0000matches'), src.length);
 });
+
+test('a group of edits in different places undoes and redoes exactly', () => {
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+    for (let run = 0; run < 200; run++) {
+        const original = Array.from({ length: 12 }, (_, i) => `line ${i} with some words`).join('\n');
+        const s = createSession(original, { parse, onChange() {} });
+        const states = [original];
+        const groups = 1 + Math.floor(rnd() * 4);
+        for (let g = 0; g < groups; g++) {
+            for (let k = 0; k < 1 + Math.floor(rnd() * 6); k++) {
+                const at = Math.floor(rnd() * s.source.length);
+                const to = Math.min(s.source.length, at + Math.floor(rnd() * 8));
+                s.apply({ start: at, end: to, text: rnd() < 0.3 ? '' : `<${Math.floor(rnd() * 99)}>` }, { group: `g${g}` });
+            }
+            if (s.source !== states[states.length - 1]) states.push(s.source);
+        }
+        for (let i = states.length - 2; i >= 0; i--) { s.undo(); assert.equal(s.source, states[i], `undo to ${i} (run ${run})`); }
+        for (let i = 1; i < states.length; i++) { s.redo(); assert.equal(s.source, states[i], `redo to ${i} (run ${run})`); }
+    }
+});

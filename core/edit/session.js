@@ -15,6 +15,7 @@ import { applyEdit } from '../doc/edit.js';
 export function createSession(source, { parse, onChange = () => {} }) {
     let text = source;
     let doc = parse(text);
+    /** Each entry is one undo step: a group of edits, kept in the order they were made. */
     let undoStack = [];
     let redoStack = [];
 
@@ -39,34 +40,30 @@ export function createSession(source, { parse, onChange = () => {} }) {
         apply(edit, { group = null } = {}) {
             const before = text.slice(edit.start, edit.end);
             if (before === edit.text) return;
-            const inverse = { start: edit.start, end: edit.start + edit.text.length, text: before };
+            // Edits in a group may land anywhere, so each keeps its own inverse
+            // and undo runs them back to front.
+            const step = { forward: { ...edit }, inverse: { start: edit.start, end: edit.start + edit.text.length, text: before } };
             const top = undoStack[undoStack.length - 1];
-            if (group && top && top.group === group) {
-                // Same burst: the earlier inverse restores the text from before the burst.
-                top.inverse = { start: top.inverse.start, end: edit.start + edit.text.length, text: top.inverse.text };
-            } else {
-                undoStack.push({ group, inverse });
-            }
+            if (group && top && top.group === group) top.steps.push(step);
+            else undoStack.push({ group, steps: [step] });
             redoStack = [];
             commit(edit, 'edit');
         },
 
         undo() {
-            const step = undoStack.pop();
-            if (!step) return null;
-            const redo = { start: step.inverse.start, end: step.inverse.end, text: text.slice(step.inverse.start, step.inverse.end) };
-            commit(step.inverse, 'undo');
-            redoStack.push({ group: step.group, inverse: { start: redo.start, end: redo.start + step.inverse.text.length, text: redo.text } });
-            return step.inverse;
+            const entry = undoStack.pop();
+            if (!entry) return null;
+            for (let i = entry.steps.length - 1; i >= 0; i--) commit(entry.steps[i].inverse, 'undo');
+            redoStack.push(entry);
+            return entry.steps[0].inverse;
         },
 
         redo() {
-            const step = redoStack.pop();
-            if (!step) return null;
-            const back = { start: step.inverse.start, end: step.inverse.end, text: text.slice(step.inverse.start, step.inverse.end) };
-            commit(step.inverse, 'redo');
-            undoStack.push({ group: null, inverse: { start: back.start, end: back.start + step.inverse.text.length, text: back.text } });
-            return step.inverse;
+            const entry = redoStack.pop();
+            if (!entry) return null;
+            for (const step of entry.steps) commit(step.forward, 'redo');
+            undoStack.push(entry);
+            return entry.steps[entry.steps.length - 1].forward;
         },
 
         /** Replace the whole text from outside (file changed on disk); history is dropped. */
