@@ -98,6 +98,7 @@ export function createPages(app) {
         const { source, vaultPage = null } = await loadSource(name);
         if (state.docEl) disposeFigures(state.docEl);
         app.persist.clear();
+        app.selection?.clear();
         state.scriptRan = false;
         state.page = name;
         state.vaultPage = vaultPage;

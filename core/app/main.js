@@ -9,7 +9,7 @@
 
 import { loadFonts, createMathService, createImageSizes, createSvgAssets } from '../render/browser.js';
 import { createCanvasMeasurer } from '../text/measure.js';
-import { createFigureTools } from '../edit/figure-tools.js';
+import { createSelection } from '../edit/selection.js';
 import { createInserter } from '../edit/insert.js';
 import { createNoteMover } from '../edit/move.js';
 import { createHoverOutline } from '../edit/outline.js';
@@ -67,12 +67,13 @@ settings.subscribe((key) => { if (key !== 'theme') app.view.relayout(); });
 
 installInteractions(app);
 app.vault.watchPageLifecycle();
-createFigureTools({
+app.selection = createSelection({
     document, root,
     getSession: () => state.session,
     getLayout: () => state.layout,
     textWidth: () => state.layout?.geometry.text.width ?? 600,
     onEdited: () => app.saver.scheduleSave(),
+    openSource: (start, end) => state.editor?.open(start, end),
 });
 app.hoverOutline = createHoverOutline({ document, root, getLayout: () => state.layout });
 createNoteMover({

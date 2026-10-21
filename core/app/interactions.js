@@ -13,13 +13,15 @@ export function installInteractions(app) {
 
     /** One handler per kind of clickable thing; the first that applies wins. */
     const clicks = [
+        (e) => !!e.target.closest('.sketch-pad'),
+        // in the editor a figure is selected, not turned into text; its drawing pad opens too
         (e) => {
-            const figure = editing() && e.target.closest('[data-sketch]');
-            if (!figure || figure.querySelector('.sketch-pad')) return false;
-            app.sketching.start(figure);
+            const figure = editing() && e.target.closest('.obj[data-start]');
+            if (!figure) return false;
+            app.selection.select(figure);
+            if (figure.dataset.sketch !== undefined) app.sketching.start(figure);
             return true;
         },
-        (e) => !!e.target.closest('.sketch-pad'),
         (e) => editing() && !e.metaKey && !e.ctrlKey && state.editor.handleClick(e.target, { x: e.clientX, y: e.clientY }),
         (e) => {
             const link = e.target.closest('.heading-link');
@@ -56,6 +58,8 @@ export function installInteractions(app) {
     ];
 
     root.addEventListener('click', (e) => {
+        // a click anywhere but on the selected figure's own controls lets go of the selection
+        if (!e.target.closest('.obj[data-start]') && !app.selection.owns(e.target)) app.selection.clear();
         for (const handle of clicks) {
             if (handle(e)) { e.preventDefault(); return; }
         }

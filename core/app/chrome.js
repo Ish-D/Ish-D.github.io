@@ -30,6 +30,7 @@ export function createChrome(app) {
         const pencil = iconButton('✎︎', 'Edit this page', () => {
             const on = !state.editor?.enabled;
             state.editor?.setEnabled(on);
+            if (!on) app.selection?.clear();
             pencil.classList.toggle('on', on);
         });
         pencil.classList.toggle('on', !!state.editor?.enabled);

@@ -27,7 +27,7 @@ Plain markdown plus directives: `[[name(args)]]{group}`.
 
 ## Editing
 
-Pencil in the top right turns editing on. Click a block to edit its source, click away to see it rendered. A `+` under a block inserts new things. Hover a figure for a grip to drag it, place and wrap buttons, and a resize handle. Click a margin note to edit it where it stands; drag the grip above it to move it (it pins itself with `type: absolute, pos:` and changes side when dropped on the other half of the page). The test page `layout-test` has a two-column spread, a drawing in the seam with circular wrap, and two notes to try this on.
+Pencil in the top right turns editing on. Click a block to edit its source, click away to see it rendered. A `+` under a block inserts new things. Click a figure to select it: it stays as it looks on the page, with a frame, a grip to drag it, a corner handle to resize it and an inspector panel for everything else (place, wrap, space around, size, nudge, layer, caption, file). Changes apply live. `Source` in the panel turns it into text if you want that. Click a margin note to edit it where it stands; drag the grip above it to move it (it pins itself with `type: absolute, pos:` and changes side when dropped on the other half of the page). The test page `layout-test` has a two-column spread, a drawing in the seam with circular wrap, and two notes to try this on.
 
 ## Backstage
 

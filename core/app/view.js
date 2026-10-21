@@ -59,6 +59,7 @@ export function createView(app) {
         state.timing = { layoutMs: Math.round(t1 - t0), renderMs: Math.round(performance.now() - t1), count: (state.timing?.count ?? 0) + 1 };
         app.nav.restoreScroll(place);
         state.editor?.afterLayout();
+        app.selection?.refresh();
         if (layout.diagnostics.length) console.debug('layout diagnostics', layout.diagnostics);
     }
 
