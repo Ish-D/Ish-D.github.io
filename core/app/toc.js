@@ -6,6 +6,8 @@
  */
 
 const STORAGE_KEY = 'v2-toc';
+/** Scroll distance over which the rail fades in after the contents box leaves. */
+const FADE_PX = 160;
 
 /** Index of the last entry whose position is at or above `y`; -1 before the first. */
 export function currentSection(entries, y) {
@@ -89,12 +91,20 @@ export function createTocRail({ document, window, goTo }) {
         root.append(controls, list);
     }
 
+    /** 0 while the contents box is on screen, 1 once it has scrolled away; fades the rail in between. */
+    function progress() {
+        if (entries.length === 0 || boxBottom === null) return 0;
+        return Math.min(1, Math.max(0, (window.scrollY - (boxBottom - FADE_PX * 1.5)) / FADE_PX));
+    }
+
     function render() {
-        const shown = entries.length > 0 && boxBottom !== null && window.scrollY > boxBottom - 40;
-        root.hidden = !shown;
+        const p = progress();
+        root.hidden = entries.length === 0;
+        root.style.setProperty('--p', p.toFixed(3));
+        root.classList.toggle('live', p > 0.15);
         root.dataset.mode = narrow ? (mode === 'open' ? 'open' : 'button') : mode;
         root.classList.toggle('narrow', narrow);
-        if (!shown) return;
+        if (p === 0) return;
         const index = currentSection(entries, window.scrollY + 120);
         if (index !== active) {
             active = index;

@@ -435,7 +435,11 @@ function flowRule(scope) {
     const r = scope.styles.rule;
     scope.y += r.before;
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
-    scope.out.push({ type: 'rule', x: col.x, y: scope.y, width: col.width });
+    // a rule runs beside a float rather than through it
+    const blocked = geometry.blockedOver(scope.shapes, scope.y, scope.y + 1, col.x, col.x + col.width);
+    const free = geometry.freeIntervals(col.x, col.x + col.width, blocked, 20).sort((p, q) => (q[1] - q[0]) - (p[1] - p[0]));
+    const [from, to] = free[0] ?? [col.x, col.x + col.width];
+    scope.out.push({ type: 'rule', x: from, y: scope.y, width: to - from });
     scope.y += 1 + r.after;
 }
 

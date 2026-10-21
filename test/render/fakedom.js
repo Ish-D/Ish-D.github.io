@@ -23,7 +23,7 @@ export class Element {
         this.tagName = tag.toUpperCase();
         this.children = [];
         this.parentNode = null;
-        this.style = { cssText: '' };
+        this.style = { cssText: '', props: {}, setProperty(k, v) { this.props[k] = v; } };
         this.dataset = {};
         this._class = '';
         this.attributes = {};

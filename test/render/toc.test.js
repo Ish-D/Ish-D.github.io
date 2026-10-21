@@ -39,10 +39,16 @@ test('the rail stays hidden while the contents box is on screen and appears once
     const t = setup(0);
     t.rail.update({ outline: t.outline, anchors: t.anchors, tocRect: { y: 100, height: 400 }, isNarrow: false });
     const nav = t.document.body.children[0];
-    assert.equal(nav.hidden, true);
+    assert.equal(nav.classList.contains('live'), false);
+    assert.equal(nav.style.props['--p'], '0.000');
     t.window.scrollY = 800;
     t.scroll();
-    assert.equal(nav.hidden, false);
+    assert.equal(nav.classList.contains('live'), true);
+    assert.equal(nav.style.props['--p'], '1.000');
+    // fades in gradually while the box leaves
+    t.window.scrollY = 400;
+    t.scroll();
+    assert.ok(Number(nav.style.props['--p']) > 0 && Number(nav.style.props['--p']) < 1);
     assert.equal(nav.querySelectorAll('.toc-item').length, 3);
 });
 

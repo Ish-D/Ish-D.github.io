@@ -5,6 +5,7 @@
 
 import { flattenInline } from './inline.js';
 import { createScope, flowBlocks } from './flow.js';
+import { walk } from '../doc/walk.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -77,6 +78,14 @@ export function flowGenerated(scope, node) {
         default:
             return false;
     }
+}
+
+/** References for the page's citations, as a final section when the page has no [[bibliography]] of its own. */
+export function flowAutoBibliography(scope, doc) {
+    if ((scope.env.refs?.citations.size ?? 0) === 0) return;
+    let explicit = false;
+    walk(doc, (n) => { if (n.type === 'directive' && n.name === 'bibliography') explicit = true; return !explicit; });
+    if (!explicit) flowBibliography(scope, { start: doc.end, end: doc.end });
 }
 
 function flowBibliography(scope, node) {

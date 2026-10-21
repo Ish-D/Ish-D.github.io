@@ -11,6 +11,7 @@
 import { createStyles } from './style.js';
 import { createScope, flowBlocks, argOf, positionalArg } from './flow.js';
 import { solveMargins } from './margins.js';
+import { flowAutoBibliography } from './generated.js';
 import { collectReferences, collectOutline } from '../doc/refs.js';
 import { parseValue, resolveLength } from './values.js';
 
@@ -117,6 +118,7 @@ function flowPass(doc, env, styles, geom, diagnostics, breakIn) {
     });
     scope.maxY = scope.y;
     flowBlocks(scope, doc.children, true);
+    flowAutoBibliography(scope, doc);
     return scope;
 }
 
