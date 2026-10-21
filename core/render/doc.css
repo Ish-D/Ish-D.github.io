@@ -243,11 +243,7 @@ aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left
 .editor-outline path { fill: none; stroke: #c4452c; stroke-width: 1.5; stroke-linejoin: round; opacity: 0.85; }
 .editor-input::selection { background: var(--color-selection); color: transparent; }
 .editor-slot { visibility: hidden; }
-body.editing .obj:hover, body.editing .codeblock:hover, body.editing .mathblock:hover, body.editing aside.note:hover {
-    outline: 1px dashed var(--color-border);
-    outline-offset: 4px;
-    cursor: text;
-}
+
 .chrome .status { font: 12px Georgia, serif; color: var(--color-text-secondary); align-self: center; }
 .chrome button.on { background: #c4452c; color: #fff; }
 
@@ -690,3 +686,8 @@ body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .
 body.previewing { background: color-mix(in srgb, var(--color-text-secondary) 22%, var(--color-card-background)); }
 body.previewing .doc { background: var(--color-card-background); box-shadow: 0 0 0 1px var(--color-border), 0 10px 40px rgba(0, 0, 0, 0.18); }
 @media print { .edit-toolbar { display: none; } }
+
+/* nothing is outlined while something is being dragged */
+body.dragging-item .hover-outline { display: none; }
+body.editing aside.note, body.editing .codeblock, body.editing .mathblock { cursor: text; }
+body.editing .obj { cursor: pointer; }
