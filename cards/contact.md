@@ -1,7 +1,5 @@
 ---
 name: Contact Me
-width: 400
-height: 480
 ---
 
 # Contact Me
@@ -12,7 +10,4 @@ height: 480
 
 [[textarea(name: message, placeholder: Your message..., rows: 6)]]
 
-[[style(text-align: center)]]
-{
 [[button(action: submitContactForm, label: Send)]]
-}

@@ -51,6 +51,7 @@ const state = {
     toc: null,
     vaultPage: null,
     expandedNotes: new Set(),
+    formValues: new Map(),
     sketching: false,
     publicSource: '',
 };
@@ -289,6 +290,12 @@ function buildWidget(node) {
         const field = document.createElement(node.name === 'input' ? 'input' : 'textarea');
         field.className = 'w-field';
         field.placeholder = get('placeholder') ?? '';
+        const name = get('name');
+        if (name) {
+            field.name = name;
+            field.value = state.formValues.get(name) ?? '';
+            field.addEventListener('input', () => state.formValues.set(name, field.value));
+        }
         if (node.name === 'textarea') field.rows = Number(get('rows') ?? 5);
         return field;
     }
@@ -297,11 +304,47 @@ function buildWidget(node) {
         b.className = 'w-button';
         b.textContent = get('label') ?? 'OK';
         const action = get('action');
-        if (action === 'resetSettings') b.onclick = () => { state.settings = { ...DEFAULTS }; saveSettings(); applyTheme(); scheduleLayout(); };
+        if (action === 'submitContactForm') b.onclick = () => submitContactForm(b);
+        else if (action === 'resetSettings') b.onclick = () => { state.settings = { ...DEFAULTS }; saveSettings(); applyTheme(); scheduleLayout(); };
         else b.disabled = true;
         return b;
     }
     return null;
+}
+
+async function submitContactForm(button) {
+    const { formValues } = state;
+    const name = formValues.get('name')?.trim();
+    const message = formValues.get('message')?.trim();
+    if (!name || !message) {
+        for (const key of ['name', 'message']) {
+            const field = root.querySelector(`[name="${key}"]`);
+            if (field && !formValues.get(key)?.trim()) {
+                field.style.borderColor = '#c4452c';
+                setTimeout(() => { field.style.borderColor = ''; }, 2000);
+            }
+        }
+        return;
+    }
+    button.disabled = true;
+    button.textContent = 'Sending…';
+    try {
+        const res = await fetch('https://formspree.io/f/mgokjyon', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ name, _subject: formValues.get('_subject') || 'Contact Form', message }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        formValues.clear();
+        state.fallbackDoc = messageDoc('Sent', 'Thanks, your message is on its way.');
+        state.editor?.dispose();
+        state.editor = null;
+        state.session = null;
+        layoutAndRender();
+    } catch {
+        button.textContent = 'Error, retry';
+        button.disabled = false;
+    }
 }
 
 function captureScroll() {
