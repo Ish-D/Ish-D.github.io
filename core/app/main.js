@@ -18,6 +18,7 @@ import { mountFigures, disposeFigures, hasFigure } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
 import { createTocRail } from './toc.js';
 import { createPersonal } from './personal.js';
+import { createInserter } from '../edit/insert.js';
 import { openSketchPad } from '../edit/sketchpad.js';
 import { parseStrokes, parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
 import '../figures/index.js';
@@ -53,6 +54,7 @@ const state = {
     publicSource: '',
 };
 const persist = new Map();
+let inserter = null;
 
 function toast(text) {
     document.querySelector('.toast')?.remove();
@@ -372,6 +374,11 @@ function useSession(source) {
         onSourceChange: scheduleSave,
     });
     state.editor.setEnabled(state.canEdit && new URLSearchParams(location.search).has('edit'));
+    inserter ??= createInserter({
+        document, root,
+        getSession: () => state.session,
+        onInserted: (range) => state.editor?.open(range.start, range.end),
+    });
 }
 
 /** Source for a page: a vault page, a draft of a public page, or the public file. */

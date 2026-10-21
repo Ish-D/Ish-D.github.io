@@ -402,3 +402,41 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
     cursor: pointer;
 }
 .sketch-bar button.on { color: #fff; background: #c4452c; border-color: #c4452c; }
+
+/* insert menu */
+.insert-plus {
+    position: absolute;
+    z-index: 80;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font: 16px/22px Georgia, serif;
+    color: var(--color-text-secondary);
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 50%;
+    cursor: pointer;
+}
+.insert-menu {
+    position: absolute;
+    z-index: 81;
+    display: flex;
+    flex-direction: column;
+    min-width: 190px;
+    padding: 4px;
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+}
+.insert-menu button {
+    padding: 5px 10px;
+    font: 14px Georgia, serif;
+    text-align: left;
+    color: var(--color-text-primary);
+    background: none;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.insert-menu button:hover { background: var(--color-selection); }
