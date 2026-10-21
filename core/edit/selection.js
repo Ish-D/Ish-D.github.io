@@ -169,10 +169,9 @@ export function createSelection({ document, root, snapper, getSession, getLayout
         inspector.hide();
     }
 
-    function select(el) {
+    function selectAt(start) {
         const session = getSession();
         if (!session) return;
-        const start = Number(el.dataset.start);
         if (current?.start === start && current.session === session) return;
         clear();
         current = { start, session };
@@ -185,6 +184,39 @@ export function createSelection({ document, root, snapper, getSession, getLayout
         });
         inspector.show();
         reposition();
+    }
+
+    const select = (el) => selectAt(Number(el.dataset.start));
+
+    /** Units for offsets of the selected figure: its column and the type size. */
+    function unitsOf() {
+        const layout = getLayout();
+        const body = (element()?.querySelector('.obj-body') ?? element())?.getBoundingClientRect();
+        const rect = body ? { x: body.left + scrollX, y: body.top + scrollY, width: body.width, height: body.height } : { x: 0, y: 0, width: 0, height: 0 };
+        return { em: layout.styles.size, basis: columnOf(layout, rect).width };
+    }
+
+    /** Moves the selected figure by a few pixels; a run of presses is one undo step. */
+    function nudge(dx, dy) {
+        const target = node();
+        if (!target) return;
+        const changes = figureMoveChanges(figureArgs(target), { dx, dy }, unitsOf());
+        const group = `nudge-${target.start}-${Math.floor(Date.now() / 700)}`;
+        if (updateArgs(current.session, target.start, changes, group, FIGURES)) onEdited();
+    }
+
+    /** Puts a copy just below and to the right of the selected figure and selects it. */
+    function duplicate() {
+        const target = node();
+        if (!target) return;
+        const session = current.session;
+        const copyStart = target.end + 2;
+        session.apply({ start: target.end, end: target.end, text: `\n\n${session.source.slice(target.start, target.end)}` }, { group: `duplicate-${Date.now()}` });
+        const copy = directiveAt(session, copyStart, FIGURES);
+        if (copy) updateArgs(session, copyStart, figureMoveChanges(figureArgs(copy), { dx: 24, dy: 24 }, unitsOf()), `duplicate-${copyStart}`, FIGURES);
+        onEdited();
+        clear();
+        selectAt(copyStart);
     }
 
     // ----- dragging -----
@@ -227,6 +259,10 @@ export function createSelection({ document, root, snapper, getSession, getLayout
 
     return {
         select,
+        selectAt,
+        nudge,
+        duplicate,
+        remove: () => host.remove(),
         clear,
         /** Call after every layout: the figure may have moved. */
         refresh() {

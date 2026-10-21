@@ -653,7 +653,7 @@ aside.note.moving, .obj.moving { opacity: 0.75; outline: 1px dashed #c4452c; out
 @media print { .fig-frame, .inspector { display: none; } }
 
 /* Whatever else happens, none of the editor's overlays show outside editing. */
-body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .fig-frame, .figure-bar, .figure-handle, .pad-ring, .inspector, .snap-guides, .editor-overlay) { display: none !important; }
+body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .fig-frame, .figure-bar, .figure-handle, .pad-ring, .inspector, .snap-guides, .editor-overlay, .edit-toolbar) { display: none !important; }
 
 /* alignment guides while dragging */
 .snap-guides { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 85; }
@@ -662,3 +662,31 @@ body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .
 .snap-hit { stroke: #c4452c; stroke-width: 1; }
 .snap-label { fill: #c4452c; font: 11px Georgia, serif; paint-order: stroke; stroke: var(--color-card-background); stroke-width: 3px; stroke-linejoin: round; }
 @media print { .snap-guides { display: none; } }
+
+/* the bar along the bottom while editing */
+.edit-toolbar {
+    position: fixed;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    z-index: 95;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    background: var(--color-card-background);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.18);
+}
+.edit-toolbar[hidden] { display: none; }
+.edit-toolbar button { padding: 4px 10px; font: 13px Georgia, serif; color: var(--color-text-primary); background: none; border: none; border-radius: 4px; cursor: pointer; }
+.edit-toolbar button:hover:not(:disabled) { background: var(--color-selection); }
+.edit-toolbar button:disabled { opacity: 0.35; cursor: default; }
+.edit-toolbar button.on { color: #fff; background: #c4452c; }
+.edit-toolbar .sep { width: 1px; height: 18px; margin: 0 4px; background: var(--color-border); }
+
+/* previewing a narrower screen */
+body.previewing { background: color-mix(in srgb, var(--color-text-secondary) 22%, var(--color-card-background)); }
+body.previewing .doc { background: var(--color-card-background); box-shadow: 0 0 0 1px var(--color-border), 0 10px 40px rgba(0, 0, 0, 0.18); }
+@media print { .edit-toolbar { display: none; } }

@@ -321,3 +321,13 @@ test('columns leave a region behind for alignment guides', () => {
     assert.equal(region.columns.length, 2);
     assert.ok(Math.abs(region.columns[1].x - region.columns[0].x - region.columns[0].width - 40) < 1e-6);
 });
+
+test('columns give way on a narrow screen, and floats that would leave no room for text sit on their own line', () => {
+    const src = '[[columns(2, gap: 40)]]\n{\n[[image(a.png, place: gutter, width: 220, height: 220, wrap: circle)]]\nWords enough to run on for a good while in whatever columns there are.\n}\n';
+    const wide = layoutDocument(parseText(src), makeEnv(1300, { hyphenator }));
+    const narrow = layoutDocument(parseText(src), makeEnv(390, { hyphenator }));
+    assert.equal(wide.blocks.find(b => b.type === 'region').columns.length, 2);
+    assert.equal(narrow.blocks.find(b => b.type === 'region').columns.length, 1);
+    assert.equal(wide.blocks.find(b => b.type === 'object').place.kind, 'gutter');
+    assert.equal(narrow.blocks.find(b => b.type === 'object').place.kind, 'block');
+});

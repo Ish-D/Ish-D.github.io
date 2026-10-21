@@ -22,9 +22,10 @@ const INPUT_DEBOUNCE_MS = 100;
  * @param {() => any} deps.getLayout            current layout
  * @param {(editing: { start: number, end: number, height: number, x?: number, width?: number } | null) => void} deps.setEditing   tells the app which region to reserve, then relayouts
  * @param {() => void} deps.onSourceChange      called after the session text changed
+ * @param {() => number} [deps.originX]         page x of the layout's x = 0 (the page is centred when previewing a narrower screen)
  * @param {(text: string) => void} [deps.onLost]  called with typed text that could not be put back in the page
  */
-export function createEditor({ document, session, getLayout, setEditing, onSourceChange, onLost = () => {} }) {
+export function createEditor({ document, session, getLayout, setEditing, onSourceChange, onLost = () => {}, originX = () => 0 }) {
     let enabled = false;
     let active = null;
     let timer = 0;
@@ -63,7 +64,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         const box = active.box;
         // a note set on its side is edited on its side: the box turns with it
         const origin = note?.rotate ? note.box : { x: 0, y: 0 };
-        box.style.left = `${origin.x + slot.x}px`;
+        box.style.left = `${originX() + origin.x + slot.x}px`;
         box.style.top = `${origin.y + slot.y}px`;
         box.style.width = `${slot.width}px`;
         box.style.transformOrigin = note?.rotate ? `${-slot.x}px ${-slot.y}px` : '';

@@ -68,6 +68,7 @@ export function createPages(app) {
             getLayout: () => state.layout,
             setEditing: (editing) => { state.editing = editing; app.view.relayout(); },
             onSourceChange: () => app.saver.scheduleSave(),
+            originX: () => app.viewport.originX(),
             onLost: (text) => {
                 navigator.clipboard?.writeText(text).catch(() => {});
                 showToast(document, 'The page changed under your edit, so it could not be put back. Your text is on the clipboard.', 7000);

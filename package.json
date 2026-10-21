@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test --test-timeout=60000 \"test/**/*.test.js\""
+    "test": "node --test --test-timeout=60000 \"test/**/*.test.js\"",
+    "smoke": "tools/smoke.sh"
   }
 }

@@ -647,8 +647,11 @@ function absoluteMarginY(node, scope) {
 
 function flowColumns(scope, node) {
     const { styles } = scope;
-    const count = Math.max(1, Math.round(resolveLength(parseValue(positionalArg(node) ?? argOf(node, 'count') ?? '2'), { em: styles.size, fallback: 2 })));
+    const wanted = Math.max(1, Math.round(resolveLength(parseValue(positionalArg(node) ?? argOf(node, 'count') ?? '2'), { em: styles.size, fallback: 2 })));
     const gap = resolveLength(parseValue(argOf(node, 'gap') ?? '2em'), { em: styles.size, basis: scope.width, fallback: styles.size * 2 });
+    // columns never get narrower than `min` (12em unless given), so a narrow screen has fewer of them
+    const min = resolveLength(parseValue(argOf(node, 'min') ?? '12em'), { em: styles.size, basis: scope.width, fallback: styles.size * 12 });
+    const count = Math.max(1, Math.min(wanted, Math.floor((scope.width + gap) / (min + gap))));
     const children = node.groups[0]?.children ?? [];
     const colWidth = (scope.width - gap * (count - 1)) / count;
     const top = scope.y;
@@ -708,6 +711,9 @@ function paramsOf(node) {
     };
 }
 
+/** The least width, in em, of text beside a floated figure. */
+const MIN_TEXT_BESIDE = 12;
+
 function flowObject(scope, node) {
     const { styles, env } = scope;
     const p = paramsOf(node);
@@ -720,10 +726,16 @@ function flowObject(scope, node) {
         return;
     }
 
-    const isFloat = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
+    let isFloat = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
     const basis = place.kind === 'span' ? scope.width : place.kind === 'full' ? scope.page.width : col.width;
     const natural = env.objects?.natural?.(node) ?? sketchSize(node);
     const size = resolveSize(p, { basis, em }, natural, { defaultWidth: isFloat ? 0.5 : 1 });
+    // a float leaves room for text beside it, or else it sits on a line of its own
+    const onSeam = place.kind === 'gutter' && scope.columns.length > 1;   // text runs down both sides of it
+    if (isFloat && !onSeam && place.kind !== 'at' && col.width - size.width < MIN_TEXT_BESIDE * em) {
+        place.kind = 'block';
+        isFloat = false;
+    }
 
     const caption = captionOf(scope, node, size.width);
     const totalHeight = size.height + (caption ? caption.height + styles.paragraphGap / 2 : 0);

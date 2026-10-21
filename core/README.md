@@ -42,3 +42,10 @@ The vault file is public, so the password is the only protection. Use a long pas
 ## Text is as big as its lines
 
 A paragraph beside a figure is a stepped shape, not a rectangle. `layout/contour.js` turns a block's lines into that shape, and three things use it: the outline shown when you point at text while editing, the area that counts as a click on the text (it is the lines themselves), and the box drawn around text being edited. The editing box wraps its lines around whatever the page wraps around, because the layout gives the editor slot the blocked stretch of each line band (`placeEditor` in `layout/flow.js`).
+
+## Editing aids
+
+- **Snapping:** things moved by hand (figures, margin notes, a figure's width) are pulled to the lines worth lining up with: the text column's edges and centre, the seam between columns, margins, other figures, the tops of paragraphs. Hold Alt to move freely. A snap to the column's edge or centre or the seam is saved as a placement (`place: left`, `center`, `gutter`), not an offset. Free offsets are saved as a share of the column (`dx: 4%`) and in lines of type (`dy: 1.5em`), and a moved note as a nudge from its anchor (`dy: 3em`), so a page keeps its shape at other screen sizes.
+- **Preview widths:** the bar along the bottom lays the page out at phone, tablet or desktop width while editing. Columns give way (`columns(2, min: 12em)`) and a float that would leave under 12em of text beside it moves onto its own line.
+- **Keys:** with a figure selected, arrows nudge it (Shift for bigger steps), Delete removes it, Cmd-D duplicates it.
+- `npm run smoke` loads a few pages in offscreen WebKit and fails on script errors.

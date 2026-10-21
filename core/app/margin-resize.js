@@ -46,12 +46,12 @@ export function createMarginResize({ document, window, settings }) {
 
     return {
         /** Call after every layout. */
-        update(geometry) {
+        update(geometry, originX = 0) {
             for (const { side, el } of handles) {
                 el.hidden = geometry.narrow;
                 if (geometry.narrow) continue;
                 const edge = side === 'left' ? geometry.text.x : geometry.text.x + geometry.text.width;
-                el.style.left = `${side === 'left' ? edge - HANDLE_PX : edge}px`;
+                el.style.left = `${originX + (side === 'left' ? edge - HANDLE_PX : edge)}px`;
             }
         },
         dispose() { handles.forEach(({ el }) => el.remove()); },
