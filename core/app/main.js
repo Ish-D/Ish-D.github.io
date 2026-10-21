@@ -46,6 +46,7 @@ const state = {
     scriptRan: false,
     toc: null,
     vaultPage: null,
+    expandedNotes: new Set(),
     publicSource: '',
 };
 const persist = new Map();
@@ -174,6 +175,8 @@ function buildEnv() {
     math.setFontSize(fontSize);
     return {
         width: document.documentElement.clientWidth,
+        viewportHeight: window.innerHeight,
+        expandedNotes: state.expandedNotes,
         measurer,
         hyphenator: english,
         settings: { fontSize, marginPercent },
@@ -551,6 +554,13 @@ root.addEventListener('click', (e) => {
         window.open(full.dataset.full, '_blank', 'noopener');
         return;
     }
+    const toggle = e.target.closest('[data-toggle-note]');
+    if (toggle) {
+        const key = Number(toggle.dataset.toggleNote);
+        if (!state.expandedNotes.delete(key)) state.expandedNotes.add(key);
+        scheduleLayout();
+        return;
+    }
     const card = e.target.closest('a[data-card]');
     if (card) {
         e.preventDefault();
@@ -563,6 +573,15 @@ root.addEventListener('click', (e) => {
         scrollToAnchor(jump.dataset.jump);
     }
 });
+
+/** Hovering a note or its marker highlights the other. */
+function linkNotes(e, on) {
+    const index = (e.target.closest?.('.mk[data-note]') ?? e.target.closest?.('aside.note'))?.dataset.note;
+    if (index === undefined) return;
+    state.docEl?.querySelectorAll(`[data-note="${index}"]`).forEach(el => el.classList.toggle('on', on));
+}
+root.addEventListener('mouseover', (e) => linkNotes(e, true));
+root.addEventListener('mouseout', (e) => linkNotes(e, false));
 
 addEventListener('popstate', () => {
     openPage(pageFromLocation(), { push: false, hash: location.hash });

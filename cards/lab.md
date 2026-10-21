@@ -43,3 +43,5 @@ The drawing above is an SVG file inlined into the page, so its strokes take the 
 ## Margin ergonomics
 
 A note can lie on its side [[note(left, orient: vertical)]]{}{Set sideways, reading bottom to top on the left and top to bottom on the right.} and one can be pinned to a fixed place on the page.[[note(right, type: absolute, pos: 120)]]{}{Pinned 120px from the top of the page, whatever the text does.}
+
+A long remark can be capped with a height and opened on demand.[[note(left, maxh: 80px)]]{}{This note is much longer than its cap. It keeps going for a good many lines so that the cap has something to cut off, and a small control at the corner opens it to the full text and closes it again. Hovering the note or its number lights up the other one.}

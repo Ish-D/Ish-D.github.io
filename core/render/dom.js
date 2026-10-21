@@ -108,6 +108,14 @@ export function renderLayout(root, layout, ctx) {
         } else {
             place(aside, note.x, note.y, note.width, note.height);
             for (const item of note.items) renderItem(env, aside, item, note.x, note.y);
+            if (note.overflow) {
+                aside.classList.toggle('clipped', !!note.clipped);
+                const more = document.createElement('button');
+                more.className = 'note-more';
+                more.dataset.toggleNote = String(note.node.start);
+                more.textContent = note.clipped ? 'more' : 'less';
+                aside.appendChild(more);
+            }
         }
         doc.appendChild(aside);
     });

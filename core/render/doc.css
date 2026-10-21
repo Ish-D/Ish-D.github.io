@@ -368,3 +368,18 @@ body.editing .obj img[data-full] { cursor: text; }
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 @media print { .vault-backdrop, .toast { display: none; } }
+
+/* capped notes */
+aside.note.clipped { overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.note-more {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    padding: 0 4px;
+    font: 11px Georgia, serif;
+    color: var(--color-text-secondary);
+    background: var(--color-card-background);
+    border: none;
+    cursor: pointer;
+}
+aside.note.clipped .note-more { -webkit-mask-image: none; }

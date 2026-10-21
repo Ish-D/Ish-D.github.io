@@ -159,6 +159,12 @@ function notePin(node) {
 
 /** Widest a margin note gets, in note-text ems. */
 const NOTE_MAX_EM = 17;
+/** Height cap from `maxh: 120px` or `maxh: 20%` (of the window height), else null. */
+function noteCap(node, env) {
+    const value = parseValue(argOf(node, 'maxh'));
+    return resolveLength(value, { basis: env.viewportHeight ?? 800, fallback: null });
+}
+
 const MIN_VERTICAL = 96;
 const MAX_VERTICAL = 720;
 
@@ -169,7 +175,9 @@ const MAX_VERTICAL = 720;
 function layoutVariant(c, env, styles, strip, scale) {
     if (!c.vertical) {
         const body = layoutNoteBody(c.blocks, env, styles, strip.x, strip.width, scale);
-        return { height: body.height, body, scale, vertical: false };
+        const cap = c.cap !== null && body.height > c.cap ? c.cap : null;
+        const open = cap !== null && env.expandedNotes?.has(c.node.start);
+        return { height: cap !== null && !open ? cap : body.height, body, scale, vertical: false, overflow: cap !== null, clipped: cap !== null && !open };
     }
     let lo = MIN_VERTICAL;
     let hi = MAX_VERTICAL;
@@ -217,10 +225,10 @@ function placeNotes(scope, env, styles, geom) {
 
     const bodyBaseline = baselineIn(env.measurer, styles.body, styles.lineHeight);
     const candidates = [
-        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), vertical: noteOrient(n.node) === 'vertical' })),
+        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), cap: noteCap(n.node, env), vertical: noteOrient(n.node) === 'vertical' })),
         ...scope.marginObjects.filter(m => !m.object).map(m => ({
             id: m, node: m.node, anchor: { x: 0, y: m.anchorY }, side: m.side === 'left' ? 'left' : m.side === 'right' ? 'right' : 'either',
-            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), vertical: noteOrient(m.node) === 'vertical',
+            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), cap: noteCap(m.node, env), vertical: noteOrient(m.node) === 'vertical',
         })),
     ];
 
@@ -266,7 +274,7 @@ function placeNotes(scope, env, styles, geom) {
         const strip = strips[side];
         if (!laid.vertical) {
             const items = laid.body.scope.out.map(it => translateItem(it, 0, y));
-            placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, scale: laid.scale, items });
+            placed.push({ node: c.node, side, x: strip.x, y, width: strip.width, height: laid.height, anchor: c.anchor, scale: laid.scale, items, overflow: laid.overflow, clipped: laid.clipped });
             return;
         }
         // set horizontally in a box of length x thickness, then turned onto the strip

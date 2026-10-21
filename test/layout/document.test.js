@@ -242,3 +242,16 @@ test('a pinned note sits at its page offset, and other notes keep clear of it', 
     const other = layout.notes.find(n => n !== pinned);
     assert.ok(other.y + other.height <= pinned.y + 1e-6 || other.y >= pinned.y + pinned.height - 1e-6);
 });
+
+test('maxh caps a note until it is expanded', () => {
+    const long = 'word '.repeat(120);
+    const doc = parseText(`Text[[note(right, maxh: 90px)]]{x}{${long}} more.\n`);
+    const capped = layoutDocument(doc, makeEnv(1300, { hyphenator })).notes[0];
+    assert.equal(capped.height, 90);
+    assert.equal(capped.clipped, true);
+    const note = doc.children[0].children.find(c => c.type === 'directive');
+    const open = layoutDocument(doc, makeEnv(1300, { hyphenator, expandedNotes: new Set([note.start]) })).notes[0];
+    assert.ok(open.height > 90);
+    assert.equal(open.clipped, false);
+    assert.equal(open.overflow, true);
+});
