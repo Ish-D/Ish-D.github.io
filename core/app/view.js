@@ -11,6 +11,7 @@ import { mountFigures } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
 import { createTocRail } from './toc.js';
 import { createReadingStats } from './reading-stats.js';
+import { createMarginResize } from './margin-resize.js';
 
 /** Runs `fn` on the next frame, or soon after when frames are not being produced (hidden tab). */
 function nextFrame(fn) {
@@ -25,6 +26,7 @@ export function createView(app) {
     let queued = false;
     let toc = null;
     let stats = null;
+    let resizer = null;
 
     const currentDoc = () => (state.session ? state.session.doc : state.fallbackDoc);
 
@@ -49,6 +51,8 @@ export function createView(app) {
         toc.update({ outline: layout.outline, anchors: layout.anchors, tocRect: tocBox ? tocBox.rect : null, isNarrow: layout.geometry.narrow });
         stats ??= createReadingStats({ document, window });
         stats.update(doc);
+        resizer ??= createMarginResize({ document, window, settings: app.settings });
+        resizer.update(layout.geometry);
         mountFigures(state.docEl, { document, store: state.store });
 
         state.timing = { layoutMs: Math.round(t1 - t0), renderMs: Math.round(performance.now() - t1), count: (state.timing?.count ?? 0) + 1 };

@@ -516,3 +516,13 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
 @media print { .reading-stats, .lightbox { display: none; } }
 
 .reading-stats { padding: 1px 6px; background: color-mix(in srgb, var(--color-card-background) 85%, transparent); border-radius: 3px; }
+
+/* margin resize handles */
+.margin-handle { position: fixed; top: 0; bottom: 0; width: 10px; z-index: 30; cursor: col-resize; touch-action: none; }
+.margin-handle[hidden] { display: none; }
+.margin-handle::after { content: ''; position: absolute; top: 0; bottom: 0; width: 2px; background: transparent; transition: background 0.15s ease; }
+.margin-handle-left::after { right: 0; }
+.margin-handle-right::after { left: 0; }
+.margin-handle:hover::after, .margin-handle.dragging::after { background: var(--color-border); }
+body.resizing-margins { user-select: none; cursor: col-resize; }
+@media print { .margin-handle { display: none; } }
