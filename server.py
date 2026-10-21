@@ -36,6 +36,11 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress default logging for cleaner output
         pass
 
+    def end_headers(self):
+        # local development: always revalidate, so a changed script never runs against an old stylesheet
+        self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
     def is_loopback(self):
         return self.client_address[0] in ('127.0.0.1', '::1')
 
