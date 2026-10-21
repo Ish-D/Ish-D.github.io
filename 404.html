@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ish</title>
+    <script>
+        // GitHub Pages serves this for unknown paths: send /name on to the app as ?page=name
+        const path = location.pathname.replace(/^\/+|\/+$/g, '');
+        location.replace(path && !path.includes('.') ? `/?page=${encodeURIComponent(decodeURIComponent(path))}${location.hash}` : '/');
+    </script>
+</head>
+<body></body>
+</html>

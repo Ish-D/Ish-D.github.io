@@ -27,6 +27,7 @@ import '../figures/index.js';
 const root = document.getElementById('root');
 
 const DEFAULTS = { fontSize: 20, marginPercent: 28, theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light' };
+const HOME_PAGE = 'menu';
 const CARD_SCRIPTS = new Set(['llms_for_bozos_1']);
 
 const state = {
@@ -615,8 +616,15 @@ function scrollToAnchor(id, smooth = true) {
     setTimeout(() => flash.remove(), 1500);
 }
 
-function pageFromLocation() {
-    return new URLSearchParams(location.search).get('page') ?? 'writing';
+/** Page and anchor for the address: ?page=, the older #/page/heading and /page forms, else home. */
+function routeFromLocation() {
+    const named = new URLSearchParams(location.search).get('page');
+    if (named) return { page: named, hash: location.hash };
+    const legacy = /^#\/(?:c\/)?([^/]+)(?:\/(.+))?$/.exec(decodeURIComponent(location.hash));
+    if (legacy) return { page: legacy[1], hash: legacy[2] ? `#${legacy[2]}` : '' };
+    const path = decodeURIComponent(location.pathname.replace(/^\/+|\/+$/g, ''));
+    if (path && !path.includes('.')) return { page: path, hash: location.hash };
+    return { page: HOME_PAGE, hash: location.hash };
 }
 
 // ---------------------------------------------------------------------------
@@ -700,7 +708,8 @@ root.addEventListener('mouseover', (e) => linkNotes(e, true));
 root.addEventListener('mouseout', (e) => linkNotes(e, false));
 
 addEventListener('popstate', () => {
-    openPage(pageFromLocation(), { push: false, hash: location.hash });
+    const route = routeFromLocation();
+    openPage(route.page, { push: false, hash: route.hash });
 });
 
 let resizeTimer = 0;
@@ -793,6 +802,13 @@ function buildChrome() {
         pages.onclick = () => personal.openPanel();
         row.append(pages);
     }
+    if (state.page && state.page !== HOME_PAGE) {
+        const home = document.createElement('button');
+        home.textContent = '⌂';
+        home.title = 'Home';
+        home.onclick = () => openPage(HOME_PAGE);
+        row.append(home);
+    }
     row.append(button);
     chrome.append(row, panel);
     document.body.appendChild(chrome);
@@ -818,7 +834,8 @@ async function start() {
     applyTheme();
     await Promise.all([loadFonts(document, undefined, { katex: !!window.katex }), fetchManifest(), probeDev()]);
     document.fonts.addEventListener('loadingdone', () => { math.invalidate(); scheduleLayout(); });
-    await openPage(pageFromLocation(), { push: false, hash: location.hash });
+    const route = routeFromLocation();
+    await openPage(route.page, { push: false, hash: route.hash });
     personal.restore();
 }
 
