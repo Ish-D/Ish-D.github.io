@@ -157,6 +157,8 @@ function notePin(node) {
     return pos?.type === 'number' ? PAGE.topPad + pos.value : null;
 }
 
+/** Widest a margin note gets, in note-text ems. */
+const NOTE_MAX_EM = 17;
 const MIN_VERTICAL = 96;
 const MAX_VERTICAL = 720;
 
@@ -203,7 +205,13 @@ function layoutNoteBody(blocks, env, styles, x, width, scale) {
 }
 
 function placeNotes(scope, env, styles, geom) {
-    const strips = { left: geom.left, right: geom.right };
+    // notes take at most NOTE_MAX_EM of the strip, on the side nearest the text
+    const maxWidth = NOTE_MAX_EM * styles.size * 0.85;
+    const narrowed = (strip, hug) => {
+        const width = Math.min(strip.width, maxWidth);
+        return { x: hug === 'right' ? strip.x + strip.width - width : strip.x, width };
+    };
+    const strips = { left: narrowed(geom.left, 'right'), right: narrowed(geom.right, 'left') };
     const items = [];
     const bodies = new Map();
 

@@ -60,8 +60,11 @@ test('margin notes do not overlap each other and sit in their strips', () => {
         const notes = layout.notes.filter(n => n.side === side).sort((a, b) => a.y - b.y);
         const strip = layout.geometry[side];
         for (let i = 0; i < notes.length; i++) {
-            assert.equal(notes[i].x, strip.x);
-            assert.ok(notes[i].width <= strip.width + 1e-6);
+            assert.ok(notes[i].x >= strip.x - 1e-6);
+            assert.ok(notes[i].x + notes[i].width <= strip.x + strip.width + 1e-6);
+            // flush against the text side of the strip
+            if (side === 'left') assert.ok(Math.abs(notes[i].x + notes[i].width - (strip.x + strip.width)) < 1e-6);
+            else assert.equal(notes[i].x, strip.x);
             if (i) assert.ok(notes[i].y >= notes[i - 1].y + notes[i - 1].height - 1e-6, `${side} notes overlap`);
         }
     }
