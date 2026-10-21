@@ -14,6 +14,7 @@ import socketserver
 import os
 import sys
 import json
+import re
 import asyncio
 import threading
 from pathlib import Path
@@ -35,9 +36,49 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
         # Suppress default logging for cleaner output
         pass
 
+    def is_loopback(self):
+        return self.client_address[0] in ('127.0.0.1', '::1')
+
+    def do_PUT(self):
+        """Save an edited card. Loopback only; the custom header forces a CORS preflight, which this server never answers."""
+        path = self.path.split('?')[0]
+        match = re.fullmatch(r'/cards/([A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*)\.md', path)
+        if not self.is_loopback() or self.headers.get('X-Requested-With') != 'v2-editor':
+            self.send_error(403, 'Forbidden')
+            return
+        if not match:
+            self.send_error(400, 'Bad card path')
+            return
+        length = int(self.headers.get('Content-Length', 0))
+        if length > 2_000_000:
+            self.send_error(413, 'Too large')
+            return
+        target = Path('cards') / (match.group(1) + '.md')
+        if not target.parent.is_dir():
+            self.send_error(404, 'No such folder')
+            return
+        temp = target.with_name(target.name + '.tmp')
+        temp.write_bytes(self.rfile.read(length))
+        os.replace(temp, target)
+        self.send_response(204)
+        self.end_headers()
+
     def do_GET(self):
         # Get the file path
         path = self.path.split('?')[0]  # Remove query string
+
+        # Dev capabilities: tells the editor that saving is available here
+        if path == '/api/dev':
+            if not self.is_loopback():
+                self.send_error(403, 'Forbidden')
+                return
+            body = json.dumps({'save': True}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
 
         # API endpoint: return list of card files dynamically
         if path == '/api/cards':

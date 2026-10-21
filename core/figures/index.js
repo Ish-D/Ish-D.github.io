@@ -1,0 +1,2 @@
+/** Registers every built-in figure. Import for side effects. */
+import './softmax-scale.js';
