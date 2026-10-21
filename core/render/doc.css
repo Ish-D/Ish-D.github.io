@@ -656,6 +656,7 @@ body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .
 .snap-guides[hidden] { display: none; }
 .snap-faint { stroke: var(--color-text-secondary); stroke-width: 1; stroke-dasharray: 2 5; opacity: 0.45; }
 .snap-hit { stroke: #c4452c; stroke-width: 1; }
+.snap-near { stroke: #c4452c; stroke-width: 1; opacity: 0.35; }
 .snap-label { fill: #c4452c; font: 11px Georgia, serif; paint-order: stroke; stroke: var(--color-card-background); stroke-width: 3px; stroke-linejoin: round; }
 @media print { .snap-guides { display: none; } }
 
@@ -682,9 +683,6 @@ body:not(.editing) :is(.hover-outline, .move-grip, .insert-plus, .insert-menu, .
 .edit-toolbar button.on { color: #fff; background: #c4452c; }
 .edit-toolbar .sep { width: 1px; height: 18px; margin: 0 4px; background: var(--color-border); }
 
-/* previewing a narrower screen */
-body.previewing { background: color-mix(in srgb, var(--color-text-secondary) 22%, var(--color-card-background)); }
-body.previewing .doc { background: var(--color-card-background); box-shadow: 0 0 0 1px var(--color-border), 0 10px 40px rgba(0, 0, 0, 0.18); }
 @media print { .edit-toolbar { display: none; } }
 
 /* nothing is outlined while something is being dragged */

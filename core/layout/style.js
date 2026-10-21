@@ -13,6 +13,9 @@
  * @property {string} [monoFamily]
  */
 
+/** The least width, in em, of text beside a floated figure or contents box; with less room it sits on its own line. */
+export const MIN_TEXT_BESIDE = 12;
+
 export function createStyles(settings = {}) {
     const size = settings.fontSize ?? 20;
     const family = settings.family ?? 'MonotypeModern';

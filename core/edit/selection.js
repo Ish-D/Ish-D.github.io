@@ -222,8 +222,8 @@ export function createSelection({ document, root, snapper, getSession, getLayout
     // ----- dragging -----
 
     // the grip moves the figure; the page re-flows around it as it goes
-    const moveChanges = (dx, dy, free) => {
-        const snapped = drag.snap.move(dx, dy, free);
+    const moveChanges = (dx, dy, free, final = false) => {
+        const snapped = drag.snap.move(dx, dy, free, final);
         return figureMoveChanges(drag.args, { dx: snapped.dx, dy: snapped.dy }, { ...drag.unit, placement: snapped.placement });
     };
     makeDraggable(grip, {
@@ -233,13 +233,13 @@ export function createSelection({ document, root, snapper, getSession, getLayout
             bar.style.transform = `translate(${dx}px, ${dy}px)`;
             drag.preview.show(moveChanges(dx, dy, e.altKey));
         },
-        onDrop(dx, dy, e) { if (drag) finish(moveChanges(dx, dy, e.altKey)); },
+        onDrop(dx, dy, e) { if (drag) finish(moveChanges(dx, dy, e.altKey, true)); },
         onCancel() { if (drag) { drag.snap.end(); drag.preview.cancel(); drag = null; bar.style.transform = ''; reposition(); } },
     });
 
     // the corner: a new width, pulled to a guide or a simple share of the column; a height in pixels follows
-    const resized = (dx, free) => {
-        const { width, fraction } = drag.snap.resize(Math.max(40, drag.size.width + dx), free, drag.column);
+    const resized = (dx, free, final = false) => {
+        const { width, fraction } = drag.snap.resize(Math.max(40, drag.size.width + dx), free, drag.column, final);
         const percent = fraction !== null || /%$/.test(drag.width ?? '');
         return [
             { key: 'width', value: fraction !== null ? `${Math.round(fraction * 10000) / 100}%` : percent ? `${Math.round(width / drag.column.width * 10000) / 100}%` : px(width) },
@@ -249,7 +249,7 @@ export function createSelection({ document, root, snapper, getSession, getLayout
     makeDraggable(handle, {
         onStart() { drag = begin('resize'); },
         onMove(dx, dy, e) { if (drag) { drag.preview.show(resized(dx, e.altKey)); reposition(); } },
-        onDrop(dx, dy, e) { if (drag) finish(resized(dx, e.altKey)); },
+        onDrop(dx, dy, e) { if (drag) finish(resized(dx, e.altKey, true)); },
         onCancel() { if (drag) { drag.snap.end(); drag.preview.cancel(); drag = null; reposition(); } },
     });
 

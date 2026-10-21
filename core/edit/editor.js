@@ -22,16 +22,17 @@ const INPUT_DEBOUNCE_MS = 100;
  * @param {() => any} deps.getLayout            current layout
  * @param {(editing: { start: number, end: number, height: number, x?: number, width?: number } | null) => void} deps.setEditing   tells the app which region to reserve, then relayouts
  * @param {() => void} deps.onSourceChange      called after the session text changed
- * @param {() => number} [deps.originX]         page x of the layout's x = 0 (the page is centred when previewing a narrower screen)
  * @param {(text: string) => void} [deps.onLost]  called with typed text that could not be put back in the page
  */
-export function createEditor({ document, session, getLayout, setEditing, onSourceChange, onLost = () => {}, originX = () => 0 }) {
+export function createEditor({ document, session, getLayout, setEditing, onSourceChange, onLost = () => {} }) {
     let enabled = false;
     let active = null;
     let timer = 0;
     let passes = 0;
     let burst = 0;
     let committing = false;
+    let pointerDown = false;
+    let afterPointer = null;
 
     const overlay = document.createElement('div');
     overlay.className = 'editor-overlay';
@@ -64,7 +65,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         const box = active.box;
         // a note set on its side is edited on its side: the box turns with it
         const origin = note?.rotate ? note.box : { x: 0, y: 0 };
-        box.style.left = `${originX() + origin.x + slot.x}px`;
+        box.style.left = `${origin.x + slot.x}px`;
         box.style.top = `${origin.y + slot.y}px`;
         box.style.width = `${slot.width}px`;
         box.style.transformOrigin = note?.rotate ? `${-slot.x}px ${-slot.y}px` : '';
@@ -149,11 +150,21 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
         }
     };
 
+    // Losing focus closes the box, but not while a mouse button is down: closing re-draws the page, and a
+    // click that started on something else would then land on whatever is under the pointer after the redraw.
+    const closeIfUnfocused = () => { if (active && !active.field.hasFocus) api.close(); };
     const onBlur = () => {
-        setTimeout(() => {
-            if (active && !active.field.hasFocus) api.close();
-        }, 120);
+        if (pointerDown) afterPointer = closeIfUnfocused;
+        else setTimeout(closeIfUnfocused, 120);
     };
+    const pressed = () => { pointerDown = true; };
+    const released = () => {
+        pointerDown = false;
+        if (afterPointer) { const run = afterPointer; afterPointer = null; setTimeout(run, 40); }
+    };
+    document.addEventListener('pointerdown', pressed, true);
+    document.addEventListener('pointerup', released, true);
+    document.addEventListener('pointercancel', released, true);
 
     const api = {
         get enabled() { return enabled; },
@@ -170,7 +181,17 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
          * `hint` is the text around the click, used to put the caret there.
          */
         open(start, end, hint = '', from = null) {
+            // Closing the box that is open may change the text, which moves the range asked for.
+            const edits = [];
+            const stop = session.subscribe((change) => { if (change.edit) edits.push(change.edit); });
             api.close();
+            stop();
+            let asked = { start, end };
+            for (const edit of edits) {
+                asked = shiftRange(asked, edit);
+                if (!asked) return;
+            }
+            ({ start, end } = asked);
             // a note's text is edited as it is, not widened to the paragraph that holds the note
             const exact = !!from?.matches?.('aside.note');
             const closed = exact ? { start, end } : closeRange(session.doc, expandToLines(session.source, start, end));
@@ -215,6 +236,9 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
 
         dispose() {
             unsubscribe();
+            document.removeEventListener('pointerdown', pressed, true);
+            document.removeEventListener('pointerup', released, true);
+            document.removeEventListener('pointercancel', released, true);
             api.setEnabled(false);
             overlay.remove();
         },

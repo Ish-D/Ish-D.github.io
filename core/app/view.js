@@ -53,7 +53,7 @@ export function createView(app) {
         stats ??= createReadingStats({ document, window });
         stats.update(doc);
         resizer ??= createMarginResize({ document, window, settings: app.settings });
-        resizer.update(layout.geometry, app.viewport.originX());
+        resizer.update(layout.geometry);
         mountFigures(state.docEl, { document, store: state.store });
 
         state.timing = { layoutMs: Math.round(t1 - t0), renderMs: Math.round(performance.now() - t1), count: (state.timing?.count ?? 0) + 1 };

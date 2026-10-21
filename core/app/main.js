@@ -19,7 +19,6 @@ import { createSnapOverlay } from '../edit/snap-overlay.js';
 import { createSnapper } from '../edit/snapper.js';
 import { createToolbar } from '../edit/toolbar.js';
 import { installKeys } from '../edit/keys.js';
-import { createViewport, PREVIEWS } from './viewport.js';
 import { createState } from './state.js';
 import { createSettings } from './settings.js';
 import { createNavigation } from './navigation.js';
@@ -58,7 +57,6 @@ app.personal = createPersonal({
 });
 
 app.prefs = createPrefs(localStorage);
-app.viewport = createViewport({ document, window, prefs: app.prefs, state });
 app.nav = createNavigation(app);
 app.view = createView(app);
 app.env = createEnv(app);
@@ -80,7 +78,7 @@ app.vault.watchPageLifecycle();
 app.snapper = createSnapper({
     getLayout: () => state.layout,
     prefs: app.prefs,
-    overlay: createSnapOverlay({ document, window, originX: () => app.viewport.originX() }),
+    overlay: createSnapOverlay({ document, window }),
 });
 app.selection = createSelection({
     document, root, snapper: app.snapper,
@@ -91,7 +89,7 @@ app.selection = createSelection({
     openSource: (start, end) => state.editor?.open(start, end),
 });
 app.hover = createHover({ document, root, active: () => document.body.classList.contains('editing') });
-app.hoverOutline = createHoverOutline({ document, getLayout: () => state.layout, hover: app.hover, originX: () => app.viewport.originX() });
+app.hoverOutline = createHoverOutline({ document, getLayout: () => state.layout, hover: app.hover });
 createNoteMover({
     document, hover: app.hover, snapper: app.snapper,
     getSession: () => state.session,
@@ -105,24 +103,20 @@ app.inserter = createInserter({
 });
 
 app.toolbar = createToolbar({
-    document, prefs: app.prefs, previews: PREVIEWS,
+    document, prefs: app.prefs,
     getSession: () => state.session,
     onUndo: () => { state.editor?.close(); state.session?.undo(); app.saver.scheduleSave(); },
     onRedo: () => { state.editor?.close(); state.session?.redo(); app.saver.scheduleSave(); },
 });
 installKeys({ document, active: () => document.body.classList.contains('editing'), selection: app.selection });
-app.prefs.subscribe((key) => { if (key === 'preview') { app.viewport.apply(); app.view.relayout(); } });
 
-// Switching editing on or off: the page is laid out again (a chosen preview width applies only
-// while editing), and leaving the editor leaves nothing of it behind.
+// Leaving the editor leaves nothing of it behind.
 let wasEditing = false;
 new MutationObserver(() => {
     const editing = document.body.classList.contains('editing');
     if (editing === wasEditing) return;
     wasEditing = editing;
-    app.viewport.apply();
     app.toolbar.refresh();
-    app.view.relayout();
     if (editing) return;
     app.selection.clear();
     app.hoverOutline.clear();

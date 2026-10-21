@@ -4,7 +4,7 @@
  */
 
 const KEY = 'v2-editor';
-const DEFAULTS = Object.freeze({ snap: true, guides: false, preview: 0 });
+const DEFAULTS = Object.freeze({ snap: true, guides: false });
 
 /** @param {Storage | null} storage */
 export function createPrefs(storage) {

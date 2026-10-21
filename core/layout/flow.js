@@ -13,7 +13,7 @@ import { flattenInline, fontFor } from './inline.js';
 import { parsePlace, parseWrap, resolveSize, placeRect, wrapShape } from './objects.js';
 import { parseValue, resolveLength } from './values.js';
 import * as geometry from './geometry.js';
-import { createStyles } from './style.js';
+import { createStyles, MIN_TEXT_BESIDE } from './style.js';
 import { flowGenerated } from './generated.js';
 import { parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
 
@@ -710,9 +710,6 @@ function paramsOf(node) {
         align: get('align'), layer: get('layer'),
     };
 }
-
-/** The least width, in em, of text beside a floated figure. */
-const MIN_TEXT_BESIDE = 12;
 
 function flowObject(scope, node) {
     const { styles, env } = scope;

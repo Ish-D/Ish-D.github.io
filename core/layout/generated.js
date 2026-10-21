@@ -6,6 +6,7 @@
 import { flattenInline } from './inline.js';
 import { createScope, flowBlocks } from './flow.js';
 import { walk } from '../doc/walk.js';
+import { MIN_TEXT_BESIDE } from './style.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -29,6 +30,10 @@ export function parseTags(text) {
 
 /** The summary under the title is set smaller than the body. */
 const SUMMARY_SCALE = 0.82;
+
+/** The contents box when it floats beside the text. */
+const TOC_WIDTH = 300;
+const TOC_GAP = 24;
 
 const synthetic = (type, props, start, end) => ({ type, start, end, ...props });
 const textNode = (value, start, end) => synthetic('text', { value }, start, end);
@@ -121,7 +126,9 @@ function flowToc(scope, node) {
     const outline = scope.env.outline ?? [];
     if (outline.length === 0) return;
     const { styles, env } = scope;
-    const width = Math.min(300, scope.width * 0.5);
+    // floated beside the text when there is room for the text, else across the page above it
+    const floated = scope.width - TOC_WIDTH - TOC_GAP >= MIN_TEXT_BESIDE * styles.size;
+    const width = floated ? TOC_WIDTH : scope.width;
     const pad = { x: 10, y: 8 };
     const font = { ...styles.body, size: styles.size - 2 };
     const lineHeight = Math.round(font.size * 1.35);
@@ -155,13 +162,17 @@ function flowToc(scope, node) {
     sub.y += styles.paragraphGap - gap;
     const height = sub.y - scope.y + pad.y - styles.paragraphGap;
     const rect = { x: scope.x, y: scope.y, width, height };
-    scope.shapes.push({
-        type: 'rect',
-        bounds: { x0: rect.x, y0: rect.y, x1: rect.x + width + 24, y1: rect.y + height + 14 },
-        blocked: (y0, y1) => (y1 <= rect.y || y0 >= rect.y + height + 14 ? null : [rect.x, rect.x + width + 24]),
-    });
+    if (floated) {
+        scope.shapes.push({
+            type: 'rect',
+            bounds: { x0: rect.x, y0: rect.y, x1: rect.x + width + TOC_GAP, y1: rect.y + height + 14 },
+            blocked: (y0, y1) => (y1 <= rect.y || y0 >= rect.y + height + 14 ? null : [rect.x, rect.x + width + TOC_GAP]),
+        });
+    } else {
+        scope.y = rect.y + height + styles.paragraphGap;
+    }
     scope.out.push({ type: 'toc', rect, items });
     for (const item of sub.out) scope.out.push(item);
-    scope.ruleTop = rect.y;
+    if (floated) scope.ruleTop = rect.y;
     scope.maxY = Math.max(scope.maxY, rect.y + height);
 }

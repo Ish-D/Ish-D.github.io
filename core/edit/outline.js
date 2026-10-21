@@ -17,9 +17,9 @@ function findBlock(layout, start) {
 }
 
 /**
- * @param {{ document: Document, getLayout: () => any, hover: ReturnType<typeof import('./hover.js').createHover>, originX?: () => number }} deps   originX: page x of the layout's x = 0
+ * @param {{ document: Document, getLayout: () => any, hover: ReturnType<typeof import('./hover.js').createHover> }} deps
  */
-export function createHoverOutline({ document, getLayout, hover, originX = () => 0 }) {
+export function createHoverOutline({ document, getLayout, hover }) {
     const NS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(NS, 'svg');
     svg.setAttribute('class', 'hover-outline');
@@ -34,7 +34,7 @@ export function createHoverOutline({ document, getLayout, hover, originX = () =>
         const layout = getLayout();
         if (el.matches('.blk') && layout) {
             const block = findBlock(layout, Number(el.dataset.start));
-            if (block) return toPath(contours(rowsOfLines(block.lines, block.lineHeight), { pad: PAD }), -originX());
+            if (block) return toPath(contours(rowsOfLines(block.lines, block.lineHeight), { pad: PAD }));
         }
         const r = el.getBoundingClientRect();
         const x = r.left + scrollX;

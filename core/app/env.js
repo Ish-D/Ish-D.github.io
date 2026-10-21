@@ -30,7 +30,7 @@ export function createEnv(app) {
 
     /** Input for layoutDocument. */
     function build() {
-        const width = app.viewport.width();
+        const width = document.documentElement.clientWidth;
         const narrow = width < 600;
         const { marginPercent } = settings.values;
         const fontSize = narrow ? Math.min(settings.values.fontSize, 18) : settings.values.fontSize;
