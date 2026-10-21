@@ -18,6 +18,7 @@ import { mountFigures, disposeFigures, hasFigure } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
 import { createTocRail } from './toc.js';
 import { createPersonal } from './personal.js';
+import { createFigureTools } from '../edit/figure-tools.js';
 import { createInserter } from '../edit/insert.js';
 import { openSketchPad } from '../edit/sketchpad.js';
 import { parseStrokes, parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
@@ -55,6 +56,7 @@ const state = {
 };
 const persist = new Map();
 let inserter = null;
+let figureTools = null;
 
 function toast(text) {
     document.querySelector('.toast')?.remove();
@@ -374,6 +376,12 @@ function useSession(source) {
         onSourceChange: scheduleSave,
     });
     state.editor.setEnabled(state.canEdit && new URLSearchParams(location.search).has('edit'));
+    figureTools ??= createFigureTools({
+        document, root,
+        getSession: () => state.session,
+        textWidth: () => state.layout?.geometry.text.width ?? 600,
+        onEdited: () => scheduleSave(),
+    });
     inserter ??= createInserter({
         document, root,
         getSession: () => state.session,
