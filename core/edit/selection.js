@@ -1,8 +1,7 @@
 /**
  * Selecting a figure while editing. Clicking a figure selects it and leaves it
  * looking as it will on the page: it gets a frame, a grip to drag it, a corner
- * handle to resize it, a short bar of placement buttons, and the inspector for
- * everything else. Nothing turns into source text unless asked to.
+ * handle to resize it, and the inspector for everything else. Nothing turns into source text unless asked to.
  *
  * Every change is an edit to the figure's arguments. Dragging and sliders
  * apply it live so the page re-flows as you move, as one undo step.
@@ -15,9 +14,6 @@ import { figureArgs, figureMoveChanges } from './move.js';
 import { columnOf } from './guides.js';
 import { createInspector } from './inspector.js';
 import { shiftRange } from './ranges.js';
-
-const BAR_PLACES = [['left', '◧', 'Float left'], ['block', '▭', 'Own line'], ['right', '◨', 'Float right'], ['full', '⟷', 'Full width']];
-const BAR_WRAPS = [['none', '□', 'No wrap'], ['box', '▣', 'Wrap around the box'], ['circle', '○', 'Wrap around a circle'], ['ellipse', '⬭', 'Wrap around an ellipse']];
 
 const px = (v) => `${Math.round(v)}px`;
 const isPixels = (text) => !!text && /^\d+(\.\d+)?(px)?$/.test(text);
@@ -114,20 +110,10 @@ export function createSelection({ document, root, snapper, getSession, getLayout
     };
     const inspector = createInspector({ document, host });
 
-    // ----- quick placement buttons -----
+    // ----- the grip that moves the figure -----
 
-    const button = (label, title, onclick) => make('button', '', { type: 'button', textContent: label, title, onclick });
-    const sep = () => make('span', 'sep');
-    const grip = button('⠿', 'Drag to move the figure');
-    grip.classList.add('grip');
-    bar.append(
-        grip, sep(),
-        ...BAR_PLACES.map(([value, label, title]) => button(label, title, () => host.apply([{ key: 'place', value }]))),
-        sep(),
-        ...BAR_WRAPS.map(([value, label, title]) => button(label, title, () => host.apply([{ key: 'wrap', value: value === 'none' ? null : value }]))),
-        sep(),
-        button('</>', 'Edit the source', () => host.openSource()),
-    );
+    const grip = make('button', 'grip', { type: 'button', textContent: '⠿', title: 'Drag to move the figure' });
+    bar.appendChild(grip);
 
     // ----- placing the frame, bar and handle on the selected figure -----
 
