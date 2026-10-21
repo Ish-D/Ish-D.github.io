@@ -7,6 +7,8 @@
  * a mirror that carries the colors.
  */
 
+import { contours, toPath } from '../layout/contour.js';
+
 const SYNTAX = /\[\[[^\]\n]*\]\]|^#{1,6}[ \t]|\*{1,3}|[{}]|\$\$?|`+/gm;
 
 /**
@@ -127,7 +129,13 @@ export function createEditorBox({ document, text, typography }) {
     plainOnly = plainOnly && input.contentEditable === 'plaintext-only';
     if (!plainOnly) input.contentEditable = 'true';
     input.textContent = text;
-    box.append(mirror, input);
+    const NS = 'http://www.w3.org/2000/svg';
+    const outline = document.createElementNS(NS, 'svg');
+    outline.setAttribute('class', 'editor-outline');
+    outline.setAttribute('aria-hidden', 'true');
+    const outlinePath = document.createElementNS(NS, 'path');
+    outline.appendChild(outlinePath);
+    box.append(mirror, input, outline);
     Object.assign(box.style, typography);
 
     const offsetOf = (node, at) => {
@@ -179,8 +187,38 @@ export function createEditorBox({ document, text, typography }) {
         // a final newline would otherwise collapse and shorten the mirror
         mirrorText.appendChild(document.createTextNode('\u200b'));
     };
+    /** One row per line of text as it is laid out right now, measured from the box. */
+    const rows = () => {
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const base = input.getBoundingClientRect();
+        const lineHeight = parseFloat(document.defaultView.getComputedStyle(input).lineHeight) || base.height || 1;
+        const byLine = new Map();
+        for (const r of range.getClientRects()) {
+            if (r.width === 0 && r.height === 0) continue;
+            const i = Math.max(0, Math.round((r.top - base.top) / lineHeight));
+            const row = byLine.get(i) ?? { x0: Infinity, x1: -Infinity };
+            row.x0 = Math.min(row.x0, r.left - base.left);
+            row.x1 = Math.max(row.x1, r.right - base.left);
+            byLine.set(i, row);
+        }
+        const last = Math.max(-1, ...byLine.keys());
+        const out = [];
+        for (let i = 0, prev = { x0: 0, x1: base.width }; i <= last; i++) {
+            const row = byLine.get(i) ?? prev;   // a blank line keeps the shape of the one above
+            out.push({ x0: row.x0, x1: row.x1, y0: i * lineHeight, y1: (i + 1) * lineHeight });
+            prev = row;
+        }
+        return out.length ? out : [{ x0: 0, x1: base.width, y0: 0, y1: lineHeight }];
+    };
+    /** Redraws the outline and limits the clickable area to the text. */
+    const refresh = () => {
+        const shape = contours(rows(), { pad: 4 });
+        outlinePath.setAttribute('d', toPath(shape));
+        input.style.clipPath = `path('${toPath(shape)}')`;
+    };
     paint();
-    input.addEventListener('input', paint);
+    input.addEventListener('input', () => { paint(); refresh(); });
 
     let signature = '';
     /** Makes the lines wrap around what the page wraps around. Call after every layout. */
@@ -191,7 +229,7 @@ export function createEditorBox({ document, text, typography }) {
         for (const parent of [box, mirror]) {
             for (const old of parent.querySelectorAll(':scope > .ex')) old.remove();
         }
-        if (!insets.some(b => b.left > 0 || b.right > 0)) return;
+        if (!insets.some(b => b.left > 0 || b.right > 0)) { refresh(); return; }
         // a float per band, stacked, gives the same ragged edge as the page's slots
         const make = (side, width) => {
             const el = document.createElement('i');
@@ -205,16 +243,18 @@ export function createEditorBox({ document, text, typography }) {
                 parent.insertBefore(make('right', right), before);
             }
         }
+        refresh();
     };
 
     return {
         box,
         repaint: paint,
+        refresh,
         setBands,
         /** The editable element, for events. */
         input,
         get value() { return readText(input); },
-        set value(next) { input.textContent = next; paint(); },
+        set value(next) { input.textContent = next; paint(); refresh(); },
         get selectionStart() {
             const sel = box.ownerDocument.defaultView.getSelection();
             if (!sel || sel.rangeCount === 0 || !input.contains(sel.anchorNode)) return 0;

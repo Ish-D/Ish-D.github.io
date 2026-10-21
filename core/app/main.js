@@ -12,6 +12,7 @@ import { createCanvasMeasurer } from '../text/measure.js';
 import { createFigureTools } from '../edit/figure-tools.js';
 import { createInserter } from '../edit/insert.js';
 import { createNoteMover } from '../edit/move.js';
+import { createHoverOutline } from '../edit/outline.js';
 import { createState } from './state.js';
 import { createSettings } from './settings.js';
 import { createNavigation } from './navigation.js';
@@ -73,6 +74,7 @@ createFigureTools({
     textWidth: () => state.layout?.geometry.text.width ?? 600,
     onEdited: () => app.saver.scheduleSave(),
 });
+app.hoverOutline = createHoverOutline({ document, root, getLayout: () => state.layout });
 createNoteMover({
     document, root,
     getSession: () => state.session,

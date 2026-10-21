@@ -51,6 +51,7 @@ export function createEditor({ document, session, getLayout, setEditing, onSourc
     const fit = () => {
         const needed = Math.ceil(active.field.height);
         active.box.style.height = `${needed}px`;
+        active.field.refresh();
         return needed;
     };
 

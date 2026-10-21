@@ -17,7 +17,7 @@ const WRAPS = [['none', '□', 'No wrap'], ['box', '▣', 'Wrap around the box']
 /** Directives that draw a figure. */
 const FIGURES = ['image', 'viz', 'drawing', 'figure', 'gallery', 'embed'];
 
-const PAD_STEP = 4;
+const PAD_MAX = 120;
 
 const px = (v) => `${Math.round(v)}px`;
 const isPixels = (text) => !!text && /^\d+(\.\d+)?(px)?$/.test(text);
@@ -70,19 +70,18 @@ export function createFigureTools({ document, root, getSession, getLayout, textW
     };
     const sep = () => Object.assign(document.createElement('span'), { className: 'sep' });
 
-    // the space the text keeps clear around the figure, in px; drag the number or use the buttons
-    const padPill = button('', 'Drag to set the space around the figure');
-    padPill.classList.add('pill');
+    // the space the text keeps clear around the figure, in px
+    const padLabel = Object.assign(document.createElement('span'), { className: 'pad-label' });
+    const padSlider = Object.assign(document.createElement('input'), { type: 'range', min: 0, max: PAD_MAX, step: 1, title: 'Space around the figure' });
+    const padControl = Object.assign(document.createElement('label'), { className: 'pad-control' });
+    padControl.append(padLabel, padSlider);
 
     const padOf = (node) => {
         const value = parseValue(argValue(node, 'pad'));
         if (value?.type === 'number') return value.value;
         return Math.round(0.6 * (getLayout()?.styles.size ?? 16));
     };
-    const stepPad = (by) => {
-        const node = directive();
-        if (node) apply([{ key: 'pad', value: String(Math.max(0, Math.round(padOf(node)) + by)) }]);
-    };
+    const showPad = (pad) => { padSlider.value = String(pad); padLabel.textContent = `pad ${Math.round(pad)}`; };
 
     const grip = button('⠿', 'Drag to move the figure');
     grip.classList.add('grip');
@@ -93,9 +92,7 @@ export function createFigureTools({ document, root, getSession, getLayout, textW
         sep(),
         ...WRAPS.map(([value, label, title]) => button(label, title, () => apply([{ key: 'wrap', value: value === 'none' ? null : value }]))),
         sep(),
-        button('−', 'Less space around it', () => stepPad(-PAD_STEP)),
-        padPill,
-        button('+', 'More space around it', () => stepPad(PAD_STEP)),
+        padControl,
     );
 
     function show(el) {
@@ -109,7 +106,7 @@ export function createFigureTools({ document, root, getSession, getLayout, textW
         handle.style.left = `${r.right + scrollX - 9}px`;
         handle.style.top = `${r.bottom + scrollY - 9}px`;
         const node = directive();
-        if (node) { padPill.textContent = `pad ${Math.round(padOf(node))}`; drawRing(el, padOf(node), node); }
+        if (node) { showPad(padOf(node)); drawRing(el, padOf(node), node); }
         hideTimer = setTimeout(hide, 3000);
     }
 
@@ -142,7 +139,7 @@ export function createFigureTools({ document, root, getSession, getLayout, textW
         const rect = figure.getBoundingClientRect();
         return {
             kind, start: node.start, preview: createPreview(session, node.start, FIGURES),
-            args: figureArgs(node), pad: padOf(node), width: argValue(node, 'width'), height: argValue(node, 'height'),
+            args: figureArgs(node), width: argValue(node, 'width'), height: argValue(node, 'height'),
             size: { width: rect.width, height: rect.height },
         };
     }
@@ -183,27 +180,25 @@ export function createFigureTools({ document, root, getSession, getLayout, textW
         onCancel() { if (drag) { drag.preview.cancel(); drag = null; hide(); } },
     });
 
-    // scrub the number: every two pixels of drag is a pixel of space
-    const padChanges = (dx) => {
-        const pad = Math.max(0, Math.round(drag.pad + dx / 2));
-        padPill.textContent = `pad ${pad}`;
-        return [{ key: 'pad', value: String(pad) }];
-    };
-    const followRing = (pad) => {
-        const el = root.querySelector(`.obj[data-start="${drag.start}"]`);
-        const node = directive();
-        if (el && node) requestAnimationFrame(() => drawRing(root.querySelector(`.obj[data-start="${drag.start}"]`) ?? el, pad, node));
-    };
-    makeDraggable(padPill, {
-        onStart() { drag = begin('pad'); },
-        onMove(dx) {
-            if (!drag) return;
-            drag.preview.show(padChanges(dx));
-            followRing(Math.max(0, Math.round(drag.pad + dx / 2)));
-        },
-        onDrop(dx) { if (drag) finish(padChanges(dx)); },
-        onCancel() { if (drag) { drag.preview.cancel(); drag = null; hide(); } },
+    // the slider changes the space live; releasing it (or the last key press) is one undo step
+    const followRing = (pad) => requestAnimationFrame(() => {
+        const el = drag && root.querySelector(`.obj[data-start="${drag.start}"]`);
+        const node = drag && directiveAt(getSession(), drag.start, FIGURES);
+        if (el && node) drawRing(el, pad, node);
     });
+    padSlider.addEventListener('input', () => {
+        drag ??= begin('pad');
+        if (!drag) return;
+        const pad = Number(padSlider.value);
+        padLabel.textContent = `pad ${pad}`;
+        drag.preview.show([{ key: 'pad', value: String(pad) }]);
+        followRing(pad);
+    });
+    padSlider.addEventListener('change', () => {
+        if (drag?.kind === 'pad') finish([{ key: 'pad', value: padSlider.value }]);
+    });
+    // keep the toolbar up while the slider is in use
+    padSlider.addEventListener('pointerdown', () => clearTimeout(hideTimer));
 
     return { dispose() { bar.remove(); handle.remove(); ring.remove(); clearTimeout(hideTimer); } };
 }

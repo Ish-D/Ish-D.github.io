@@ -34,6 +34,7 @@ export function createView(app) {
         const doc = currentDoc();
         if (!doc) return;
         const place = app.nav.captureScroll();
+        app.hoverOutline?.clear();
         for (const spec of collectVars(doc)) state.store.define(spec);
         state.liveStops.forEach(stop => stop());
         state.liveStops = [];

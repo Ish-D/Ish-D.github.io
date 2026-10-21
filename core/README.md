@@ -6,7 +6,7 @@ A layout engine and editor for long-form pages. No dependencies, no build step. 
 | --- | --- |
 | `doc/` | Parser with source ranges, `setArg` style edits, front matter |
 | `text/` | Knuth-Plass line breaking, hyphenation, measuring |
-| `layout/` | Columns, slots around shapes, objects, margin notes, page layout |
+| `layout/` | Columns, slots around shapes, objects, margin notes, page layout; `contour.js` turns lines of text into the shape they fill |
 | `render/` | Layout to DOM, strokes, stylesheet |
 | `edit/` | In-place editor, undo, insert menu, figure tools, sketch pad |
 | `runtime/` | Article variables, scrubbing, figures |
@@ -38,3 +38,7 @@ Hidden. Type `backstage`, open `/#backstage`, or hold the gear for a second and 
 - A page with a public name can be published (the arrow button); that commits plain source to `cards/<name>.md` and your manifest action does the rest.
 
 The vault file is public, so the password is the only protection. Use a long passphrase.
+
+## Text is as big as its lines
+
+A paragraph beside a figure is a stepped shape, not a rectangle. `layout/contour.js` turns a block's lines into that shape, and three things use it: the outline shown when you point at text while editing, the area that counts as a click on the text (it is the lines themselves), and the box drawn around text being edited. The editing box wraps its lines around whatever the page wraps around, because the layout gives the editor slot the blocked stretch of each line band (`placeEditor` in `layout/flow.js`).
