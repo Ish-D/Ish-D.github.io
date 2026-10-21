@@ -39,6 +39,40 @@ test('argument changes are applied to the directive and skip what is already the
     assert.equal(updateArgs(session, start, [{ key: 0, value: 'left' }, { key: 'pos', value: '120' }]), false);
     assert.equal(updateArgs(session, start, [{ key: 'type', value: null }, { key: 'pos', value: null }]), true);
     assert.match(session.source, /\[\[note\(left\)\]\]/);
+});
+
+test('the changes of one call undo together', () => {
+    const original = 'Text[[note(right)]]{x}{Body.} more.\n';
+    const session = createSession(original, { parse, onChange() {} });
+    updateArgs(session, original.indexOf('[[note'), [{ key: 0, value: 'left' }, { key: 'type', value: 'absolute' }, { key: 'pos', value: '9' }], 'one-move');
+    assert.notEqual(session.source, original);
     session.undo();
-    assert.match(session.source, /type: absolute/, 'one undo step per move would restore both; at least one change comes back');
+    assert.equal(session.source, original);
+});
+
+import { createPreview } from '../../core/edit/args.js';
+
+test('a preview sets the arguments to each value in turn and undoes as one step', () => {
+    const session = createSession('Text\n\n[[drawing(a.svg, place: left)]]\n\nMore.\n', { parse, onChange() {} });
+    const original = session.source;
+    const start = session.source.indexOf('[[drawing');
+    const preview = createPreview(session, start);
+    for (const dx of [5, 20, 35, 60]) assert.equal(preview.show([{ key: 'dx', value: String(dx) }]), true);
+    assert.match(session.source, /dx: 60\)\]\]/);
+    assert.equal((session.source.match(/dx:/g) ?? []).length, 1);
+    assert.equal(preview.changed, true);
+    preview.cancel();
+    assert.equal(session.source, original);
+});
+
+test('a preview stops when something else changes the source mid-drag', () => {
+    const session = createSession('[[drawing(a.svg)]]\n\nMore.\n', { parse, onChange() {} });
+    const preview = createPreview(session, 0);
+    assert.equal(preview.show([{ key: 'dx', value: '5' }]), true);
+    session.reset('Something else entirely.\n');
+    assert.equal(preview.show([{ key: 'dx', value: '9' }]), false);
+    assert.equal(session.source, 'Something else entirely.\n');
+    assert.equal(preview.changed, false);
+    preview.cancel();
+    assert.equal(session.source, 'Something else entirely.\n');
 });

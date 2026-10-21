@@ -8,7 +8,7 @@
  *  - A figure gets `dx` and `dy` offsets from where its placement would put it.
  */
 
-import { argValue, directiveAt, updateArgs } from './args.js';
+import { argValue, createPreview } from './args.js';
 import { makeDraggable } from './drag.js';
 import { parseValue } from '../layout/values.js';
 import { PAGE } from '../layout/document.js';
@@ -55,7 +55,8 @@ export function figureMoveChanges(args, drag) {
 export const figureArgs = (node) => ({ place: argValue(node, 'place'), dx: argValue(node, 'dx'), dy: argValue(node, 'dy') });
 
 /**
- * A grip above a margin note while editing; dragging it moves the note.
+ * A grip above a margin note while editing; dragging it moves the note, and
+ * the page re-flows around it on every move.
  * @param {{ document: Document, root: HTMLElement, getSession: () => any, getLayout: () => any, onEdited: () => void }} deps
  */
 export function createNoteMover({ document, root, getSession, getLayout, onEdited }) {
@@ -66,22 +67,19 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
     grip.hidden = true;
     document.body.appendChild(grip);
 
-    let note = null;
-    let element = null;
+    let hovered = null;
     let hideTimer = 0;
-    const hide = () => { grip.hidden = true; if (!dragging) { note = null; element = null; } };
-    let dragging = false;
+    let drag = null;
+    const hide = () => { if (!drag) { grip.hidden = true; hovered = null; } };
 
     root.addEventListener('mousemove', (e) => {
-        if (!document.body.classList.contains('editing') || dragging) return;
+        if (!document.body.classList.contains('editing') || drag) return;
         const aside = e.target.closest?.('aside.note[data-note]');
         if (!aside) return;
-        const layout = getLayout();
-        const found = layout?.notes[Number(aside.dataset.note)];
-        if (!found) return;
+        const note = getLayout()?.notes[Number(aside.dataset.note)];
+        if (!note) return;
         clearTimeout(hideTimer);
-        note = found;
-        element = aside;
+        hovered = note;
         const r = aside.getBoundingClientRect();
         grip.hidden = false;
         grip.style.left = `${r.left + scrollX - 2}px`;
@@ -89,35 +87,39 @@ export function createNoteMover({ document, root, getSession, getLayout, onEdite
         hideTimer = setTimeout(hide, 2500);
     });
 
-    let base = '';
+    const show = (dx, dy) => drag.preview.show(noteMoveChanges(drag.from, { ...drag.page, dx, dy }));
+
     makeDraggable(grip, {
         onStart() {
-            dragging = true;
+            const session = getSession();
+            const layout = getLayout();
+            if (!hovered || !session) return;
             clearTimeout(hideTimer);
-            base = element.style.transform;
-            element.classList.add('moving');
+            drag = {
+                preview: createPreview(session, hovered.node.start),
+                from: { y: hovered.y, x: hovered.x, width: hovered.width, anchorY: hovered.anchor.y },
+                page: { pageWidth: layout.width, lineHeight: layout.styles.lineHeight, topPad: PAGE.topPad },
+            };
         },
         onMove(dx, dy) {
-            element.style.transform = `translate(${dx}px, ${dy}px) ${base}`;
+            if (!drag) return;
             grip.style.transform = `translate(${dx}px, ${dy}px)`;
+            show(dx, dy);
         },
         onDrop(dx, dy) {
-            const layout = getLayout();
-            const session = getSession();
-            const target = { node: note.node, y: note.y, x: note.x, width: note.width, anchorY: note.anchor.y };
-            const changes = noteMoveChanges(target, { dx, dy, pageWidth: layout.width, lineHeight: layout.styles.lineHeight, topPad: PAGE.topPad });
-            const start = note.node.start;
-            dragging = false;
+            if (!drag) return;
+            show(dx, dy);
+            const { preview } = drag;
+            drag = null;
             grip.style.transform = '';
-            element.classList.remove('moving');
             hide();
-            if (session && directiveAt(session, start) && updateArgs(session, start, changes, `move-${Date.now()}`)) onEdited();
-            else element.style.transform = base;
+            if (preview.changed) onEdited();
         },
         onCancel() {
-            dragging = false;
-            if (element) { element.style.transform = base; element.classList.remove('moving'); }
+            drag?.preview.cancel();
+            drag = null;
             grip.style.transform = '';
+            hide();
         },
     });
 

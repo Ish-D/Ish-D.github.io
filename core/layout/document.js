@@ -266,6 +266,16 @@ function placeNotes(scope, env, styles, geom) {
     }
 
     const obstacles = { left: scope.bleeds.slice(), right: scope.bleeds.slice() };
+    // a figure that reaches into a margin takes that stretch of it
+    for (const item of scope.out) {
+        if (item.type !== 'object' || !item.rect) continue;
+        const { x, y, width, height } = item.rect;
+        const bottom = y + height + (item.caption ? item.caption.height + styles.paragraphGap : 0);
+        for (const side of ['left', 'right']) {
+            const strip = strips[side];
+            if (x < strip.x + strip.width && x + width > strip.x) obstacles[side].push([y, bottom]);
+        }
+    }
     for (const pin of pinned) obstacles[pin.side].push([pin.y - styles.note.gap, pin.y + pin.laid.height + styles.note.gap]);
     const solved = solveMargins(items, {
         lo: PAGE.topPad,

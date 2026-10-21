@@ -11,6 +11,9 @@ export function createSaver(app) {
     const { state, personal } = app;
     let devTimer = 0;
     let vaultTimer = 0;
+    /** True from an edit until the file on disk holds it. */
+    let unsaved = false;
+    let saving = false;
 
     function setStatus(text) {
         state.saveStatus = text;
@@ -37,15 +40,22 @@ export function createSaver(app) {
         if (!state.session) return;
         const body = state.session.source;
         setStatus('saving…');
+        saving = true;
         try {
             const res = await fetch(`/cards/${state.page}.md`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'text/markdown', 'X-Requested-With': 'v2-editor' },
                 body,
             });
-            if (res.ok) { state.lastSaved = body; setStatus('saved'); } else setStatus(`save failed (${res.status})`);
+            if (res.ok) {
+                state.lastSaved = body;
+                unsaved = state.session?.source !== body;
+                setStatus(unsaved ? 'unsaved' : 'saved');
+            } else setStatus(`save failed (${res.status})`);
         } catch {
             setStatus('save failed');
+        } finally {
+            saving = false;
         }
     }
 
@@ -55,6 +65,7 @@ export function createSaver(app) {
             clearTimeout(vaultTimer);
             vaultTimer = setTimeout(pushToVault, VAULT_PUSH_DELAY);
         } else if (state.canSave) {
+            unsaved = true;
             setStatus('unsaved');
             clearTimeout(devTimer);
             devTimer = setTimeout(saveToDevServer, DEV_SAVE_DELAY);
@@ -72,15 +83,21 @@ export function createSaver(app) {
         state.canEdit = state.canSave || new URLSearchParams(location.search).has('edit');
     }
 
+    /** The editor is busy: text being typed, a drag in progress, or edits not yet written. */
+    const busy = () => !!state.editor?.active || state.sketching || unsaved || saving || document.body.classList.contains('dragging-item');
+
     /** Picks up changes made to the file outside the editor while running locally. */
     function watchFile() {
         setInterval(async () => {
-            if (!state.canSave || !state.session || state.editor?.active || savesToVault()) return;
+            if (!state.canSave || !state.session || savesToVault() || busy()) return;
+            const before = state.session.source;
             try {
                 const res = await fetch(`/cards/${state.page}.md`, { cache: 'no-cache' });
                 if (!res.ok) return;
                 const text = await res.text();
-                if (text !== state.session.source && text !== state.lastSaved) { state.lastSaved = text; state.session.reset(text); }
+                // anything the user did while this was in flight wins
+                if (busy() || state.session?.source !== before) return;
+                if (text !== before && text !== state.lastSaved) { state.lastSaved = text; state.session.reset(text); }
             } catch { /* offline */ }
         }, RELOAD_POLL_MS);
     }

@@ -41,3 +41,35 @@ export function updateArgs(session, start, changes, group = `args-${Date.now()}`
     }
     return changed;
 }
+
+/**
+ * A live preview of argument changes while something is being dragged. Each
+ * `show` sets the arguments to the given values (not relative to the last
+ * call), so the page can re-flow on every pointer move; all of it is one undo
+ * step. If the source is changed by anything else mid-drag the preview stops
+ * touching it.
+ */
+export function createPreview(session, start) {
+    const original = session.source;
+    const group = `drag-${Date.now()}`;
+    let last = original;
+    let lost = false;
+
+    return {
+        get lost() { return lost; },
+        /** @returns {boolean} false once the source has changed under the drag */
+        show(changes) {
+            if (lost || session.source !== last) { lost = true; return false; }
+            updateArgs(session, start, changes, group);
+            last = session.source;
+            return true;
+        },
+        /** Puts the source back as it was before the drag. */
+        cancel() {
+            if (lost || session.source !== last) return;
+            for (let i = 0; i < 20 && session.source !== original; i++) session.undo();
+            last = session.source;
+        },
+        get changed() { return !lost && session.source !== original; },
+    };
+}

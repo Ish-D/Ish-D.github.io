@@ -20,6 +20,7 @@ export function makeDraggable(handle, { onStart, onMove, onDrop, onCancel }) {
         try { handle.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
         drag = { x: e.clientX, y: e.clientY, moved: false };
     };
+    const body = () => handle.ownerDocument.body;
     const move = (e) => {
         if (!drag) return;
         const dx = e.clientX - drag.x;
@@ -27,6 +28,7 @@ export function makeDraggable(handle, { onStart, onMove, onDrop, onCancel }) {
         if (!drag.moved) {
             if (Math.hypot(dx, dy) < THRESHOLD) return;
             drag.moved = true;
+            body().classList.add('dragging-item');
             onStart?.();
         }
         onMove(dx, dy);
@@ -35,12 +37,14 @@ export function makeDraggable(handle, { onStart, onMove, onDrop, onCancel }) {
         if (!drag) return;
         const { moved, x, y } = drag;
         drag = null;
+        body().classList.remove('dragging-item');
         if (moved) onDrop(e.clientX - x, e.clientY - y); else onCancel?.();
     };
     const cancel = () => {
         if (!drag) return;
         const { moved } = drag;
         drag = null;
+        body().classList.remove('dragging-item');
         if (moved) onCancel?.();
     };
 

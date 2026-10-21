@@ -281,3 +281,14 @@ test('a note too tall for the margin is set in the body', () => {
     assert.equal(layout.notes.length, 1);
     assert.ok(layout.blocks.some(b => b.type === 'paragraph' && b.lines?.some(l => l.runs.some(r => /word word/.test(r.text ?? '')))));
 });
+
+test('a figure dragged into a margin pushes the notes there out of its way', () => {
+    const src = 'Text[[note(right)]]{x}{A note that wants to sit beside this paragraph.} more.\n\n[[image(a.png, place: right, width: 200, height: 200, dx: -260)]]\n\nMore text here.\n';
+    const layout = layoutDocument(parseText(src), makeEnv(1300, { hyphenator }));
+    const obj = layout.blocks.find(b => b.type === 'object');
+    const strip = layout.geometry.right;
+    assert.ok(obj.rect.x + obj.rect.width > strip.x, 'the figure reaches the margin');
+    for (const n of layout.notes.filter(n => n.side === 'right')) {
+        assert.ok(n.y + n.height <= obj.rect.y + 1e-6 || n.y >= obj.rect.y + obj.rect.height - 1e-6);
+    }
+});
