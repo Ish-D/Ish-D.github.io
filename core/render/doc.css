@@ -463,3 +463,10 @@ body.editing .obj[data-sketch] { outline: 1px dashed var(--color-border); outlin
 .scatter-piece.held { cursor: grabbing; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); }
 
 .figure-bar[hidden], .figure-handle[hidden], .insert-plus[hidden], .insert-menu[hidden] { display: none; }
+
+@media print {
+    .toc-rail, .insert-plus, .insert-menu, .figure-bar, .figure-handle, .note-more, .sketch-bar { display: none !important; }
+    html, body { background: #fff; color: #000; }
+    .doc { break-inside: auto; }
+    .blk, .obj, aside.note, .codeblock, .mathblock { break-inside: avoid; }
+}

@@ -1,0 +1,40 @@
+# Site core
+
+A layout engine and editor for long-form pages. No dependencies, no build step. `node --test "test/**/*.test.js"` runs the tests.
+
+| Folder | What it does |
+| --- | --- |
+| `doc/` | Parser with source ranges, `setArg` style edits, front matter |
+| `text/` | Knuth-Plass line breaking, hyphenation, measuring |
+| `layout/` | Columns, slots around shapes, objects, margin notes, page layout |
+| `render/` | Layout to DOM, strokes, stylesheet |
+| `edit/` | In-place editor, undo, insert menu, figure tools, sketch pad |
+| `runtime/` | Article variables, scrubbing, figures |
+| `figures/` | Figures that read article variables |
+| `vault/` | Encrypted private pages and drafts kept in the GitHub repo |
+| `app/` | The shell: `main.js`, contents rail, backstage |
+
+## Writing
+
+Plain markdown plus directives: `[[name(args)]]{group}`.
+
+- `[[image(src, place: left|right|center|gutter|block|span|full, wrap: circle|ellipse|box|polygon(...), width:, height:, pad:, fit:)]]{caption}`
+- `[[columns(2, gap: 40)]]{ ... }`
+- `[[note(left|right, orient: vertical, type: absolute, pos: 120, maxh: 80px)]]{marker}{body}`
+- `[[var(name, value, min:, max:, step:)]]`, `\val{name}` in math, `[[viz(type: softmax-scale, var: name)]]`
+- `[[drawing(file.svg)]]` or `[[drawing(view: 600x300)]]{strokes}` (click it in edit mode to draw)
+- `[[gallery(columns: 3)]]{path | caption}`
+
+## Editing
+
+Pencil in the top right turns editing on. Click a block to edit its source, click away to see it rendered. A `+` under a block inserts new things. Hover a figure for place and wrap buttons and a resize handle.
+
+## Backstage
+
+Hidden. Type `backstage`, open `/#backstage`, or hold the gear for a second and a half. First time, it asks for a GitHub token (fine-grained, Contents read and write on this repo only), the repo, and a password. After that it asks for the password.
+
+- `vault.json` (public) holds a random master key wrapped by a key from your password (scrypt) and the token, sealed.
+- Private pages and drafts are sealed with the master key on the `private` branch. They save as you type, queue when offline, and merge if two devices edit.
+- A page with a public name can be published (the arrow button); that commits plain source to `cards/<name>.md` and your manifest action does the rest.
+
+The vault file is public, so the password is the only protection. Use a long passphrase.
