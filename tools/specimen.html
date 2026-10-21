@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Body font specimen</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&family=Libre+Bodoni:ital,wght@0,400..700;1,400..700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Prata&display=block">
+<style>
+@font-face { font-family: 'MonotypeModern'; src: url('/fonts/MonotypeModern.otf'); font-display: block; }
+body { margin: 0; padding: 28px 40px; background: #fff; color: #2d2926; width: 1200px; }
+.row { display: grid; grid-template-columns: 170px 1fr; gap: 24px; padding: 18px 0; border-top: 1px solid #ddd; }
+.name { font: 13px/1.4 -apple-system, Helvetica, sans-serif; color: #666; padding-top: 6px; }
+.name b { color: #222; font-size: 14px; }
+.sample { font-weight: 400; width: 600px; font-size: 20px; line-height: 28px; text-align: justify; hyphens: auto; font-kerning: normal; font-variant-ligatures: common-ligatures; }
+.sample h3 { margin: 0 0 6px; font-size: 20px; line-height: 28px; text-align: left; }
+.sample p { margin: 0 0 8px; }
+.sample .num { font-size: 17px; letter-spacing: 0.01em; }
+</style>
+</head>
+<body>
+<script>
+const text = {
+  head: 'The Layer',
+  body: 'Individual neurons are organized into layers. A layer is simply a collection of independent neurons that together, project our input data into a different dimension. If we stopped here, and chained layers together like this, we wouldn’t actually be able to learn much; the <em>activation function</em> is what lets the network <strong>fold</strong> the space into complex shapes.',
+  nums: 'Fig. 3 · 0123456789 · April 14, 2026 · “fi fl ffi” — d<sub>k</sub> = 64',
+};
+const fonts = [
+  ['Monotype Modern Extended', 'current: regular only, italic and bold are synthesized', "'MonotypeModern', Georgia, serif"],
+  ['Old Standard TT', 'regular, italic, bold', "'Old Standard TT', serif"],
+  ['Libre Bodoni', 'regular to bold, italic', "'Libre Bodoni', serif; font-variation-settings: 'wght' 400"],
+  ['Bodoni Moda', 'variable weight and optical size, italic', "'Bodoni Moda', serif"],
+  ['Playfair Display', 'regular to black, italic', "'Playfair Display', serif"],
+  ['Prata', 'regular only (no italic)', "'Prata', serif"],
+];
+for (const [name, note, family] of fonts) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<div class="name"><b>${name}</b><br>${note}</div>
+    <div class="sample" style="font-family:${family}"><h3><strong>${text.head}</strong></h3><p>${text.body}</p><p class="num">${text.nums}</p></div>`;
+  document.body.appendChild(row);
+}
+</script>
+</body>
+</html>

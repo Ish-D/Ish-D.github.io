@@ -16,6 +16,7 @@ import { createStore, formatNumber } from '../runtime/store.js';
 import { attachScrub, bindVars } from '../runtime/scrub.js';
 import { mountFigures, disposeFigures, hasFigure } from '../runtime/figures.js';
 import { collectVars } from '../doc/refs.js';
+import { createTocRail } from './toc.js';
 import '../figures/index.js';
 
 const root = document.getElementById('root');
@@ -42,6 +43,7 @@ const state = {
     manifest: null,
     settings: loadSettings(),
     scriptRan: false,
+    toc: null,
 };
 const persist = new Map();
 const measurer = createCanvasMeasurer();
@@ -92,6 +94,13 @@ function applyTheme() {
 
 const assetUrl = (path) => (/^(?:[a-z]+:)?\/\//i.test(path) || path.startsWith('/') ? path : `/${path}`);
 
+/** Photographs have web-sized copies in images/photography/web/; the page shows those and links to the original. */
+const WEB_VARIANT = /^\/?images\/photography\/(?!web\/)([^/]+)\.[A-Za-z0-9]+$/;
+const displayUrl = (path) => {
+    const m = WEB_VARIANT.exec(path);
+    return m ? `/images/photography/web/${m[1]}.jpg` : assetUrl(path);
+};
+
 function imageSrc(node) {
     if (node.type === 'image') return node.src;
     return node.args?.items.find(a => a.key === null)?.value ?? node.args?.items.find(a => a.key === 'src')?.value ?? '';
@@ -141,7 +150,7 @@ function buildEnv() {
             inlineMath: (tex) => math.render(tex, false) ?? { width: tex.length * fontSize * 0.5, height: fontSize * 1.2, ascent: fontSize },
             displayMath: (tex) => math.render(tex, true) ?? { width: 0, height: fontSize * 2.5 },
             image: (node) => {
-                const size = images.get(assetUrl(node.src)) ?? { width: fontSize * 6, height: fontSize * 4 };
+                const size = images.get(displayUrl(node.src)) ?? { width: fontSize * 6, height: fontSize * 4 };
                 const height = Math.min(size.height, fontSize * 1.4);
                 return { width: size.width * (height / size.height), height };
             },
@@ -154,7 +163,7 @@ function buildEnv() {
         },
         objects: {
             natural: (node) => {
-                if (node.name === 'image') return images.get(assetUrl(imageSrc(node)));
+                if (node.name === 'image') return images.get(displayUrl(imageSrc(node)));
                 if (node.name === 'drawing') return drawings.get(drawingUrl(node));
                 return null;
             },
@@ -177,7 +186,8 @@ function renderContext() {
         measurer,
         math: (tex, display) => math.render(tex, display),
         highlight: (el, lang) => { if (window.Prism && lang) window.Prism.highlightElement(el); },
-        resolveAsset: assetUrl,
+        resolveAsset: displayUrl,
+        fullAsset: assetUrl,
         persist,
         widget: buildWidget,
         formatVar: varText,
@@ -257,6 +267,9 @@ function layoutAndRender() {
     state.layout = layout;
     state.docEl = renderLayout(root, layout, renderContext());
     state.unbindVars = bindVars(state.docEl, state.store, formatNumber);
+    const tocBox = layout.blocks.find(b => b.type === 'toc');
+    state.toc ??= createTocRail({ document, window, goTo: (id) => scrollToAnchor(id) });
+    state.toc.update({ outline: layout.outline, anchors: layout.anchors, tocRect: tocBox ? tocBox.rect : null, isNarrow: layout.geometry.narrow });
     mountFigures(state.docEl, { document, store: state.store });
     const t2 = performance.now();
     state.timing = { layoutMs: Math.round(t1 - t0), renderMs: Math.round(t2 - t1), count: (state.timing?.count ?? 0) + 1 };
@@ -453,6 +466,11 @@ root.addEventListener('click', (e) => {
         e.preventDefault();
         const url = `${location.origin}${location.pathname}?page=${encodeURIComponent(state.page)}#${heading.dataset.anchor}`;
         navigator.clipboard?.writeText(url).catch(() => {});
+        return;
+    }
+    const full = e.target.closest('img[data-full]');
+    if (full && !state.editor?.enabled) {
+        window.open(full.dataset.full, '_blank', 'noopener');
         return;
     }
     const card = e.target.closest('a[data-card]');

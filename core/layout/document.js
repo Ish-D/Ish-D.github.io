@@ -97,6 +97,7 @@ export function layoutDocument(doc, env) {
         blocks: items,
         notes: notes.placed,
         anchors: scope.anchors,
+        outline: env.outline.map(({ level, number, id, text }) => ({ level, number, id, text })),
         diagnostics,
         overflow: scope.overflow,
     };

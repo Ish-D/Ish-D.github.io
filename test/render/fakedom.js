@@ -10,6 +10,11 @@ class ClassList {
     add(...names) { const s = this.set; names.forEach(n => s.add(n)); this.el._class = [...s].join(' '); }
     remove(...names) { const s = this.set; names.forEach(n => s.delete(n)); this.el._class = [...s].join(' '); }
     contains(name) { return this.set.has(name); }
+    toggle(name, force) {
+        const on = force === undefined ? !this.contains(name) : !!force;
+        if (on) this.add(name); else this.remove(name);
+        return on;
+    }
 }
 
 export class Element {
@@ -31,7 +36,10 @@ export class Element {
     set className(v) { this._class = String(v); }
 
     appendChild(child) {
-        if (child.parentNode) child.parentNode.children.splice(child.parentNode.children.indexOf(child), 1);
+        if (child.parentNode) {
+            const at = child.parentNode.children.indexOf(child);
+            if (at !== -1) child.parentNode.children.splice(at, 1);
+        }
         child.parentNode = this;
         this.children.push(child);
         return child;
@@ -47,6 +55,10 @@ export class Element {
 
     remove() { if (this.parentNode) this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; }
 
+    addEventListener(type, fn) { (this._listeners ??= {})[type] = [...((this._listeners ?? {})[type] ?? []), fn]; }
+    removeEventListener(type, fn) { if (this._listeners?.[type]) this._listeners[type] = this._listeners[type].filter(f => f !== fn); }
+    dispatch(type, event = {}) { for (const fn of this._listeners?.[type] ?? []) fn({ preventDefault() {}, ...event }); }
+
     setAttribute(k, v) { this.attributes[k] = String(v); if (k === 'class') this._class = String(v); }
     getAttribute(k) { return this.attributes[k] ?? null; }
 
@@ -54,10 +66,18 @@ export class Element {
         if (this._text !== undefined) return this._text;
         return this.children.map(c => c.textContent).join('');
     }
-    set textContent(v) { this.children = []; this._text = String(v); }
+    set textContent(v) {
+        this.children.forEach(c => { c.parentNode = null; });
+        this.children = [];
+        this._text = String(v);
+    }
 
     get innerHTML() { return this._html ?? ''; }
-    set innerHTML(v) { this._html = String(v); this.children = []; }
+    set innerHTML(v) {
+        this.children.forEach(c => { c.parentNode = null; });
+        this._html = String(v);
+        this.children = [];
+    }
 
     matches(selector) {
         return selector.split(',').some(part => {

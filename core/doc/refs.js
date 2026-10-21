@@ -52,6 +52,10 @@ export function collectReferences(doc) {
     return { citations, numberOf, jumps };
 }
 
+function plainText(nodes) {
+    return nodes.map(n => n.value ?? n.tex ?? (n.children ? plainText(n.children) : '')).join('').replace(/\s+/g, ' ').trim();
+}
+
 /** Headings of level 2 and 3, numbered 1, 1.1, 1.2, 2, ... as the contents list shows them. */
 export function collectOutline(doc) {
     const out = [];
@@ -61,7 +65,7 @@ export function collectOutline(doc) {
         if (node.type !== 'heading' || node.level < 2 || node.level > 3) return;
         if (node.level === 2) { h2++; h3 = 0; } else { h3++; }
         const number = node.level === 2 ? `${h2}` : (h2 > 0 ? `${h2}.${h3}` : `${h3}`);
-        out.push({ level: node.level, number, id: node.id, node });
+        out.push({ level: node.level, number, id: node.id, text: plainText(node.children), node });
     });
     return out;
 }
