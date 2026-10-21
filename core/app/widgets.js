@@ -47,7 +47,7 @@ export function createWidgets(app) {
             for (const key of ['name', 'message']) {
                 const el = root.querySelector(`[name="${key}"]`);
                 if (el && !formValues.get(key)?.trim()) {
-                    el.style.borderColor = '#c4452c';
+                    el.style.borderColor = 'var(--color-text-primary)';
                     setTimeout(() => { el.style.borderColor = ''; }, 2000);
                 }
             }

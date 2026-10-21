@@ -57,13 +57,16 @@ export function themeColors(document) {
     const css = document.defaultView?.getComputedStyle?.(document.documentElement);
     const read = (name, fallback) => (css?.getPropertyValue(name).trim() || fallback);
     const dark = document.documentElement.dataset.theme === 'dark';
+    const ink = read('--color-text-primary', dark ? '#e0e0e0' : '#2d2926');
+    const muted = read('--color-text-secondary', dark ? '#a0a0a0' : '#555555');
     return {
-        ink: read('--color-text-primary', dark ? '#e0e0e0' : '#2d2926'),
-        muted: read('--color-text-secondary', dark ? '#a0a0a0' : '#555555'),
+        ink,
+        muted,
         paper: read('--color-card-background', dark ? '#1a1a1a' : '#ffffff'),
         rule: read('--color-border', dark ? '#333333' : '#cccccc'),
-        accent: dark ? '#e8765a' : '#c4452c',
-        accent2: dark ? '#6fa8dc' : '#2b6a99',
+        // figures are drawn in ink: one strong tone and one lighter
+        accent: ink,
+        accent2: muted,
         isDark: dark,
     };
 }

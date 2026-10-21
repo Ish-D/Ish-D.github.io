@@ -79,7 +79,7 @@ export function createTocRail({ document, window, goTo }) {
         pin.className = 'toc-pin';
         pin.type = 'button';
         pin.title = 'Keep the contents open';
-        pin.textContent = '▤';
+        pin.textContent = 'Contents';
         pin.addEventListener('click', () => writeMode(mode === 'open' ? 'ticks' : 'open'));
         const hide = document.createElement('button');
         hide.className = 'toc-hide';
@@ -104,6 +104,10 @@ export function createTocRail({ document, window, goTo }) {
         root.classList.toggle('live', p > 0.15);
         root.dataset.mode = narrow ? (mode === 'open' ? 'open' : 'button') : mode;
         root.classList.toggle('narrow', narrow);
+        // the handle stands in for the rail when it is hidden, and for the sheet on a small screen
+        handle.hidden = !(entries.length > 0 && p > 0.15 && (narrow || mode === 'hidden'));
+        handle.classList.toggle('narrow', narrow);
+        handle.style.opacity = String(Math.min(1, p) * 0.6);
         if (p === 0) return;
         const index = currentSection(entries, window.scrollY + 120);
         if (index !== active) {
@@ -128,7 +132,7 @@ export function createTocRail({ document, window, goTo }) {
     handle.title = 'Contents';
     handle.textContent = '≡';
     handle.addEventListener('click', () => writeMode(mode === 'open' ? (narrow ? 'button' : 'ticks') : 'open'));
-    root.appendChild(handle);
+    document.body.appendChild(handle);
 
     return {
         /** Call after every layout. `tocRect` is the contents box on the page, or null if the page has none. */
@@ -137,13 +141,13 @@ export function createTocRail({ document, window, goTo }) {
             entries = tocRect ? outline.filter(o => anchors.has(o.id)).map(o => ({ ...o, y: anchors.get(o.id).y })) : [];
             boxBottom = tocRect ? tocRect.y + tocRect.height : null;
             build();
-            root.appendChild(handle);
             active = -2;
             render();
         },
         dispose() {
             window.removeEventListener('scroll', onScroll);
             root.remove();
+            handle.remove();
         },
         get mode() { return mode; },
     };
