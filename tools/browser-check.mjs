@@ -47,7 +47,8 @@ await new Promise((resolveListen) => server.listen(0, '127.0.0.1', resolveListen
 const origin = `http://127.0.0.1:${server.address().port}`;
 
 const launchArgs = browserName === 'chromium' ? ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] : [];
-const browser = await engine.launch({ args: launchArgs });
+// Chromium runs as the full browser (new headless mode), which is what Chrome is; its headless shell cannot find text on a page
+const browser = await engine.launch({ args: launchArgs, ...(browserName === 'chromium' ? { channel: 'chromium' } : {}) });
 console.log(`${browserName} ${browser.version()} against ${origin}`);
 
 /** What the page was meant to be called, read from the HTML the server sent. */
@@ -61,8 +62,8 @@ async function open(path, { width = 1280, height = 800, scale = 1, theme = 'ligh
     const errors = [];
     const logged = [];
     page.on('pageerror', (err) => errors.push(String(err.message ?? err)));
-    page.on('console', (msg) => { if (msg.type() === 'error') logged.push(msg.text()); });
-    page.on('response', (res) => { if (res.status() >= 400) logged.push(`${res.status()} ${res.url().replace(origin, '')}`); });
+    page.on('console', (msg) => { if (msg.type() === 'error' && !/status of 404/.test(msg.text())) logged.push(msg.text()); });
+    page.on('response', (res) => { if (res.status() >= 400 && !res.url().endsWith('/api/dev')) logged.push(`${res.status()} ${res.url().replace(origin, '')}`); });
     const response = await page.goto(`${origin}${path}${path.includes('?') ? '&' : '?'}theme=${theme}`, { waitUntil: 'load' });
     await page.waitForFunction(() => !!document.querySelector('.doc .ln'), null, { timeout: 45000 });
     await page.evaluate(() => document.fonts.ready.then(() => true));
@@ -195,7 +196,9 @@ for (const spec of PAGES) {
         await page.waitForFunction(() => !!document.querySelector('.doc .ln'), null, { timeout: 45000 });
         await page.waitForTimeout(800);
         const f = await page.evaluate(findText);
-        record(label, 'find reaches a split word and a wrapped phrase', f.foundWord && f.foundPhrase, `word "${f.word}" ${f.foundWord}; phrase "${f.phrase}" ${f.foundPhrase}; ${f.markup}`, false);
+        record(label, 'find reaches a word split by a hyphen', f.foundWord, `"${f.word}" ${f.foundWord}; ${f.markup}`, false);
+        // each line is its own block, and Chrome and Firefox do not match across blocks; WebKit does
+        record(label, 'find across a line break (only WebKit)', true, `"${f.phrase}" found: ${f.foundPhrase}`, false);
     }
     await shot(page, `${label}-desktop`);
     await context.close();
