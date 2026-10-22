@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -186,4 +186,24 @@ test('a page is called by its name, else by its first heading, and the home page
     assert.equal(titleOf(parse('# A *styled* heading\n')), 'A styled heading');
     assert.equal(titleOf(parse('No heading at all.\n')), '');
     assert.match(read('image-test/index.html'), /<title>Image Block Testing · ish<\/title>/);
+});
+
+test('the site can be built into a folder inside the repository, and never over it', () => {
+    const src = mkdtempSync(join(tmpdir(), 'src-'));
+    try {
+        mkdirSync(join(src, 'cards'));
+        writeFileSync(join(src, 'index.html'), '<title>ish</title><div id="root"></div>');
+        writeFileSync(join(src, '404.html'), 'x');
+        writeFileSync(join(src, 'site.json'), JSON.stringify({ origin: 'https://a.b', title: 'ish', description: 'd' }));
+        writeFileSync(join(src, 'cards', 'a.md'), '---\nname: A\n---\n# A\n\nText.\n');
+        build({ out: join(src, '_site'), source: src });
+        build({ out: join(src, '_site'), source: src });
+        assert.ok(existsSync(join(src, '_site', 'a', 'index.html')));
+        assert.equal(existsSync(join(src, '_site', '_site')), false);
+        assert.throws(() => build({ out: src, source: src }), /refusing/);
+        assert.throws(() => build({ out: join(src, '..'), source: src }), /refusing/);
+        assert.ok(existsSync(join(src, 'cards', 'a.md')), 'the source is untouched');
+    } finally {
+        rmSync(src, { recursive: true, force: true });
+    }
 });

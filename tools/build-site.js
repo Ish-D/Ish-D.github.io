@@ -273,19 +273,19 @@ export function readSite(dir = root) {
 
 /** Copies what the browser needs, leaving out what is only for working on the site. */
 function copySite(from, to) {
-    cpSync(from, to, {
-        recursive: true,
-        filter: (path) => {
-            const rel = relative(from, path);
-            if (!rel) return true;
-            if (resolve(path) === resolve(to)) return false;
-            return !rel.split(sep).some(part => LEFT_OUT.has(part) || part === '_site');
-        },
-    });
+    const left = (path) => relative(from, path).split(sep).some(part => LEFT_OUT.has(part) || part === '_site');
+    for (const entry of readdirSync(from)) {
+        const path = join(from, entry);
+        if (left(path) || resolve(path) === resolve(to)) continue;
+        cpSync(path, join(to, entry), { recursive: true, filter: (inner) => !left(inner) && resolve(inner) !== resolve(to) });
+    }
 }
 
 export function build({ out, source = root, log = () => {} }) {
     const site = readSite(source);
+    // the output is cleared first, so it must not be the source or hold it
+    const above = relative(resolve(out), resolve(source));
+    if (above === '' || !above.startsWith('..')) throw new Error(`refusing to build into ${out}, which is or holds the source`);
     const cardsDir = join(source, 'cards');
     const cards = listCards(cardsDir).map(c => ({ ...c, source: readFileSync(c.file, 'utf8') }));
     const manifest = buildManifest(cards);
