@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { layoutDocument } from '../../core/layout/document.js';
-import { makeEnv, parseCard, parseText, hyphenator } from './fixtures.js';
+import { makeEnv, parseCard, parseText, hyphenator, atoms } from './fixtures.js';
 
 const textLines = (layout) => layout.blocks
     .filter(b => b.lines && !b.note && (b.type === 'paragraph' || b.type === 'heading'))
@@ -25,8 +25,9 @@ test('text lines stay inside the text column and never overflow their slot', () 
     const { text } = layout.geometry;
     for (const { block, line } of textLines(layout)) {
         if (block.cite) continue;
-        assert.ok(line.x >= text.x - 1e-6, `x ${line.x} < ${text.x}`);
-        assert.ok(line.x + line.width <= text.x + text.width + 1e-6);
+        // punctuation may hang in the margin, the text itself may not
+        assert.ok(line.x + line.hung.left >= text.x - 1e-6, `x ${line.x} < ${text.x}`);
+        assert.ok(line.x + line.width - line.hung.right <= text.x + text.width + 1e-6);
         assert.ok(lineWidthOf(line) <= line.width + 1e-6, `line wider than slot: ${lineWidthOf(line)} > ${line.width}`);
     }
 });
@@ -81,7 +82,8 @@ test('at narrow widths every note is set inline and nothing lands in a margin', 
     assert.equal(layout.geometry.narrow, true);
     assert.equal(layout.notes.length, 0);
     for (const { line } of textLines(layout)) {
-        assert.ok(line.x >= 16 - 1e-6 && line.x + line.width <= 420 - 16 + 1e-6);
+        assert.ok(line.x + line.hung.left >= 16 - 1e-6 && line.x + line.width - line.hung.right <= 420 - 16 + 1e-6);
+        assert.ok(line.x >= 0 && line.x + line.width <= 420, 'what hangs stays on the page');
     }
     const wide = layoutDocument(parseCard('llms_for_bozos_1'), makeEnv(1280, { hyphenator }));
     assert.ok(layout.height > wide.height, 'narrow page is taller');
@@ -330,4 +332,64 @@ test('columns give way on a narrow screen, and floats that would leave no room f
     assert.equal(narrow.blocks.find(b => b.type === 'region').columns.length, 1);
     assert.equal(wide.blocks.find(b => b.type === 'object').place.kind, 'gutter');
     assert.equal(narrow.blocks.find(b => b.type === 'object').place.kind, 'block');
+});
+
+test('the contents box floats beside the first paragraphs, and sits above them on a column too narrow to share', () => {
+    const doc = parseText('# Title\n\n[[toc]]\n---\n## One\n\nText.\n\n## Two\n\nMore.\n');
+    const beside = layoutDocument(doc, makeEnv(1300, { hyphenator })).blocks.find(b => b.type === 'toc');
+    assert.ok(beside.rect.width < 400, 'floated at the default width');
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator, settings: { width: 24 } }));
+    const above = layout.blocks.find(b => b.type === 'toc');
+    assert.equal(above.rect.width, layout.geometry.text.width);
+});
+
+test('the text column is a fixed width in em, centred, whatever the window', () => {
+    const at = (w, over) => layoutDocument(parseText('Text.\n'), makeEnv(w, over)).geometry;
+    for (const w of [1100, 1440, 2560]) {
+        const g = at(w);
+        assert.equal(g.text.width, 32 * 20);
+        assert.equal(g.text.x, (w - 640) / 2);
+    }
+    assert.equal(at(1440, { settings: { fontSize: 24 } }).text.width, 32 * 24);
+    assert.equal(at(1440, { settings: { width: 40 } }).text.width, 800);
+});
+
+test('the column gives way before the margins get too narrow for notes, then the page has no margins', () => {
+    const at = (w) => layoutDocument(parseText('Text.\n'), makeEnv(w)).geometry;
+    const g = at(900);
+    assert.equal(g.narrow, false);
+    assert.equal(g.text.width, 900 - 2 * (24 + 16 + 150));
+    assert.ok(g.left.width >= 150 && g.right.width >= 150);
+    const small = at(640);
+    assert.equal(small.narrow, true);
+    assert.equal(small.text.width, 640 - 2 * 16);
+});
+
+test('a float that drops onto its own line leaves its nudges behind', () => {
+    const src = '[[image(a.png, place: right, width: 200, height: 100, dy: 4em)]]\n\nText.\n';
+    const layout = layoutDocument(parseText(src), makeEnv(420, { hyphenator }));
+    const obj = layout.blocks.find(b => b.type === 'object');
+    assert.equal(obj.place.kind, 'block');
+    assert.equal(obj.rect.y, 32);
+});
+
+test('math is measured at the size of the text it sits in, so a note set small has small math', () => {
+    const asked = [];
+    const inlineMath = (tex, size) => { asked.push({ tex, size }); return { width: tex.length * size * 0.4, height: size * 1.2, ascent: size }; };
+    const env = makeEnv(400, { settings: { fontSize: 20 }, atoms: { ...atoms, inlineMath } });
+    layoutDocument(parseText('Body text with $x$ in it.[[note(right)]]{}{Small text with $y$ in it.}\n'), env);
+    const size = (tex) => asked.find(a => a.tex === tex)?.size;
+    assert.equal(size('x'), 20);
+    assert.ok(size('y') < 20 && size('y') > 10, `a note measures its math at ${size('y')}`);
+});
+
+test('display math is measured at the size of the text around it, and carries that size to be drawn at', () => {
+    const asked = [];
+    const displayMath = (tex, width, size) => { asked.push(size); return { width: 100, height: 40 }; };
+    const env = makeEnv(1280, { settings: { fontSize: 18 }, atoms: { ...atoms, displayMath } });
+    const layout = layoutDocument(parseText('Before.\n\n$$x^2$$\n\nAfter.\n'), env);
+    const math = layout.blocks.find(b => b.type === 'math');
+    assert.ok(math, 'there is a display math block');
+    assert.equal(math.fontSize, 18);
+    assert.deepEqual(asked, [18]);
 });

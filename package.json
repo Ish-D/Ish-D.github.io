@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test --test-timeout=60000 \"test/**/*.test.js\"",
-    "smoke": "tools/smoke.sh"
+    "smoke": "tools/smoke.sh",
+    "lint-type": "node tools/lint-type.js"
   }
 }

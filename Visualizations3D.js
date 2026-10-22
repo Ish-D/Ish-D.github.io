@@ -175,7 +175,7 @@ export const rendererPool = new RendererPool();
  */
 class AnimationManager {
     constructor() {
-        this.animations = new Map();  // id -> { render, container, active }
+        this.animations = new Map();  // id -> { render, container, active, snapshot }
         this.running = false;
         this.frameId = null;
         this.lastTime = 0;
@@ -185,10 +185,15 @@ class AnimationManager {
      * Register a visualization for animation
      */
     register(id, renderFn, container) {
+        // A page being printed asks each visualization to draw once more right away, so the picture of it can be
+        // read before the browser clears the canvas.
+        const snapshot = () => renderFn(0);
+        container?.addEventListener('printsnapshot', snapshot);
         this.animations.set(id, {
             render: renderFn,
             container: container,
-            active: true
+            active: true,
+            snapshot
         });
 
         if (!this.running) {
@@ -200,6 +205,8 @@ class AnimationManager {
      * Unregister a visualization
      */
     unregister(id) {
+        const anim = this.animations.get(id);
+        anim?.container?.removeEventListener('printsnapshot', anim.snapshot);
         this.animations.delete(id);
 
         if (this.animations.size === 0) {

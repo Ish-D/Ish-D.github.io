@@ -16,7 +16,7 @@ const EPS = 1;
 
 function lay(text, width) {
     const fontSize = width < 600 ? 18 : 20;
-    return layoutDocument(parseText(text), makeEnv(width, { hyphenator, settings: { fontSize, marginPercent: 28 } }));
+    return layoutDocument(parseText(text), makeEnv(width, { hyphenator, settings: { fontSize } }));
 }
 
 const linesOf = (layout) => layout.blocks

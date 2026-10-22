@@ -17,9 +17,14 @@ export function collectGuides(layout, { ignoreObject = null, ignoreNote = null }
     const g = layout.geometry;
     const text = g.text;
 
+    // inside columns, `center` and `right` mean the column's, so the text column's centre and right edge are not placements there
+    const split = layout.blocks
+        .filter(item => item.type === 'region' && item.kind === 'columns' && item.columns.length > 1)
+        .map(item => [item.y, item.y + item.height]);
+    const unlessSplit = split.length ? { except: split } : {};
     x.push({ value: text.x, kind: 'text-left', label: 'Text edge' });
-    x.push({ value: text.x + text.width / 2, kind: 'text-center', label: 'Centre' });
-    x.push({ value: text.x + text.width, kind: 'text-right', label: 'Text edge' });
+    x.push({ value: text.x + text.width / 2, kind: 'text-center', label: 'Centre', ...unlessSplit });
+    x.push({ value: text.x + text.width, kind: 'text-right', label: 'Text edge', ...unlessSplit });
     x.push({ value: layout.width / 2, kind: 'page-center', label: 'Page centre' });
     if (!g.narrow) {
         x.push({ value: g.left.x, kind: 'margin', label: 'Margin' }, { value: g.left.x + g.left.width, kind: 'margin', label: 'Margin' });

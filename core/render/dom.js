@@ -70,6 +70,7 @@ export function sanitizeCss(css) {
  * @property {(type: string) => boolean} [isFigure]
  * @property {(path: string) => string} [fullAsset]   the original of an image whose displayed copy is a web-sized variant
  * @property {(src: string) => { markup: string } | null} [drawing]   themed SVG markup for a drawing file
+ * @property {boolean} [eager]   images load now, whether or not they are near the screen (paper)
  */
 
 /**
@@ -203,6 +204,8 @@ function renderItem(env, parent, item, ox, oy) {
             }
             place(el, item.x - ox, item.y - oy, item.width, item.height);
             el.style.lineHeight = px(item.height);
+            // set at the size it was measured at
+            if (item.fontSize) el.style.fontSize = px(item.fontSize);
             parent.appendChild(el);
             break;
         }
@@ -228,6 +231,8 @@ function fontStyle(el, font, base) {
     const baseBold = base.weight === 'bold' || base.weight >= 600;
     if (bold !== baseBold) el.style.fontWeight = bold ? 'bold' : 'normal';
     if ((font.style === 'italic') !== (base.style === 'italic')) el.style.fontStyle = font.style === 'italic' ? 'italic' : 'normal';
+    if (!!font.caps !== !!base.caps) el.style.textTransform = font.caps ? 'uppercase' : 'none';
+    if ((font.tracking ?? 0) !== (base.tracking ?? 0)) el.style.letterSpacing = font.tracking ? `${font.tracking}em` : 'normal';
 }
 
 function baseFontOf(item) {
@@ -254,11 +259,11 @@ function renderTextBlock(env, item, ox, oy) {
     el.style.fontSize = px(base.size);
     if (base.weight === 'bold') el.style.fontWeight = 'bold';
     if (base.style === 'italic') el.style.fontStyle = 'italic';
+    if (base.caps) el.style.textTransform = 'uppercase';
+    if (base.tracking) el.style.letterSpacing = `${base.tracking}em`;
     el.style.lineHeight = px(item.lineHeight);
 
-    for (const line of lines) {
-        el.appendChild(renderLine(env, line, item, base, left, item.top));
-    }
+    for (const node of renderLines(env, lines, item, base, left, item.top)) el.appendChild(node);
     if (item.type === 'heading' && item.id) {
         const a = document.createElement('a');
         a.className = 'heading-link';
@@ -271,7 +276,41 @@ function renderTextBlock(env, item, ox, oy) {
     return el;
 }
 
-function renderLine(env, line, item, base, blockLeft, blockTop) {
+/**
+ * For each line, how it takes part in a word split across lines. The first piece of the word keeps
+ * the whole word as text, so the word can be found and copied whole; the piece on the next line is
+ * drawn as generated content (`cont`), and so is the hyphen after the first piece.
+ * @returns {Array<{ cont: string, hyphen: boolean, tail: string }>}
+ */
+function splitWords(lines) {
+    const parts = lines.map(() => ({ cont: '', hyphen: false, tail: '' }));
+    const first = (line) => (line?.runs[0]?.kind === 'text' ? /^\S+/.exec(line.runs[0].text)?.[0] ?? '' : '');
+    /** A line that is nothing but a piece of a word, so the word goes on below it. */
+    const onlyPiece = (line) => line.runs.filter(r => r.kind === 'text').length === 1 && !/\s/.test(line.runs.find(r => r.kind === 'text').text);
+    lines.forEach((line, i) => {
+        if (!line.hyphenated) return;
+        parts[i].hyphen = true;
+        if (parts[i].cont && onlyPiece(line)) return;
+        let k = i;
+        for (;;) {
+            const next = lines[k + 1];
+            const piece = first(next);
+            if (!piece) break;
+            parts[k + 1].cont = piece;
+            parts[i].tail += piece;
+            if (!(next.hyphenated && onlyPiece(next))) break;
+            k++;
+        }
+    });
+    return parts;
+}
+
+function renderLines(env, lines, item, base, blockLeft, blockTop) {
+    const parts = splitWords(lines);
+    return lines.map((line, i) => renderLine(env, line, item, base, blockLeft, blockTop, parts[i]));
+}
+
+function renderLine(env, line, item, base, blockLeft, blockTop, part) {
     const { document } = env.ctx;
     const ln = document.createElement('span');
     ln.className = line.ratio !== 0 && !line.last ? 'ln just' : 'ln';
@@ -290,29 +329,74 @@ function renderLine(env, line, item, base, blockLeft, blockTop) {
         ln.appendChild(mk);
     }
 
-    for (const run of line.runs) {
-        const node = renderRun(env, run, item, base);
+    // a hyphen is not text: it is drawn after the last piece, so it is neither found nor copied
+    const runs = line.runs.filter(r => r.kind !== 'hyphen');
+    runs.forEach((run, k) => {
+        const split = { cont: k === 0 ? part.cont : '', hyphen: part.hyphen && k === runs.length - 1, tail: part.tail };
+        const node = renderRun(env, run, item, base, split);
         if (node) ln.appendChild(node);
+    });
+    // what the break after the line stands for, as text that is not drawn: a space, or the end of a paragraph
+    if (line.join === 'space' || line.join === 'end') {
+        const sp = document.createElement('span');
+        sp.className = 'sp';
+        sp.textContent = line.join === 'space' ? ' ' : '\n';
+        ln.appendChild(sp);
     }
     return ln;
 }
 
-function renderRun(env, run, item, base) {
+/**
+ * The text of a run. Where a word is split across lines, the piece from the line below is drawn
+ * first (`ct`), and the last piece carries the rest of the word (`tl`) and the hyphen (`hd`).
+ */
+function fillText(document, el, text, { cont, hyphen, tail }) {
+    if (!cont && !hyphen) {
+        el.textContent = text;
+        return;
+    }
+    let rest = text;
+    if (cont) {
+        const ct = document.createElement('span');
+        ct.className = 'ct';
+        ct.dataset.t = cont;
+        rest = rest.slice(cont.length);
+        if (hyphen && !rest) ct.dataset.hy = '';
+        el.appendChild(ct);
+        if (hyphen && !rest) return;
+    }
+    if (!hyphen) {
+        if (rest) el.appendChild(document.createTextNode(rest));
+        return;
+    }
+    const head = /\S+$/.exec(rest)?.[0] ?? '';
+    const before = rest.slice(0, rest.length - head.length);
+    if (before) el.appendChild(document.createTextNode(before));
+    if (!head) {
+        el.dataset.hy = '';
+        return;
+    }
+    const hd = document.createElement('span');
+    hd.className = 'hd';
+    hd.textContent = head;
+    el.appendChild(hd);
+    if (tail) {
+        const tl = document.createElement('span');
+        tl.className = 'tl';
+        tl.textContent = tail;
+        el.appendChild(tl);
+    }
+}
+
+function renderRun(env, run, item, base, split) {
     const { document } = env.ctx;
     const span = item.spans[run.span];
-    if (run.kind === 'hyphen') {
-        const hy = document.createElement('span');
-        hy.className = 'hy';
-        hy.textContent = '-';
-        if (span?.font) fontStyle(hy, span.font, base);
-        return hy;
-    }
     if (run.kind === 'atom') return renderAtom(env, span, run, base);
 
     const ref = span.ref ?? {};
     const text = document.createElement('span');
     text.className = 'r';
-    text.textContent = run.text;
+    fillText(document, text, run.text, split);
     fontStyle(text, span.font, base);
     if (run.wordSpacing) text.style.wordSpacing = px(run.wordSpacing);
     if (ref.sup) { text.classList.add('sup'); text.style.top = px(-base.size * 0.38); }
@@ -366,7 +450,7 @@ function renderAtom(env, span, run, base) {
         inner.className = 'atom-inner';
         if (rendered) {
             inner.innerHTML = rendered.html;
-            inner.style.top = px(-rendered.ascent);
+            inner.style.top = px(-(ref.ascent ?? rendered.ascent));
             if (ref.tex.includes('\\val{')) env.ctx.liveMath?.(inner, ref.tex, false);
         } else {
             inner.textContent = ref.tex;
@@ -399,6 +483,9 @@ function renderCode(env, item, ox, oy) {
     }
     place(pre, item.x - ox, item.y - oy, item.width, item.height);
     pre.style.padding = px(item.pad);
+    // a block cut at a page break has no padding where it was cut
+    if (item.cutTop) pre.style.paddingTop = '0';
+    if (item.cutBottom) pre.style.paddingBottom = '0';
     pre.style.fontFamily = FAMILY_CSS[item.font.family] ?? item.font.family;
     pre.style.fontSize = px(item.font.size);
     pre.style.lineHeight = px(item.lineHeight);
@@ -451,8 +538,8 @@ function renderObject(env, item, ox, oy) {
             img.dataset.full = full;
             img.onerror = () => { img.onerror = null; img.src = full; };
         }
-        img.loading = 'lazy';
-        img.decoding = 'async';
+        img.loading = env.ctx.eager ? 'eager' : 'lazy';
+        img.decoding = env.ctx.eager ? 'sync' : 'async';
         img.style.objectFit = argValue(item.node, 'fit') ?? 'contain';
         img.style.width = '100%';
         img.style.height = '100%';
@@ -507,9 +594,7 @@ function renderObject(env, item, ox, oy) {
             x: item.rect.x, top: item.caption.y, bottom: item.caption.y + item.caption.height, width: item.caption.width,
         };
         const base = item.caption.spans.find(s => s.kind === 'text')?.font ?? baseFontOf(captionBlock);
-        for (const line of item.caption.lines) {
-            cap.appendChild(renderLine(env, line, captionBlock, base, item.rect.x, item.caption.y));
-        }
+        for (const node of renderLines(env, item.caption.lines, captionBlock, base, item.rect.x, item.caption.y)) cap.appendChild(node);
         cap.style.fontSize = px(base.size);
         cap.style.lineHeight = px(item.caption.lineHeight);
         wrap.appendChild(cap);
@@ -538,32 +623,39 @@ function renderToc(env, item, ox, oy) {
 // Copying
 // ---------------------------------------------------------------------------
 
+/** Parts of the page that are for pointing at, not for reading: nothing of them is copied. */
+const NOT_COPIED = ['heading-link', 'note-more', 'mk', 'katex-mathml'];
+
 /**
- * Plain text for a copied selection: lines of one paragraph are joined with
- * spaces (or directly after an inserted hyphen), paragraphs with blank lines.
+ * Plain text for a copied selection. The lines carry their own breaks (a space where a line ends between
+ * words, nothing inside a word, a newline where a paragraph ends), so the text is read straight off the
+ * fragment. Math is copied as its TeX.
  * @param {DocumentFragment | HTMLElement} fragment
+ * @returns {string | null} null when the fragment holds none of the page's text
  */
 export function selectionText(fragment) {
-    const blocks = fragment.querySelectorAll ? [...fragment.querySelectorAll('.blk')] : [];
-    if (blocks.length === 0) {
-        const lines = fragment.querySelectorAll ? [...fragment.querySelectorAll('.ln')] : [];
-        return lines.length ? joinLines(lines) : null;
-    }
-    return blocks.map(b => joinLines([...b.querySelectorAll('.ln')])).join('\n\n');
+    if (!fragment.querySelectorAll || fragment.querySelectorAll('.ln, .codeblock, .mathblock, .dropcap').length === 0) return null;
+    return copiedText(fragment).replace(/[\u00A0\u2003]+/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-function joinLines(lines) {
-    let out = '';
-    lines.forEach((line, i) => {
-        const hyphenated = !!line.querySelector('.hy');
-        let text = '';
-        for (const node of line.querySelectorAll('.r, .atom, .hy')) {
-            if (node.classList.contains('hy')) continue;
-            if (node.classList.contains('atom')) text += node.textContent ?? '';
-            else if (!node.closest?.('.atom')) text += node.textContent;
+function copiedText(node) {
+    if (node.nodeType === 3) return node.data ?? node.textContent;
+    const classes = node.classList;
+    if (classes?.contains) {
+        if (NOT_COPIED.some(c => classes.contains(c))) return '';
+        if (classes.contains('katex')) {
+            const tex = node.querySelector?.('annotation')?.textContent;
+            return tex ? `$${tex}$` : '';
         }
-        out += text;
-        if (i < lines.length - 1) out += hyphenated ? '' : ' ';
-    });
+        if (classes.contains('codeblock')) return `\n${node.textContent}\n`;
+    }
+    const children = node.childNodes ?? node.children ?? [];
+    let out = '';
+    for (const child of children) out += copiedText(child);
+    if (children.length === 0 && node.nodeType === 1) out += node.textContent ?? '';
+    if (classes?.contains) {
+        if (classes.contains('bullet')) out += ' ';
+        else if (classes.contains('blk') || classes.contains('mathblock')) out += '\n';
+    }
     return out;
 }

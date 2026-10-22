@@ -95,3 +95,19 @@ test('fixed measurer counts code points', () => {
     assert.deepEqual(measurer.metrics({ family: 'X', size: 10 }), { ascent: 8, descent: 2, xHeight: 5, capHeight: 7, spaceWidth: 5 });
     assert.throws(() => createFixedMeasurer({ charWidth: 0 }), RangeError);
 });
+
+test('canvas measurer measures capitals as capitals and adds tracking after every character', () => {
+    const context = fakeContext();
+    const measurer = createCanvasMeasurer({ context });
+    assert.equal(measurer.width('ab', { ...body, caps: true }), 16);
+    assert.deepEqual(context.calls.at(-1), ['16px "MonotypeModern"', 'AB']);
+    // 16px * 0.1em = 1.6px for each of the two characters
+    assert.ok(Math.abs(measurer.width('ab', { ...body, tracking: 0.1 }) - (16 + 3.2)) < 1e-9);
+    assert.ok(Math.abs(measurer.width('a b', { ...body, caps: true, tracking: 0.1 }) - (24 + 4.8)) < 1e-9);
+});
+
+test('fixed measurer adds tracking to every code point', () => {
+    const measurer = createFixedMeasurer({ charWidth: 5 });
+    assert.equal(measurer.width('abc', { family: 'X', size: 10 }), 15);
+    assert.equal(measurer.width('abc', { family: 'X', size: 10, tracking: 0.1 }), 18);
+});

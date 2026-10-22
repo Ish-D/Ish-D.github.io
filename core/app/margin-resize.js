@@ -1,16 +1,20 @@
 /**
  * Drag handles on either side of the text column. Dragging one changes the
- * margin width setting, the same one the settings panel has.
+ * reading width setting, the same one the settings panel has.
  */
 
-const MIN_PERCENT = 0;
-const MAX_PERCENT = 40;
+import { PAGE } from '../layout/document.js';
+
 const HANDLE_PX = 10;
 
-/** Margin width, as a percent of the window, when a handle is dragged to `clientX`. */
-export function marginPercentFor(side, clientX, windowWidth) {
+/**
+ * Reading width, in em, when a handle is dragged to `clientX`. The column stays centred,
+ * so the far edge follows.
+ */
+export function widthFor(side, clientX, windowWidth, fontSize) {
     const edge = side === 'left' ? clientX : windowWidth - clientX;
-    return Math.round(Math.min(MAX_PERCENT, Math.max(MIN_PERCENT, (edge / windowWidth) * 100)));
+    const em = (windowWidth - 2 * edge) / fontSize;
+    return Math.round(Math.min(PAGE.width.max, Math.max(PAGE.width.min, em)));
 }
 
 /**
@@ -20,7 +24,7 @@ export function createMarginResize({ document, window, settings }) {
     const handles = ['left', 'right'].map((side) => {
         const el = document.createElement('div');
         el.className = `margin-handle margin-handle-${side}`;
-        el.title = 'Drag to change the margin width';
+        el.title = 'Drag to change the reading width';
         el.hidden = true;
         document.body.appendChild(el);
 
@@ -32,8 +36,8 @@ export function createMarginResize({ document, window, settings }) {
         });
         el.addEventListener('pointermove', (e) => {
             if (!el.classList.contains('dragging')) return;
-            const percent = marginPercentFor(side, e.clientX, window.innerWidth);
-            if (percent !== settings.values.marginPercent) settings.set('marginPercent', percent);
+            const width = widthFor(side, e.clientX, window.innerWidth, settings.values.fontSize);
+            if (width !== settings.values.width) settings.set('width', width);
         });
         const stop = () => {
             el.classList.remove('dragging');

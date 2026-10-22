@@ -5,8 +5,8 @@
 
 import { flattenInline } from './inline.js';
 import { createScope, flowBlocks } from './flow.js';
-import { walk } from '../doc/walk.js';
 import { MIN_TEXT_BESIDE } from './style.js';
+import { walk } from '../doc/walk.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
@@ -28,11 +28,14 @@ export function parseTags(text) {
     return out;
 }
 
-/** The summary under the title is set smaller than the body. */
-const SUMMARY_SCALE = 0.82;
+/** The summary under the title is set a little larger than the body. */
+const SUMMARY_SCALE = 1.1;
+
+/** Dates and tags are small tracked capitals. */
+const LABEL = { caps: true, tracking: 0.14 };
 
 /** The contents box when it floats beside the text. */
-const TOC_WIDTH = 300;
+const TOC_WIDTH = 260;
 const TOC_GAP = 24;
 
 const synthetic = (type, props, start, end) => ({ type, start, end, ...props });
@@ -47,14 +50,17 @@ export function flowGenerated(scope, node) {
     const { styles } = scope;
     const small = (scale, extra = {}) => ({ ...styles.body, size: styles.size * scale, ...extra });
 
-    const centered = (children, font) => {
-        const para = synthetic('paragraph', { centered: true, children }, node.start, node.end);
+    /** A paragraph of the title block, in the title's alignment. */
+    const titleBlock = (children) => synthetic('paragraph', styles.titleAlign === 'center' ? { centered: true, children } : { flush: true, children }, node.start, node.end);
+
+    const label = (children, font) => {
+        scope.labelled = true;
         const savedFlags = scope.inlineFlags;
         const savedStyles = scope.styles;
         scope.inlineFlags = { ...savedFlags, font };
         // a small line sets its own rhythm instead of borrowing the body's
         scope.styles = { ...styles, lineHeight: Math.round(font.size * 1.6), paragraphGap: 0 };
-        flowBlocks(scope, [para]);
+        flowBlocks(scope, [titleBlock(children)]);
         scope.styles = savedStyles;
         scope.inlineFlags = savedFlags;
     };
@@ -62,26 +68,21 @@ export function flowGenerated(scope, node) {
     switch (node.name) {
         case 'date': {
             const value = front.date?.value;
-            if (value) centered([textNode(formatDate(value), node.start, node.end)], small(0.6, { weight: 'bold' }));
+            if (value) label([textNode(formatDate(value), node.start, node.end)], small(0.68, LABEL));
             return true;
         }
         case 'tags': {
             const tags = parseTags(front.tags?.value);
-            if (tags.length) centered([textNode(tags.join(', '), node.start, node.end)], small(0.65, { weight: 'bold' }));
+            if (tags.length) label([textNode(tags.join(', '), node.start, node.end)], small(0.68, LABEL));
             return true;
         }
         case 'summary': {
             const group = node.groups[0];
             if (group?.children?.length) {
-                scope.y += styles.lineHeight * 0.5;
-                const para = synthetic('paragraph', { centered: true, children: group.children }, node.start, node.end);
+                if (scope.labelled) scope.y += styles.lineHeight;
                 const saved = scope.inlineFlags;
-                const savedStyles = scope.styles;
-                const font = small(SUMMARY_SCALE, { style: 'italic' });
-                scope.inlineFlags = { ...saved, italic: true, font };
-                scope.styles = { ...styles, lineHeight: Math.round(font.size * 1.55) };
-                flowBlocks(scope, [para]);
-                scope.styles = savedStyles;
+                scope.inlineFlags = { ...saved, font: small(SUMMARY_SCALE) };
+                flowBlocks(scope, [titleBlock(group.children)]);
                 scope.inlineFlags = saved;
             }
             return true;
@@ -124,7 +125,8 @@ function flowBibliography(scope, node) {
 /** A bordered, numbered contents list floated to the left of the text. */
 function flowToc(scope, node) {
     const outline = scope.env.outline ?? [];
-    if (outline.length === 0) return;
+    // a contents box points at the page, and paper has no links to follow
+    if (outline.length === 0 || scope.env.print) return;
     const { styles, env } = scope;
     // floated beside the text when there is room for the text, else across the page above it
     const floated = scope.width - TOC_WIDTH - TOC_GAP >= MIN_TEXT_BESIDE * styles.size;
@@ -137,6 +139,7 @@ function flowToc(scope, node) {
         x: scope.x + pad.x, width: width - 2 * pad.x, y: scope.y + pad.y, styles: tocStyles, align: 'left',
     });
     sub.diagnostics = scope.diagnostics;
+    sub.gridUnit = 0;
     // numbers sit in their own column per level, titles hang beside them
     const numberWidth = (level) => Math.max(0, ...outline.filter(o => o.level === level).map(o => env.measurer.width(o.number, font))) + font.size * 0.7;
     const columns = { 2: numberWidth(2), 3: numberWidth(3) };

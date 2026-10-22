@@ -9,11 +9,14 @@ const KATEX_FACES = [
     '1em KaTeX_Caligraphic', '1em KaTeX_Script', '1em KaTeX_SansSerif', '1em KaTeX_Typewriter',
 ];
 
+/** Loading a face needs text it covers; this has a letter and a space so every face of a family loads. */
+const SAMPLE = 'Aa ';
+
 export async function loadFonts(document, families = ['MonotypeModern', 'ImprintMTShadow'], { katex = false } = {}) {
     if (!document.fonts) return;
     const faces = families.map(f => `20px ${f}`);
     if (katex) faces.push(...KATEX_FACES);
-    await Promise.all(faces.map(f => document.fonts.load(f).catch(() => null)));
+    await Promise.all(faces.map(f => document.fonts.load(f, SAMPLE).catch(() => null)));
     await document.fonts.ready;
 }
 
@@ -59,10 +62,11 @@ export function createMathService({ document, katex, fontSize }) {
             try { return typeset(substitute(tex, values.current), display); } catch { return null; }
         },
 
-        render(tex, display) {
+        /** `at` is the font size the math is set in; it is measured there. */
+        render(tex, display, at = size) {
             if (!katex) return null;
             const live = tex.includes('\\val{');
-            const key = `${display ? 'D' : 'I'}|${size}|${live ? substitute(tex, values.widest) : tex}`;
+            const key = `${display ? 'D' : 'I'}|${at}|${live ? substitute(tex, values.widest) : tex}`;
             const hit = cache.get(key);
             if (hit !== undefined) return hit;
 
@@ -76,7 +80,7 @@ export function createMathService({ document, katex, fontSize }) {
                 return null;
             }
             const host = ensureProbe();
-            host.style.fontSize = `${size}px`;
+            host.style.fontSize = `${at}px`;
             host.style.fontFamily = "'MonotypeModern', Georgia, serif";
             const marker = '<span class="math-marker" style="display:inline-block;width:0;height:0"></span>';
             host.innerHTML = `<span class="math-wrap" style="position:static">${measured}${marker}</span>`;

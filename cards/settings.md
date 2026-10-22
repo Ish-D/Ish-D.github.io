@@ -12,7 +12,7 @@ name: Settings
 
 [[slider(bind: fontSize, min: 14, max: 26, step: 1, label: Font Size)]]
 
-[[slider(bind: marginSize, min: 0, max: 40, step: 1, label: Margins)]]
+[[slider(bind: width, min: 24, max: 44, step: 1, label: Width)]]
 
 ---
 

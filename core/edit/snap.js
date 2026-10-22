@@ -8,8 +8,9 @@
  * on without a step. So the page below it moves the same way with or without
  * snapping, only the box eases onto the line.
  *
- * @typedef {{ value: number, kind: string, label: string, from?: number, to?: number }} Guide
- *   `from`/`to` bound the stretch the line is drawn over; without them it spans the page
+ * @typedef {{ value: number, kind: string, label: string, from?: number, to?: number, except?: Array<[number, number]> }} Guide
+ *   `from`/`to` bound the stretch the line is drawn over; without them it spans the page.
+ *   `except` lists the stretches down the page (top, bottom) where a vertical line does not hold
  * @typedef {{ x: Guide[], y: Guide[] }} Guides
  * @typedef {'start' | 'center' | 'end'} Role
  */
@@ -20,6 +21,18 @@ export const REACH = 8;
 export const STICK = 2.5;
 
 const ORDER = { center: 0, start: 1, end: 1 };
+
+/** The placement a box stands for when its `role` rests on a guide of `kind`. */
+function placementFor(kind, role) {
+    if (kind === 'text-left' && role === 'start') return 'left';
+    if (kind === 'text-right' && role === 'end') return 'right';
+    if (kind === 'text-center' && role === 'center') return 'center';
+    if (kind === 'seam' && role === 'center') return 'gutter';
+    return null;
+}
+
+/** Of guides the same distance away, a centre beats an edge, and one that is a placement beats one that is not. */
+const rank = (role, guide) => ORDER[role] * 2 + (placementFor(guide.kind, role) ? 0 : 1);
 
 /**
  * How far to shift a box that is `distance` px short of a guide (negative: past it).
@@ -46,7 +59,7 @@ export function nearest(candidates, guides, { reach = REACH, stick = STICK } = {
             const distance = guide.value - at;
             const a = Math.abs(distance);
             if (a >= reach) continue;
-            if (!best || a < best.a - 1e-9 || (Math.abs(a - best.a) < 1e-9 && ORDER[role] < ORDER[best.role])) best = { a, distance, guide, role };
+            if (!best || a < best.a - 1e-9 || (Math.abs(a - best.a) < 1e-9 && rank(role, guide) < best.rank)) best = { a, distance, guide, role, rank: rank(role, guide) };
         }
     }
     return best && { shift: pull(best.distance, reach, stick), distance: best.distance, guide: best.guide, role: best.role, locked: best.a <= stick };
@@ -60,9 +73,10 @@ export function nearest(candidates, guides, { reach = REACH, stick = STICK } = {
  * @returns {{ dx: number, dy: number, x: ReturnType<typeof nearest>, y: ReturnType<typeof nearest> }}
  */
 export function snapRect(rect, guides, { axes = 'both' } = {}) {
+    const holds = (guide) => !guide.except || !guide.except.some(([top, bottom]) => rect.y < bottom && rect.y + rect.height > top);
     const x = axes === 'y' ? null : nearest([
         { at: rect.x, role: 'start' }, { at: rect.x + rect.width / 2, role: 'center' }, { at: rect.x + rect.width, role: 'end' },
-    ], guides.x);
+    ], guides.x.filter(holds));
     const y = axes === 'x' ? null : nearest([
         { at: rect.y, role: 'start' }, { at: rect.y + rect.height / 2, role: 'center' }, { at: rect.y + rect.height, role: 'end' },
     ], guides.y);
@@ -76,11 +90,5 @@ export function snapRect(rect, guides, { axes = 'both' } = {}) {
  * @returns {'left' | 'right' | 'center' | 'gutter' | null}
  */
 export function placementOf(hit) {
-    if (!hit?.locked) return null;
-    const { kind } = hit.guide;
-    if (kind === 'text-left' && hit.role === 'start') return 'left';
-    if (kind === 'text-right' && hit.role === 'end') return 'right';
-    if (kind === 'text-center' && hit.role === 'center') return 'center';
-    if (kind === 'seam' && hit.role === 'center') return 'gutter';
-    return null;
+    return hit?.locked ? placementFor(hit.guide.kind, hit.role) : null;
 }

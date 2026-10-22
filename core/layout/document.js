@@ -22,7 +22,9 @@ import { parseValue, resolveLength } from './values.js';
  * @property {{ points(word: string): number[] }} [hyphenator]
  * @property {object} atoms        { inlineMath, displayMath, image, widget }
  * @property {object} [objects]    { natural(node), mask(node, rect) }
- * @property {object} [settings]   { fontSize, lineHeight, marginPercent }
+ * @property {object} [settings]   { fontSize, lineHeight, width, titleScale, titleAlign }
+ * @property {{ notes: boolean } | false} [print]   a page of paper: one column, centred, nothing floated; `notes` leaves a strip on each side for margin notes
+ * @property {Set<any>} [inlineNotes]   notes to set in the text instead of the margin
  * @property {(node: any, scope: object) => any[] | null} [generate]
  */
 
@@ -34,25 +36,37 @@ export const PAGE = Object.freeze({
     minText: 280,
     topPad: 32,
     bottomPad: 96,
+    /** The text column's width in em of body text. Readers choose within the range. */
+    width: Object.freeze({ default: 32, min: 24, max: 44 }),
+    /** The same on paper: room kept clear of the edge, between the strip and the text, and for a strip. */
+    paper: Object.freeze({ pad: 36, gap: 16, minMargin: 140 }),
 });
 
+/**
+ * The text column is a fixed width in em, centred, whatever the window. It gives way only
+ * when the margins on either side would be too narrow to hold notes, and below the
+ * least text width the page has no margins at all and notes are set inline.
+ */
 export function pageGeometry(env) {
     const W = env.width;
-    const percent = env.settings?.marginPercent ?? 28;
-    let gutter = (percent / 100) * W;
-    let pad = PAGE.pad;
-    let strip = gutter - pad - PAGE.gap;
-    let narrow = strip < PAGE.minMargin;
-    if (narrow) {
-        pad = PAGE.narrowPad;
-        gutter = pad;
-        strip = 0;
-    } else if (W - 2 * gutter < PAGE.minText) {
-        gutter = Math.max(pad, (W - PAGE.minText) / 2);
-        strip = gutter - pad - PAGE.gap;
-        narrow = strip < PAGE.minMargin;
-        if (narrow) { pad = PAGE.narrowPad; gutter = pad; strip = 0; }
+    const em = env.settings?.fontSize ?? 20;
+    const wanted = (env.settings?.width ?? PAGE.width.default) * em;
+    if (env.print) {
+        const { pad, gap, minMargin } = PAGE.paper;
+        const width = Math.min(wanted, env.print.notes ? W - 2 * (pad + gap + minMargin) : W);
+        const gutter = (W - width) / 2;
+        const strip = env.print.notes ? Math.max(0, gutter - pad - gap) : 0;
+        return {
+            width: W, narrow: false, pad, text: { x: gutter, width }, page: { x: 0, width: W },
+            left: { x: pad, width: strip }, right: { x: gutter + width + gap, width: strip },
+        };
     }
+    const widest = W - 2 * (PAGE.pad + PAGE.gap + PAGE.minMargin);
+    const width = Math.min(wanted, widest);
+    const narrow = width < PAGE.minText;
+    const pad = narrow ? PAGE.narrowPad : PAGE.pad;
+    const gutter = narrow ? pad : (W - width) / 2;
+    const strip = narrow ? 0 : gutter - pad - PAGE.gap;
     const text = { x: gutter, width: W - 2 * gutter };
     return {
         width: W,
@@ -70,13 +84,13 @@ export function layoutDocument(doc, env) {
     const geom = pageGeometry(env);
     env = { ...env, refs: collectReferences(doc), outline: collectOutline(doc), doc };
     const diagnostics = [];
-    let breakIn = new Set();
+    let breakIn = new Set(env.inlineNotes ?? []);
     let scope;
     let notes = { placed: [], inline: new Set() };
 
     for (let pass = 0; pass < 4; pass++) {
         scope = flowPass(doc, env, styles, geom, diagnostics, breakIn);
-        if (geom.narrow) break;
+        if (geom.narrow || env.print) break;
         notes = placeNotes(scope, env, styles, geom);
         const sameSize = notes.inline.size === breakIn.size && [...notes.inline].every(n => breakIn.has(n));
         if (sameSize) break;
@@ -101,6 +115,22 @@ export function layoutDocument(doc, env) {
         outline: env.outline.map(({ level, number, id, text }) => ({ level, number, id, text })),
         diagnostics,
         overflow: scope.overflow,
+        ...(env.print ? { sheetNotes: sheetNotes(scope, env, styles, geom) } : {}),
+    };
+}
+
+/**
+ * What a page of paper needs to place its notes once it is cut into sheets: every note that has an anchor, and
+ * a function that places a set of them on one sheet. Nothing about a note is nudged or pinned by hand on paper.
+ */
+function sheetNotes(scope, env, styles, geom) {
+    return {
+        candidates: noteCandidates(scope, env, styles),
+        /** @param {any[]} candidates  anchors in sheet coordinates */
+        place: (candidates, { height, loose = false }) => placeCandidates(candidates, env, styles, geom, {
+            lo: 0, hi: height, obstacles: { left: [], right: [] },
+            maxDisplacement: loose ? Infinity : styles.lineHeight * PRINT_DISPLACEMENT_LINES,
+        }),
     };
 }
 
@@ -174,6 +204,8 @@ function noteCap(node, env) {
 
 /** A note farther than this from its anchor, or taller than MAX_NOTE_HEIGHT, is set in the body instead. */
 const MAX_DISPLACEMENT_LINES = 6;
+/** A note on paper may sit farther from its anchor, because a sheet has less room than the page. */
+const PRINT_DISPLACEMENT_LINES = 10;
 const MAX_NOTE_HEIGHT = 480;
 const MIN_VERTICAL = 96;
 const MAX_VERTICAL = 720;
@@ -222,25 +254,63 @@ function layoutNoteBody(blocks, env, styles, x, width, scale) {
     return { scope, height: Math.max(last, noteStyles.lineHeight), styles: noteStyles };
 }
 
-function placeNotes(scope, env, styles, geom) {
-    // notes take at most NOTE_MAX_EM of the strip, on the side nearest the text
+/** Where notes may stand: at most NOTE_MAX_EM of each strip, on the side nearest the text. */
+function noteStrips(geom, styles) {
     const maxWidth = NOTE_MAX_EM * styles.size * 0.85;
     const narrowed = (strip, hug) => {
         const width = Math.min(strip.width, maxWidth);
         return { x: hug === 'right' ? strip.x + strip.width - width : strip.x, width };
     };
-    const strips = { left: narrowed(geom.left, 'right'), right: narrowed(geom.right, 'left') };
+    return { left: narrowed(geom.left, 'right'), right: narrowed(geom.right, 'left') };
+}
+
+/** Margin notes that have a place in the text. On paper nothing is pinned, nudged or capped by hand. */
+function noteCandidates(scope, env, styles) {
+    const paper = !!env.print;
+    const common = (node) => ({
+        node, pin: paper ? null : notePin(node), dy: paper ? 0 : noteNudge(node, styles),
+        cap: paper ? null : noteCap(node, env), vertical: noteOrient(node) === 'vertical',
+    });
+    return [
+        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), ...common(n.node) })),
+        ...scope.marginObjects.filter(m => !m.object).map(m => ({
+            id: m, anchor: { x: 0, y: m.anchorY }, side: m.side === 'left' ? 'left' : m.side === 'right' ? 'right' : 'either',
+            blocks: m.node.groups[0]?.children ?? [], ...common(m.node),
+        })),
+    ];
+}
+
+function placeNotes(scope, env, styles, geom) {
+    const strips = noteStrips(geom, styles);
+    const obstacles = { left: scope.bleeds.slice(), right: scope.bleeds.slice() };
+    // a figure that reaches into a margin takes that stretch of it
+    for (const item of scope.out) {
+        if (item.type !== 'object' || !item.rect) continue;
+        const { x, y, width, height } = item.rect;
+        const bottom = y + height + (item.caption ? item.caption.height + styles.paragraphGap : 0);
+        for (const side of ['left', 'right']) {
+            const strip = strips[side];
+            if (x < strip.x + strip.width && x + width > strip.x) obstacles[side].push([y, bottom]);
+        }
+    }
+    return placeCandidates(noteCandidates(scope, env, styles), env, styles, geom, {
+        lo: PAGE.topPad,
+        hi: Math.max(scope.y, scope.maxY ?? 0) + 400,
+        obstacles,
+        maxDisplacement: styles.lineHeight * MAX_DISPLACEMENT_LINES,
+    });
+}
+
+/**
+ * Chooses a size, a side and a place for each note between `lo` and `hi`. Notes that do not fit come back in
+ * `inline`, to be set in the text.
+ */
+function placeCandidates(candidates, env, styles, geom, { lo, hi, obstacles, maxDisplacement }) {
+    const strips = noteStrips(geom, styles);
     const items = [];
     const bodies = new Map();
 
     const bodyBaseline = baselineIn(env.measurer, styles.body, styles.lineHeight);
-    const candidates = [
-        ...scope.notes.filter(n => n.anchor).map(n => ({ id: n, node: n.node, anchor: n.anchor, side: noteSide(n.node), blocks: noteBody(n.node), pin: notePin(n.node), dy: noteNudge(n.node, styles), cap: noteCap(n.node, env), vertical: noteOrient(n.node) === 'vertical' })),
-        ...scope.marginObjects.filter(m => !m.object).map(m => ({
-            id: m, node: m.node, anchor: { x: 0, y: m.anchorY }, side: m.side === 'left' ? 'left' : m.side === 'right' ? 'right' : 'either',
-            blocks: m.node.groups[0]?.children ?? [], pin: notePin(m.node), dy: noteNudge(m.node, styles), cap: noteCap(m.node, env), vertical: noteOrient(m.node) === 'vertical',
-        })),
-    ];
 
     const pinned = [];
     const bases = new Map();   // where each note sits before any nudge
@@ -273,25 +343,9 @@ function placeNotes(scope, env, styles, geom) {
         bodies.set(c.id, c);
     }
 
-    const obstacles = { left: scope.bleeds.slice(), right: scope.bleeds.slice() };
-    // a figure that reaches into a margin takes that stretch of it
-    for (const item of scope.out) {
-        if (item.type !== 'object' || !item.rect) continue;
-        const { x, y, width, height } = item.rect;
-        const bottom = y + height + (item.caption ? item.caption.height + styles.paragraphGap : 0);
-        for (const side of ['left', 'right']) {
-            const strip = strips[side];
-            if (x < strip.x + strip.width && x + width > strip.x) obstacles[side].push([y, bottom]);
-        }
-    }
+    obstacles = { left: obstacles.left.slice(), right: obstacles.right.slice() };
     for (const pin of pinned) obstacles[pin.side].push([pin.y - styles.note.gap, pin.y + pin.laid.height + styles.note.gap]);
-    const solved = solveMargins(items, {
-        lo: PAGE.topPad,
-        hi: Math.max(scope.y, scope.maxY ?? 0) + 400,
-        gap: styles.note.gap,
-        obstacles,
-        maxDisplacement: styles.lineHeight * MAX_DISPLACEMENT_LINES,
-    });
+    const solved = solveMargins(items, { lo, hi, gap: styles.note.gap, obstacles, maxDisplacement });
 
     const placed = [];
     const inline = new Set(inlineNow);

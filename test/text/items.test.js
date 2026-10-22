@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildItems } from '../../core/text/items.js';
+import { buildItems, KEEP_TOGETHER } from '../../core/text/items.js';
 
 const font = { family: 'Test', size: 10 };
 const italic = { family: 'Test', size: 10, style: 'italic' };
@@ -25,12 +25,31 @@ test('leading, trailing and repeated spaces collapse', () => {
     assert.equal(kinds(items), 'bgbgp');
 });
 
-test('keepLastTwo forbids breaking before the last word', () => {
+test('keepLastTwo forbids breaking before the last word, unless nothing else fits', () => {
     const { items } = buildItems([text('one two three')], { measurer });
     const glues = items.map((it, i) => [it, i]).filter(([it]) => it.kind === 'glue' && it.stretch < 1e8);
     const lastSpace = glues.at(-1)[1];
     assert.equal(items[lastSpace - 1].kind, 'penalty');
     assert.equal(items[lastSpace - 1].penalty, Infinity);
+    assert.equal(items[lastSpace - 1].relaxedTo, KEEP_TOGETHER);
+});
+
+test('the last word is not hyphenated, and an earlier one still is', () => {
+    const hyphenator = { points: () => [2, 5] };
+    const { items, info } = buildItems([text('hyphenation hyphenation')], { measurer, hyphenator, params: { minHyphenWord: 5 } });
+    const penalties = items.map((it, i) => ({ it, role: info[i].role })).filter(({ it, role }) => it.kind === 'penalty' && role === 'hyphen');
+    assert.equal(penalties.length, 4);
+    assert.ok(penalties.slice(0, 2).every(({ it }) => it.penalty === 50), 'the first word keeps its hyphenation points');
+    assert.ok(penalties.slice(2).every(({ it }) => it.penalty === Infinity && it.relaxedTo === KEEP_TOGETHER), 'the last word does not');
+});
+
+test('addresses and code break after a slash or a hyphen they already have, and nowhere else', () => {
+    const hyphenator = { points: () => [3] };
+    const { items, info } = buildItems([text('see/the-long/address.html', font, { noHyphen: true })], { measurer, hyphenator });
+    const roles = info.map(i => i.role).filter(r => r !== 'text' && r !== 'fill' && r !== 'end');
+    assert.deepEqual(roles, ['address', 'hyphen', 'address']);
+    const widths = items.filter(it => it.kind === 'penalty' && it.penalty !== -Infinity).map(it => it.width);
+    assert.deepEqual(widths, [0, 0, 0], 'no hyphen is added');
 });
 
 test('hyphenation points become soft flagged penalties and pieces sum to the word width', () => {

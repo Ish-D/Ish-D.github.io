@@ -72,4 +72,4 @@ defineFigure('scatter', (ctx) => {
             urls.forEach(u => URL.revokeObjectURL(u));
         },
     };
-});
+}, { paper: false });

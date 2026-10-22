@@ -24,9 +24,9 @@ test('setting the theme applies it and listeners hear every change', () => {
     s.subscribe((k, v) => heard.push([k, v]));
     s.set('theme', 'dark');
     assert.equal(d.documentElement.dataset.theme, 'dark');
-    s.set('marginPercent', 10);
+    s.set('width', 28);
     s.reset();
-    assert.deepEqual(heard, [['theme', 'dark'], ['marginPercent', 10], ['*', null]]);
+    assert.deepEqual(heard, [['theme', 'dark'], ['width', 28], ['*', null]]);
     assert.equal(d.documentElement.dataset.theme, 'light');
 });
 

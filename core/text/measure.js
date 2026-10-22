@@ -44,6 +44,8 @@ export function fontToCss(font) {
 /**
  * Measurer over a canvas 2D context: an OffscreenCanvas when available, else a detached
  * <canvas>. Kerning is forced on. Widths are cached per (font, text), up to `cacheSize` entries.
+ * Capitals and tracking are applied here, not through the context: the text is measured in
+ * capitals and every character gains `tracking` em, as CSS letter-spacing does.
  * Metrics use fontBoundingBox* for ascent/descent (without it, the ink extents of accented
  * capitals and descenders) and the ink tops of 'x' and 'H' for xHeight and capHeight.
  * @param {{ context?: MeasureContext, cacheSize?: number }} [options]  `context` replaces the canvas
@@ -57,15 +59,16 @@ export function createCanvasMeasurer({ context = createContext(), cacheSize = 20
 
     return {
         width(text, font) {
+            const shown = font.caps ? text.toUpperCase() : text;
             const css = fontToCss(font);
-            const key = `${css}\n${text}`;
+            const key = `${css}\n${shown}`;
             let width = widths.get(key);
             if (width === undefined) {
                 context.font = css;
-                width = context.measureText(text).width;
+                width = context.measureText(shown).width;
                 widths.set(key, width);
             }
-            return width;
+            return font.tracking ? width + font.tracking * font.size * [...shown].length : width;
         },
         metrics(font) {
             const css = fontToCss(font);
@@ -81,7 +84,8 @@ export function createCanvasMeasurer({ context = createContext(), cacheSize = 20
 }
 
 /**
- * Measurer where every code point is `charWidth` px wide. Metrics scale with font.size:
+ * Measurer where every code point is `charWidth` px wide, plus the font's tracking.
+ * Metrics scale with font.size:
  * ascent 0.8em, descent 0.2em, xHeight 0.5em, capHeight 0.7em; spaceWidth is charWidth.
  * @param {{ charWidth: number }} options
  * @returns {Measurer}
@@ -89,10 +93,10 @@ export function createCanvasMeasurer({ context = createContext(), cacheSize = 20
 export function createFixedMeasurer({ charWidth }) {
     if (!(charWidth > 0)) throw new RangeError(`charWidth must be > 0, got ${charWidth}`);
     return {
-        width(text) {
+        width(text, font) {
             let count = 0;
             for (const _ of text) count++;
-            return count * charWidth;
+            return count * (charWidth + (font?.tracking ?? 0) * (font?.size ?? 0));
         },
         metrics({ size }) {
             return { ascent: 0.8 * size, descent: 0.2 * size, xHeight: 0.5 * size, capHeight: 0.7 * size, spaceWidth: charWidth };

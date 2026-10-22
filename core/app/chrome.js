@@ -4,6 +4,7 @@
  */
 
 import { HOME_PAGE } from './urls.js';
+import { PAGE } from '../layout/document.js';
 
 export function createChrome(app) {
     const { state, settings, personal, document } = app;
@@ -23,7 +24,7 @@ export function createChrome(app) {
         };
         const dark = el('input', { type: 'checkbox', checked: settings.values.theme === 'dark' });
         dark.onchange = () => settings.set('theme', dark.checked ? 'dark' : 'light');
-        return el('div', { className: 'panel' }, slider('Font size', 'fontSize', 14, 26), slider('Margins', 'marginPercent', 0, 40), el('label', {}, 'Dark mode', dark));
+        return el('div', { className: 'panel' }, slider('Font size', 'fontSize', 14, 26), slider('Width', 'width', PAGE.width.min, PAGE.width.max), el('label', {}, 'Dark mode', dark));
     }
 
     function editButtons() {

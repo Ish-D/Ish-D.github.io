@@ -2,7 +2,8 @@
  * Turns styled inline content into Knuth-Plass items.
  *
  * Words are boxes, spaces are stretchable glue, hyphenation and dash
- * opportunities are penalties. Inline atoms (math, images, widgets) are boxes.
+ * opportunities are penalties. Addresses and code are not hyphenated but may break
+ * after a slash or at a hyphen they already have. Inline atoms (math, images, widgets) are boxes.
  * Markers (note anchors, jump targets) take no width; each remembers the index
  * of the item that follows so a placed line can report where they landed.
  */
@@ -23,7 +24,7 @@ const ATOM_CHAR = '\uFFFC';
  * @property {'text'} kind
  * @property {string} text
  * @property {FontSpec} font
- * @property {boolean} [noHyphen]     no hyphenation or hyphen breaks inside (code, URLs)
+ * @property {boolean} [noHyphen]     no hyphenation inside (code, URLs); they break only after a slash or a hyphen already there
  * @property {any} [ref]              opaque handle for the renderer (style, link, source node)
  */
 /**
@@ -42,6 +43,8 @@ export const defaultParams = Object.freeze({
     hyphenPenalty: 50,
     explicitHyphenPenalty: 50,
     dashPenalty: 50,
+    /** A break after a slash in an address or code. */
+    addressPenalty: 100,
     /** Stretch and shrink of a space, as fractions of its width. */
     spaceStretch: 0.5,
     spaceShrink: 1 / 3,
@@ -58,11 +61,11 @@ const isTie = (ch) => ch === NBSP || ch === NARROW_NBSP;
 const isAlnum = (ch) => ch !== undefined && /[\p{L}\p{N}]/u.test(ch);
 
 export const fontKey = (f) =>
-    `${f.family}|${f.size}|${f.weight ?? ''}|${f.style ?? ''}|${f.smallCaps ? 1 : 0}`;
+    `${f.family}|${f.size}|${f.weight ?? ''}|${f.style ?? ''}|${f.smallCaps ? 1 : 0}|${f.caps ? 1 : 0}|${f.tracking ?? 0}`;
 
 /**
  * @typedef {Object} ItemInfo
- * @property {'text' | 'atom' | 'space' | 'tie' | 'hyphen' | 'dash' | 'fill' | 'end'} role
+ * @property {'text' | 'atom' | 'space' | 'tie' | 'hyphen' | 'dash' | 'address' | 'fill' | 'end'} role
  * @property {number} [span]
  * @property {number} [from]     range inside spans[span].text (boxes)
  * @property {number} [to]
@@ -130,12 +133,18 @@ export function buildItems(spans, ctx) {
         }
         const textSegAt = (offset) => segs.find(s => s.frag.type === 'text' && offset >= s.start && offset < s.end);
 
-        /** @type {Map<number, 'dash' | 'explicit' | 'soft'>} */
+        /** @type {Map<number, 'dash' | 'explicit' | 'soft' | 'address'>} */
         const cuts = new Map();
         for (const s of segs) {
-            if (s.frag.type !== 'text' || spans[s.frag.span].noHyphen) continue;
+            if (s.frag.type !== 'text') continue;
+            const address = spans[s.frag.span].noHyphen;
             for (let k = s.start; k < s.end; k++) {
                 const ch = text[k];
+                if (address) {
+                    if (ch === '/' && text[k - 1] !== '/' && text[k + 1] !== '/' && k + 1 < text.length) cuts.set(k + 1, 'address');
+                    else if (ch === '-' && isAlnum(text[k - 1]) && isAlnum(text[k + 1])) cuts.set(k + 1, 'explicit');
+                    continue;
+                }
                 if (ch === '-' && isAlnum(text[k - 1]) && isAlnum(text[k + 1])) cuts.set(k + 1, 'explicit');
                 else if ((ch === '\u2014' || ch === '\u2013') && k + 1 < text.length) cuts.set(k + 1, 'dash');
             }
@@ -179,6 +188,7 @@ export function buildItems(spans, ctx) {
                 const kind = cuts.get(b1);
                 const seg = textSegAt(b1 - 1);
                 if (kind === 'dash') push(penalty(0, p.dashPenalty, false), { role: 'dash' });
+                else if (kind === 'address') push(penalty(0, p.addressPenalty, false), { role: 'address' });
                 else if (kind === 'explicit') push(penalty(0, p.explicitHyphenPenalty, true), { role: 'hyphen', span: seg.frag.span });
                 else push(penalty(hyphenWidth(seg.frag.font), p.hyphenPenalty, true, true), { role: 'hyphen', span: seg.frag.span });
             }
@@ -245,13 +255,25 @@ function closeParagraph(items, info, markers, keepLastTwo) {
     }
 }
 
-/** Forbids the break before the final word of the last line segment. */
+/** Cost of a break the last line of a paragraph should not have, when nothing else will fit. */
+export const KEEP_TOGETHER = 100000;
+
+/**
+ * Forbids the break before the final word of the last line segment, and any hyphen inside it, so the
+ * last line is never one word or the tail of a split one. A final word too wide to share a line can still break.
+ */
 function tieLastTwoWords(items, info, markers) {
     for (let i = items.length - 1; i > 0; i--) {
         const it = items[i];
         if (it.kind === 'penalty' && it.penalty === -INF) return;
         if (it.kind === 'glue' && info[i].role === 'space') {
-            items.splice(i, 0, penalty(0, INF, false));
+            for (let j = i + 1; j < items.length; j++) {
+                const later = items[j];
+                if (later.kind === 'penalty' && later.penalty !== -INF && ['hyphen', 'dash'].includes(info[j].role)) {
+                    items[j] = penalty(later.width, INF, later.flagged, later.soft, KEEP_TOGETHER);
+                }
+            }
+            items.splice(i, 0, penalty(0, INF, false, false, KEEP_TOGETHER));
             info.splice(i, 0, { role: 'tie' });
             for (const m of markers) if (m.at > i) m.at++;
             return;

@@ -106,3 +106,19 @@ test('slotStream materializes lazily and repeats the last width past the end', (
     assert.equal(stream.width(5), 100);
     assert.equal(stream.exhausted, true);
 });
+
+test('a slot stream says which sides of a slot are the edges of its column', () => {
+    const columns = [{ x: 10, width: 300, top: 0, bottom: Infinity }];
+    const cursor = createSlotCursor({ columns, lineHeight: 20, shapes: [rect(100, 0, 60, 40, 0)] });
+    const stream = slotStream(cursor, columns);
+    // the first two bands are split by the shape: a slot on its left, one on its right
+    assert.deepEqual(stream.edges(0), { left: true, right: false });
+    assert.deepEqual(stream.edges(1), { left: false, right: true });
+    assert.deepEqual(stream.edges(2), { left: true, right: false });
+    assert.deepEqual(stream.edges(3), { left: false, right: true });
+    // below the shape the whole column is free
+    assert.deepEqual(stream.edges(4), { left: true, right: true });
+    const plain = slotStream(createSlotCursor({ columns, lineHeight: 20 }), columns);
+    assert.deepEqual(plain.edges(0), { left: true, right: true });
+    assert.deepEqual(slotStream(createSlotCursor({ columns, lineHeight: 20 })).edges(0), { left: true, right: true }, 'without columns every edge counts');
+});

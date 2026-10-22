@@ -73,12 +73,110 @@ test('math atoms get a zero-height wrapper with the rendered html inside', () =>
     assert.equal(atom.children[0].style.top, '-18px');
 });
 
-test('hyphenated lines end with a .hy span and selectionText reassembles the paragraph', () => {
+test('a paragraph is copied exactly as it was written, however its lines were broken', () => {
     const text = 'Typographic quality depends on the evenness of color across a page, and nothing disturbs color more than loose lines followed by tight ones, so the optimizer trades tightness for looseness.';
-    const { el } = render(parseText(text), 300);
-    const joined = selectionText(el);
-    assert.equal(joined.replace(/\s+/g, ' ').trim(), text);
-    assert.ok(el.querySelectorAll('.hy').length > 0, 'a narrow measure should hyphenate');
+    for (const width of [300, 360, 420, 520]) {
+        const { el } = render(parseText(text), width);
+        assert.equal(selectionText(el), text, `at ${width}px`);
+    }
+});
+
+const LONG_WORDS = 'Extraordinarily incomprehensible internationalization considerations notwithstanding characteristically unrepresentative misunderstandings overwhelmingly counterintuitive acknowledgements demonstrably';
+
+test('a hyphen is drawn, not text, and a split word is whole in the text of its first line', () => {
+    const { el } = render(parseText(LONG_WORDS));
+    assert.equal(el.querySelectorAll('.hy').length, 0, 'no hyphen element');
+    const heads = el.querySelectorAll('.hd');
+    assert.ok(heads.length > 0, 'a narrow measure should hyphenate');
+    for (const head of heads) {
+        const tail = head.parentNode.children.find(c => c.matches?.('.tl'));
+        assert.ok(tail, 'the rest of the word follows the first piece');
+        const lines = el.querySelectorAll('.ln');
+        const line = head.closest('.ln');
+        const next = lines[lines.indexOf(line) + 1];
+        const piece = next.querySelector('.ct');
+        assert.ok(piece, 'the next line draws its piece');
+        assert.equal(piece.dataset.t, tail.textContent.slice(0, piece.dataset.t.length));
+        assert.ok(!/-/.test(head.textContent + tail.textContent), 'no hyphen in the word');
+    }
+    // the pieces on the next lines are not text
+    assert.ok(el.querySelectorAll('.ct').every(c => c.textContent === ''));
+});
+
+test('a word split over three lines is whole in the first one, and the middle line draws its piece and a hyphen', () => {
+    const word = 'supercalifragilisticexpialidocious';
+    const { el } = render(parseText(`Say ${word} now`), 110);
+    const lines = el.querySelectorAll('.ln');
+    assert.ok(lines.length >= 3);
+    const heads = el.querySelectorAll('.hd');
+    assert.equal(heads.length, 1);
+    assert.equal(heads[0].textContent + heads[0].parentNode.children.find(c => c.matches?.('.tl')).textContent, word);
+    const middle = el.querySelectorAll('.ct').filter(c => c.dataset.hy !== undefined);
+    assert.ok(middle.length >= 1, 'a middle piece carries its own hyphen');
+    assert.equal(selectionText(el), `Say ${word} now`);
+});
+
+test('a break at a hyphen that is already there is not a space', () => {
+    const text = 'Looking at the state-of-the-art long-standing well-known results here';
+    let seen = false;
+    for (let width = 200; width <= 420; width += 10) {
+        const { layout, el } = render(parseText(text), width);
+        const lines = layout.blocks.find(b => b.type === 'paragraph').lines;
+        if (lines.some((l, i) => i < lines.length - 1 && l.join === 'none')) seen = true;
+        assert.equal(selectionText(el), text, `at ${width}px`);
+    }
+    assert.ok(seen, 'some width breaks a word at its own hyphen');
+});
+
+test('lines say what follows them: a space between words, the end of a paragraph, or nothing inside a word', () => {
+    const { el } = render(parseText('One short paragraph of words that wraps onto a few lines at this narrow width, and another below.\n\nSecond.'), 260);
+    const separators = el.querySelectorAll('.sp').map(sp => sp.textContent);
+    assert.ok(separators.filter(t => t === ' ').length >= 2);
+    assert.equal(separators.filter(t => t === '\n').length, 2, 'one at the end of each paragraph');
+    assert.equal(selectionText(el), 'One short paragraph of words that wraps onto a few lines at this narrow width, and another below.\n\nSecond.');
+});
+
+test('copying leaves out the section link and the markers, turns math into its TeX and keeps drop caps and bullets', () => {
+    const { el } = render(parseText('## A heading\n\n[[drop(I)]]n my time here, with $x^2$ in a line.\n\n- one\n- two\n'));
+    const copied = selectionText(el);
+    assert.ok(!copied.includes('§'));
+    assert.ok(copied.startsWith('A heading'));
+    assert.match(copied, /In my time here, with .* in a line\./);
+    assert.match(copied, /one\s+two|\S one\n\n\S two/, 'list items stay apart');
+    assert.equal(selectionText(document.createElement('div')), null, 'nothing of the page, nothing copied');
+});
+
+test('math is copied as its TeX, once', () => {
+    const el = (tag, className, ...kids) => {
+        const e = document.createElement(tag);
+        e.className = className;
+        for (const k of kids) e.appendChild(typeof k === 'string' ? document.createTextNode(k) : k);
+        return e;
+    };
+    const line = el('span', 'ln', el('span', 'r', 'the square '), el('span', 'atom atom-math',
+        el('span', 'katex', el('span', 'katex-mathml', el('annotation', '', 'x^2')), el('span', 'katex-html', 'x2'))),
+    el('span', 'r', ' of it'), el('span', 'sp', '\n'));
+    assert.equal(selectionText(el('p', 'blk', line)), 'the square $x^2$ of it');
+});
+
+test('every paragraph of the post is copied as its own text, however it was broken, at several widths', () => {
+    const normal = (text) => text.replace(/[\s\u00A0\u2003]+/g, ' ').trim();
+    let checked = 0;
+    for (const width of [420, 700, 1280]) {
+        const { layout, el } = render(parseCard('llms_for_bozos_1'), width);
+        const drawn = el.children.filter(c => c.classList?.contains('blk'));
+        const texts = layout.blocks.filter(b => b.type === 'paragraph' || b.type === 'heading');
+        assert.equal(drawn.length, texts.length);
+        for (const [i, block] of texts.entries()) {
+            if (block.type !== 'paragraph' || block.spans.some(sp => sp.kind !== 'text' && sp.kind !== 'marker')) continue;
+            const blockEl = drawn[i];
+            if (blockEl.classList.contains('toc-text')) continue;
+            const expected = normal(block.spans.filter(sp => sp.kind === 'text').map(sp => sp.text).join(''));
+            assert.equal(normal(selectionText(blockEl) ?? ''), expected, `at ${width}px`);
+            checked++;
+        }
+    }
+    assert.ok(checked > 100, `${checked} paragraphs checked`);
 });
 
 test('viz objects expose their data attributes and persist across renders', () => {
@@ -125,4 +223,35 @@ test('an object with a shaped wrap carries a clip-path unless clip: none', () =>
     const bodies = el.querySelectorAll('.obj-body');
     assert.ok(bodies[0].style.clipPath.startsWith('circle('));
     assert.equal(bodies[1].style.clipPath, undefined);
+});
+
+test('images wait until they are near on screen, and load and decode at once on paper', () => {
+    const layout = layoutDocument(parseText('[[image(a.png, place: block, width: 200, height: 100)]]\n'), makeEnv(1280, { hyphenator }));
+    const image = (extra) => {
+        const ctx = { document, measurer, math, resolveAsset: (p) => `/${p}`, persist: new Map(), ...extra };
+        return renderLayout(document.createElement('div'), layout, ctx).querySelectorAll('img')[0];
+    };
+    const screen = image({});
+    assert.deepEqual([screen.loading, screen.decoding], ['lazy', 'async']);
+    const paper = image({ eager: true });
+    assert.deepEqual([paper.loading, paper.decoding], ['eager', 'sync']);
+});
+
+test('capitals and tracking reach the page as styles on the block', () => {
+    const { el } = render(parseText('# Title\n\n### Small heading\n\nBody text here.\n'));
+    const h3 = el.querySelectorAll('h3')[0];
+    assert.equal(h3.style.textTransform, 'uppercase');
+    assert.equal(h3.style.letterSpacing, '0.1em');
+    const p = el.querySelectorAll('p')[0];
+    assert.equal(p.style.textTransform, undefined);
+    assert.equal(p.style.letterSpacing, undefined);
+});
+
+test('strong text keeps the weight of the page and is set in capitals instead', () => {
+    const { el } = render(parseText('Some **loud** words.\n'));
+    const runs = el.querySelectorAll('.r');
+    const loud = runs.find(r => r.textContent === 'loud');
+    assert.ok(loud, 'the strong run is its own span');
+    assert.equal(loud.style.textTransform, 'uppercase');
+    assert.equal(loud.style.fontWeight, undefined);
 });

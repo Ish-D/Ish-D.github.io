@@ -12,12 +12,16 @@
 import { themeColors } from './svg.js';
 
 const registry = new Map();
+const onPaper = new Map();
 
-export function defineFigure(name, factory) {
+/** `options.paper: false` keeps a figure off paper, for one that is only there to look at on screen. */
+export function defineFigure(name, factory, options = {}) {
     registry.set(name, factory);
+    onPaper.set(name, options.paper !== false);
 }
 
 export const hasFigure = (name) => registry.has(name);
+export const figureOnPaper = (name) => onPaper.get(name) !== false;
 export const figureNames = () => [...registry.keys()];
 
 function paramsOf(el) {
@@ -31,10 +35,11 @@ function paramsOf(el) {
 /**
  * Mounts every unmounted `[data-figure]` under `root` as it nears the viewport.
  * @param {HTMLElement} root
- * @param {{ document: Document, store: any, window?: Window }} deps
+ * @param {{ document: Document, store: any, window?: Window, eager?: boolean, colors?: () => ReturnType<typeof themeColors> }} deps
+ *   `eager` mounts every figure now, wherever it is; `colors` gives them a fixed palette instead of the page's theme
  * @returns {() => void} stops observing (mounted figures stay until disposeFigures)
  */
-export function mountFigures(root, { document, store, window: win = document.defaultView }) {
+export function mountFigures(root, { document, store, window: win = document.defaultView, eager = false, colors = null }) {
     const targets = [...root.querySelectorAll('[data-figure]')].filter(el => !el.__figure);
     if (targets.length === 0) return () => {};
 
@@ -49,7 +54,7 @@ export function mountFigures(root, { document, store, window: win = document.def
             ? new ResizeObserver(() => resizeListeners.forEach(cb => cb(el.clientWidth, el.clientHeight)))
             : null;
         observer?.observe(el);
-        const themeWatch = typeof MutationObserver === 'function'
+        const themeWatch = !colors && typeof MutationObserver === 'function'
             ? new MutationObserver(() => themeListeners.forEach(cb => cb(themeColors(document))))
             : null;
         themeWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -62,7 +67,7 @@ export function mountFigures(root, { document, store, window: win = document.def
             signal: controller.signal,
             get width() { return el.clientWidth; },
             get height() { return el.clientHeight; },
-            theme: () => themeColors(document),
+            theme: () => (colors ? colors() : themeColors(document)),
             onTheme: (cb) => { themeListeners.add(cb); return () => themeListeners.delete(cb); },
             onResize: (cb) => { resizeListeners.add(cb); return () => resizeListeners.delete(cb); },
         };
@@ -78,7 +83,7 @@ export function mountFigures(root, { document, store, window: win = document.def
         };
     };
 
-    if (typeof IntersectionObserver !== 'function' || !win) {
+    if (eager || typeof IntersectionObserver !== 'function' || !win) {
         targets.forEach(mount);
         return () => {};
     }

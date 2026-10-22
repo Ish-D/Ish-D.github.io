@@ -14,6 +14,8 @@
  * @property {number|string} [weight]            400, 700, 'bold'
  * @property {'normal'|'italic'|'oblique'} [style]
  * @property {boolean} [smallCaps]
+ * @property {boolean} [caps]                    set in capitals; the text is measured and drawn as capitals
+ * @property {number} [tracking]                 letter spacing in em, added after every character
  */
 
 /**
@@ -41,7 +43,7 @@
 /**
  * `width` is added to the line only if the break is taken here (a hyphen glyph).
  * `soft` marks breaks inserted by hyphenation; the first pass ignores them.
- * @typedef {{ kind: 'penalty', width: number, penalty: number, flagged: boolean, soft?: boolean }} PenaltyItem
+ * @typedef {{ kind: 'penalty', width: number, penalty: number, flagged: boolean, soft?: boolean, relaxedTo?: number }} PenaltyItem
  */
 /** @typedef {BoxItem | GlueItem | PenaltyItem} Item */
 
@@ -83,7 +85,7 @@
 // Blocks --------------------------------------------------------------------
 
 /** @typedef {NodeBase & { type: 'heading', level: number, id: string, children: Inline[] }} Heading */
-/** @typedef {NodeBase & { type: 'paragraph', centered: boolean, children: Inline[] }} Paragraph */
+/** @typedef {NodeBase & { type: 'paragraph', centered: boolean, flush?: boolean, children: Inline[] }} Paragraph  `flush` sets a generated paragraph flush left instead of justified */
 /** @typedef {NodeBase & { type: 'item', children: Inline[] }} ListItem */
 /** @typedef {NodeBase & { type: 'list', ordered: boolean, items: ListItem[] }} List */
 /** @typedef {NodeBase & { type: 'blockquote', children: Block[] }} Blockquote */

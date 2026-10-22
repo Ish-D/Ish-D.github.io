@@ -46,6 +46,9 @@ export function createScope(env, { x, width, y = 0, styles = env.styles, columns
     return {
         env,
         styles,
+        /** Blocks start and end on lines of a grid with this pitch, counted from `gridOrigin`; 0 turns the grid off. */
+        gridUnit: styles.lineHeight,
+        gridOrigin: y,
         x,
         width,
         columns: columns ?? [{ x, width, top: y, bottom: Infinity }],
@@ -124,8 +127,22 @@ function placeEditor(scope, editing) {
     scope.maxY = Math.max(scope.maxY, scope.y);
 }
 
+/** Moves the cursor down to the next line of the grid, if it is not on one. Text set in another size has its own grid. */
+function snapToGrid(scope) {
+    const unit = scope.gridUnit;
+    if (!unit || scope.styles.lineHeight !== unit) return;
+    const lines = Math.ceil((scope.y - scope.gridOrigin) / unit - 1e-6);
+    scope.y = scope.gridOrigin + Math.max(0, lines) * unit;
+}
+
 function flowBlock(scope, block, siblings, index) {
     if (block.type !== 'rule' && !(block.type === 'directive' && block.name === 'toc')) scope.ruleTop = null;
+    snapToGrid(scope);
+    flowBlockOfType(scope, block, siblings, index);
+    snapToGrid(scope);
+}
+
+function flowBlockOfType(scope, block, siblings, index) {
     switch (block.type) {
         case 'heading': return flowHeading(scope, block);
         case 'paragraph': return flowParagraph(scope, block);
@@ -176,7 +193,13 @@ function makeStream(scope, lineHeight, fromY) {
         grid: 0,
     });
     cursor.seek(scope.columnIndex, fromY);
-    return slotStream(cursor);
+    return slotStream(cursor, scope.columns);
+}
+
+/** Justified text hangs punctuation on both edges, text set flush left on its left edge; centred and right-aligned text does not. */
+function hangingFor(scope, align) {
+    if (scope.env.hang === false) return 'none';
+    return align === 'justify' ? 'both' : align === 'left' ? 'left' : 'none';
 }
 
 const widthsUniform = (scope) =>
@@ -186,7 +209,7 @@ const widthsUniform = (scope) =>
  * Lays out spans as a text block and appends it to the scope.
  * @returns {{ block: object, lines: object[] } | null}
  */
-function placeText(scope, spans, { kind, node, lineHeight, align, indent = 0, after = 0, before = 0, extra = {}, hyphenate = true }) {
+function placeText(scope, spans, { kind, node, lineHeight, align, after = 0, before = 0, extra = {}, hyphenate = true }) {
     if (!spans.some(s => s.kind === 'text' && s.text.trim() || s.kind === 'atom' || s.kind === 'marker')) {
         return null;
     }
@@ -195,7 +218,7 @@ function placeText(scope, spans, { kind, node, lineHeight, align, indent = 0, af
     const ctx = paragraphContext(scope, lineHeight);
     if (!hyphenate) ctx.params = { ...ctx.params, hyphenate: false };
     const result = layoutParagraph(spans, ctx, stream, {
-        align, indent, uniform: widthsUniform(scope),
+        align, uniform: widthsUniform(scope), hang: hangingFor(scope, align),
     });
     if (result.lines.length === 0) {
         for (const m of spans.filter(s => s.kind === 'marker')) recordMarkerAnchor(scope, m.ref, { x: scope.x, y: startY });
@@ -215,7 +238,7 @@ function placeText(scope, spans, { kind, node, lineHeight, align, indent = 0, af
     const block = {
         type: kind,
         node,
-        spans,
+        spans: result.spans,
         lines,
         lineHeight,
         align,
@@ -304,11 +327,10 @@ function leadingDirective(children, name) {
 function flowParagraph(scope, node) {
     const { styles } = scope;
     let children = node.children;
-    let indent = 0;
     let dropCap = null;
 
-    const tab = leadingDirective(children, 'tab');
-    if (tab) { indent = styles.indentEm * styles.size; children = children.slice(1); }
+    // paragraphs are not indented, so a tab that opens one has nothing to do
+    if (leadingDirective(children, 'tab')) children = children.slice(1);
     const drop = leadingDirective(children, 'drop');
     if (drop) { dropCap = positionalArg(drop) ?? ''; children = children.slice(1); }
 
@@ -316,7 +338,7 @@ function flowParagraph(scope, node) {
     const spans = flattenInline(children, ictx, { ...scope.inlineFlags });
     const inline = collectNotes(scope, ictx);
 
-    const align = node.centered ? 'center' : scope.align;
+    const align = node.centered ? 'center' : node.flush ? 'left' : scope.align;
     const lineHeight = styles.lineHeight;
     let addedShape = null;
     let capBottom = -Infinity;
@@ -335,11 +357,10 @@ function flowParagraph(scope, node) {
             type: 'dropcap', letter: dropCap, x: capX, y: top, width: cap.width, height: capHeight, font: cap.font,
             baseline: top + (cap.lines - 1) * lineHeight + cap.baselineInLine,
         });
-        indent = 0;
     }
 
     placeText(scope, spans, {
-        kind: 'paragraph', node, lineHeight, align, indent, after: styles.paragraphGap,
+        kind: 'paragraph', node, lineHeight, align, after: styles.paragraphGap,
     });
     if (capBottom > scope.y) scope.y = capBottom;
     for (const n of inline) flowBreakIn(scope, n);
@@ -388,10 +409,13 @@ function flowList(scope, node) {
         scope.overflow = scope.overflow || sub.overflow;
         if (placed) {
             const first = placed.lines[0];
-            scope.out.push({
+            const bullet = {
                 type: 'bullet', text: marker, font: bulletFont,
                 x: col.x + indent - styles.list.bulletGap, y: first.y, align: 'right', lineHeight: styles.lineHeight,
-            });
+            };
+            // the bullet comes before its text in the page, as it does in reading order
+            const at = scope.out.indexOf(placed.block);
+            scope.out.splice(at === -1 ? scope.out.length : at, 0, bullet);
         } else {
             scope.y = startY;
         }
@@ -455,10 +479,11 @@ function flowRule(scope) {
 
 function flowDisplayMath(scope, node) {
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
-    const size = scope.env.atoms.displayMath(node.tex, col.width);
+    const fontSize = scope.styles.size;
+    const size = scope.env.atoms.displayMath(node.tex, col.width, fontSize);
     const gap = scope.styles.paragraphGap;
     scope.out.push({
-        type: 'math', node, tex: node.tex,
+        type: 'math', node, tex: node.tex, fontSize,
         x: col.x + (col.width - Math.min(size.width ?? col.width, col.width)) / 2,
         y: scope.y, width: Math.min(size.width ?? col.width, col.width), height: size.height,
     });
@@ -478,14 +503,16 @@ function flowTable(scope, node) {
 
     const minWidth = new Array(cols).fill(0);
     const maxWidth = new Array(cols).fill(0);
+    // a hair of room, so a word that fills its column exactly is not taken to be too wide
+    const room = 2 * t.cellPadX + 0.5;
     const measure = (cells, font) => cells.forEach((cell, i) => {
         const text = plain(cell);
-        maxWidth[i] = Math.max(maxWidth[i], env.measurer.width(text, font) + 2 * t.cellPadX);
+        maxWidth[i] = Math.max(maxWidth[i], env.measurer.width(text, font) + room);
         for (const word of text.split(/\s+/)) {
-            minWidth[i] = Math.max(minWidth[i], env.measurer.width(word, font) + 2 * t.cellPadX);
+            minWidth[i] = Math.max(minWidth[i], env.measurer.width(word, font) + room);
         }
     });
-    measure(node.header, { ...styles.body, weight: 'bold' });
+    measure(node.header, t.head);
     for (const r of node.rows) measure(r, styles.body);
 
     const sumMin = minWidth.reduce((a, b) => a + b, 0);
@@ -512,12 +539,12 @@ function flowTable(scope, node) {
                 x: x + t.cellPadX, width: Math.max(10, widths[i] - 2 * t.cellPadX), y: y + t.cellPadY, styles, align: 'left',
             });
             const ictx = inlineContext(scope);
-            const flags = isHead ? { bold: true } : { ...scope.inlineFlags };
+            const flags = isHead ? { font: t.head } : { ...scope.inlineFlags };
             const spans = flattenInline(cell, ictx, flags);
             collectNotes(scope, ictx);
             placeText(sub, spans, {
                 kind: 'paragraph', node, lineHeight: styles.lineHeight,
-                align: node.align?.[i] ?? 'left',
+                align: node.align?.[i] ?? 'left', hyphenate: !isHead,
             });
             height = Math.max(height, sub.y - y - t.cellPadY + t.cellPadY * 2);
             placed.push(sub.out);
@@ -651,7 +678,7 @@ function flowColumns(scope, node) {
     const gap = resolveLength(parseValue(argOf(node, 'gap') ?? '2em'), { em: styles.size, basis: scope.width, fallback: styles.size * 2 });
     // columns never get narrower than `min` (12em unless given), so a narrow screen has fewer of them
     const min = resolveLength(parseValue(argOf(node, 'min') ?? '12em'), { em: styles.size, basis: scope.width, fallback: styles.size * 12 });
-    const count = Math.max(1, Math.min(wanted, Math.floor((scope.width + gap) / (min + gap))));
+    const count = scope.env.print ? 1 : Math.max(1, Math.min(wanted, Math.floor((scope.width + gap) / (min + gap))));
     const children = node.groups[0]?.children ?? [];
     const colWidth = (scope.width - gap * (count - 1)) / count;
     const top = scope.y;
@@ -714,7 +741,12 @@ function paramsOf(node) {
 function flowObject(scope, node) {
     const { styles, env } = scope;
     const p = paramsOf(node);
+    if (env.print && env.objects?.onPaper?.(node) === false) return;
     const place = parsePlace(p.place ?? (node.name === 'gallery' ? 'block' : 'block'));
+    const floats = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
+    // on paper nothing floats or hangs in a margin: a figure sits between the paragraphs
+    let demoted = false;
+    if (scope.env.print && place.kind !== 'inline') { place.kind = 'block'; delete place.at; delete place.side; demoted = true; }
     const em = styles.size;
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
 
@@ -723,22 +755,24 @@ function flowObject(scope, node) {
         return;
     }
 
-    let isFloat = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
+    let isFloat = !demoted && floats;
     const basis = place.kind === 'span' ? scope.width : place.kind === 'full' ? scope.page.width : col.width;
     const natural = env.objects?.natural?.(node) ?? sketchSize(node);
-    const size = resolveSize(p, { basis, em }, natural, { defaultWidth: isFloat ? 0.5 : 1 });
+    const size = resolveSize(p, { basis, em }, natural, { defaultWidth: floats ? 0.5 : 1 });
     // a float leaves room for text beside it, or else it sits on a line of its own
     const onSeam = place.kind === 'gutter' && scope.columns.length > 1;   // text runs down both sides of it
     if (isFloat && !onSeam && place.kind !== 'at' && col.width - size.width < MIN_TEXT_BESIDE * em) {
         place.kind = 'block';
         isFloat = false;
+        demoted = true;
     }
 
     const caption = captionOf(scope, node, size.width);
     const totalHeight = size.height + (caption ? caption.height + styles.paragraphGap / 2 : 0);
 
-    const dx = resolveLength(parseValue(p.dx), { em, basis, fallback: 0 });
-    const dy = resolveLength(parseValue(p.dy), { em, basis, fallback: 0 });
+    // the nudges place a float among the text; once it has its own line there is nothing to nudge it from
+    const dx = demoted ? 0 : resolveLength(parseValue(p.dx), { em, basis, fallback: 0 });
+    const dy = demoted ? 0 : resolveLength(parseValue(p.dy), { em, basis, fallback: 0 });
     const geom = {
         columns: scope.columns, columnIndex: scope.columnIndex, cursorY: scope.y,
         container: { x: scope.x, width: scope.width }, page: scope.page, em,
@@ -801,7 +835,7 @@ function captionOf(scope, node, width) {
     }));
     const result = layoutParagraph(spans, paragraphContext(scope, lineHeight), stream, { align: 'center', uniform: true });
     if (result.lines.length === 0) return null;
-    return { lines: result.lines, spans, lineHeight, height: result.lines.length * lineHeight, width };
+    return { lines: result.lines, spans: result.spans, lineHeight, height: result.lines.length * lineHeight, width };
 }
 
 /** Moves a block-level rect below any wrapped shape it would collide with. */

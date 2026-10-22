@@ -138,3 +138,11 @@ test('rejects data that is not a supported font', () => {
     assert.throws(() => parseOpenType(Uint8Array.from([0x74, 0x74, 0x63, 0x66, 0, 0, 0, 0])), /collections/);
     assert.throws(() => parseOpenType(modernBytes.subarray(0, 2000)), /runs past the end/);
 });
+
+test('measurer shapes capitals as capitals and adds tracking after every character', () => {
+    const measurer = createOtfMeasurer({ MonotypeModern: modern });
+    const font = { family: 'MonotypeModern', size: 20 };
+    assert.equal(measurer.width('Typography', { ...font, caps: true }), measurer.width('TYPOGRAPHY', font));
+    const tracked = measurer.width('Typography', { ...font, tracking: 0.1 });
+    assert.ok(Math.abs(tracked - (measurer.width('Typography', font) + 10 * 2)) < 1e-9);
+});

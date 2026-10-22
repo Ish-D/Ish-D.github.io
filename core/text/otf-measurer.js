@@ -3,7 +3,8 @@
  * scaled by font.size / unitsPerEm.
  *
  * Weight and style are ignored, so synthetic bold and italic measure like the regular face.
- * Synthetic bold widening is NOT modeled, and neither is smallCaps.
+ * Synthetic bold widening is NOT modeled, and neither is smallCaps. Capitals are shaped as
+ * capitals and tracking adds `tracking` em after every character.
  */
 
 /** @typedef {import('../types.js').FontSpec} FontSpec */
@@ -30,9 +31,11 @@ export function createOtfMeasurer(fonts) {
     return {
         width(text, spec) {
             const font = fontFor(spec);
+            const shown = spec.caps ? text.toUpperCase() : text;
             let total = 0;
-            for (const advance of font.shape(text).advances) total += advance;
-            return (total * spec.size) / font.unitsPerEm;
+            for (const advance of font.shape(shown).advances) total += advance;
+            const width = (total * spec.size) / font.unitsPerEm;
+            return spec.tracking ? width + spec.tracking * spec.size * [...shown].length : width;
         },
         metrics(spec) {
             const font = fontFor(spec);

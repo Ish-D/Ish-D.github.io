@@ -65,7 +65,7 @@ function bruteForce(items, widthOf, o, pass) {
         for (let k = 0; k < count; k++) if (mask & (1 << k)) chosen.push(legal[k]);
         chosen.push(n - 1);
 
-        let start = 0, line = 0, total = 0, prevFit = 2, prevFlag = false, ok = true;
+        let start = 0, line = 0, total = 0, prevFit = 2, prevFlag = false, run = 0, ok = true;
         for (const b of chosen) {
             const it = items[b];
             const pen = it.kind === 'penalty' ? it.penalty : 0;
@@ -88,11 +88,13 @@ function bruteForce(items, widthOf, o, pass) {
             else if (pen > -INF) d -= pen * pen;
             const isFinal = b === n - 1;
             if (prevFlag && (isFinal || flagged)) d += isFinal ? o.finalHyphenDemerits : o.doubleHyphenDemerits;
+            if (flagged && run >= 2) d += o.tripleHyphenDemerits;
             const fit = fitnessClass(ratio, bad);
             if (Math.abs(fit - prevFit) > 1) d += o.adjDemerits;
             total += d;
             prevFit = fit;
             prevFlag = flagged;
+            run = flagged ? Math.min(2, run + 1) : 0;
             start = startAfter(b);
             line++;
         }
@@ -296,3 +298,77 @@ function demeritsOf(items, breaks, width, o) {
     }
     return total;
 }
+
+test('a line may hang past the edges of its slot, and the target width grows by what hangs', () => {
+    // "aaa bbb-" fills 68 of 66 only if the hyphen stands out in the margin
+    const items = finishParagraph([box(30), glue(5, 2.5, 5 / 3), box(30), penalty(5, 50, true, true), box(20)]);
+    const without = breakLines(items, 66, { pretolerance: -1 });
+    assert.notEqual(without.breaks[0].index, 3, 'the hyphen does not fit by itself');
+
+    const protrusion = { lead: () => 0, trail: (line, index) => (index === 3 ? 5 : 0) };
+    const hung = breakLines(items, 66, { pretolerance: -1, protrusion });
+    assert.equal(hung.breaks[0].index, 3);
+    assert.equal(hung.breaks[0].width, 71);
+    assert.equal(hung.breaks[0].trail, 5);
+    assert.equal(hung.breaks[0].lead, 0);
+    assert.equal(hung.breaks.at(-1).trail, 0, 'the last line hangs nothing on the right');
+});
+
+test('the left edge of a line is asked about the box the line starts with', () => {
+    const items = finishParagraph([box(30), glue(5, 2.5, 5 / 3), box(30), glue(5, 2.5, 5 / 3), box(30), glue(5, 2.5, 5 / 3), box(30)]);
+    const asked = [];
+    const protrusion = { lead: (line, first) => { asked.push([line, first]); return first === 4 ? 4 : 0; }, trail: () => 0 };
+    const result = breakLines(items, 70, { protrusion });
+    assert.ok(asked.some(([line, first]) => line === 0 && first === 0), 'the first line starts at the first box');
+    const second = result.breaks.find(b => b.line === 1);
+    assert.equal(second.lead, result.breaks[0].index === 3 ? 4 : 0);
+    for (const b of result.breaks) assert.equal(b.width, 70 + b.lead + b.trail);
+});
+
+test('a third hyphen in a row costs far more than a second', () => {
+    // a paragraph of mostly split words, where setting the hyphens in runs of four fits slightly better
+    const rand = rng(53);
+    const words = [];
+    for (let w = 0; w < 40; w++) {
+        const parts = rand() < 0.8 ? 2 + Math.floor(rand() * 2) : 1;
+        for (let k = 0; k < parts; k++) {
+            words.push(box(5 + Math.floor(rand() * 14)));
+            if (k < parts - 1) words.push(penalty(3, 50, true, true));
+        }
+        if (w < 39) words.push(glue(4, 2, 1.3));
+    }
+    const items = finishParagraph(words);
+    const longest = (result) => {
+        let run = 0;
+        let most = 0;
+        for (const b of result.breaks) {
+            run = b.flagged ? run + 1 : 0;
+            most = Math.max(most, run);
+        }
+        return most;
+    };
+    assert.ok(longest(breakLines(items, 55, { tripleHyphenDemerits: 0 })) >= 3, 'without the rule the hyphens stack');
+    assert.ok(longest(breakLines(items, 55)) <= 2, 'with it they do not');
+});
+
+test('a break forbidden only as a preference is used when the paragraph cannot be set without it', () => {
+    // the last box is too wide to share a line with the one before it, and the two are tied together
+    const set = (tie, last = 90) => finishParagraph([box(20), glue(5, 3, 2), box(20), tie, glue(5, 3, 2), box(last)]);
+    const hard = breakLines(set(penalty(0, INF, false)), 100);
+    assert.ok(hard.breaks.some(b => b.natural > b.width), 'a hard tie leaves an overfull line');
+    const preferred = breakLines(set(penalty(0, INF, false, false, 1000)), 100);
+    assert.equal(preferred.pass, 'relaxed');
+    assert.ok(preferred.breaks.every(b => b.natural <= b.width + 1e-6), 'no line is overfull');
+    // when the paragraph can be set without the break, the break is not used
+    const roomy = breakLines(set(penalty(0, INF, false, false, 1000), 40), 100);
+    assert.notEqual(roomy.pass, 'relaxed');
+});
+
+test('when every line overflows the paragraph is broken from the best line, not the last one', () => {
+    const words = [];
+    for (let w = 0; w < 30; w++) { words.push(box(30)); if (w < 29) words.push(glue(5, 3, 2)); }
+    words.push(penalty(0, INF, false), glue(5, 3, 2), box(120));
+    const result = breakLines(finishParagraph(words), 100, { pretolerance: -1 });
+    assert.equal(result.pass, 'overfull');
+    assert.ok(result.breaks.length < 25, `${result.breaks.length} lines for 31 words`);
+});

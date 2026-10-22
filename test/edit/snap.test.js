@@ -91,3 +91,30 @@ test('a note can be left out of the guides it is moved against', () => {
     const rest = collectGuides(layout, { ignoreNote: layout.notes[0] }).y.filter(l => l.kind === 'note').length;
     assert.equal(all - rest, 2);
 });
+
+test('in a pair of columns the page centre is the seam, so a box resting there takes the seam placement', () => {
+    const src = 'Before the columns.\n\n[[columns(2, gap: 40)]]\n{\nSome words to fill the first column of a pair, and then a good deal more so it has height.\n}\n\nAfter the columns.\n';
+    const layout = layoutDocument(parseText(src), makeEnv(1300, { hyphenator }));
+    const guides = collectGuides(layout);
+    const region = layout.blocks.find(b => b.type === 'region' && b.kind === 'columns');
+    const seam = guides.x.find(l => l.kind === 'seam');
+    const box = (y) => ({ x: seam.value - 50, y, width: 100, height: 40 });
+
+    const inside = snapRect(box(region.y + 10), guides);
+    assert.equal(inside.x.guide.kind, 'seam');
+    assert.equal(placementOf(inside.x), 'gutter');
+
+    const above = snapRect(box(region.y - 300), guides);
+    assert.equal(above.x.guide.kind, 'text-center');
+    assert.equal(placementOf(above.x), 'center');
+});
+
+test('a box in a pair of columns is not offered the text column\'s right edge as a placement', () => {
+    const src = '[[columns(2, gap: 40)]]\n{\nSome words to fill the first column of a pair, and then a good deal more so it has height.\n}\n';
+    const layout = layoutDocument(parseText(src), makeEnv(1300, { hyphenator }));
+    const guides = collectGuides(layout);
+    const region = layout.blocks.find(b => b.type === 'region' && b.kind === 'columns');
+    const edge = layout.geometry.text.x + layout.geometry.text.width;
+    const hit = snapRect({ x: edge - 100, y: region.y + 10, width: 100, height: 40 }, guides).x;
+    assert.notEqual(placementOf(hit), 'right');
+});

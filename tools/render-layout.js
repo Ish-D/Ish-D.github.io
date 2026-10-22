@@ -45,7 +45,11 @@ export function makeEnv(width, settings = {}) {
 }
 
 export function renderToPng(layout, env, outPath, opts = {}) {
-    const svg = layoutToSvg(layout, env, opts);
+    return svgToPng(layoutToSvg(layout, env, opts), outPath);
+}
+
+/** Writes an SVG next to `outPath` and turns it into a PNG, with the site's fonts available to it. */
+export function svgToPng(svg, outPath) {
     const dir = dirname(resolve(outPath));
     mkdirSync(dir, { recursive: true });
     const svgPath = resolve(outPath).replace(/\.png$/, '.svg');

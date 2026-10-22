@@ -88,8 +88,9 @@ export function createSlotCursor({ columns, lineHeight, shapes = [], minSlot = 0
  * Lazily materialized slots for one paragraph, with the width lookup the
  * line breaker needs. Lines past the available slots reuse the last width.
  * @param {ReturnType<typeof createSlotCursor>} cursor
+ * @param {Column[]} [columns]   lets `edges` tell which sides of a slot are the edges of its column
  */
-export function slotStream(cursor) {
+export function slotStream(cursor, columns) {
     const slots = [];
     let done = false;
 
@@ -103,11 +104,21 @@ export function slotStream(cursor) {
 
     return {
         slots,
+        /** The widest column the paragraph can be set in, when nothing is in the way. */
+        measure: columns?.length ? Math.max(...columns.map(c => c.width)) : undefined,
         get(index) { fill(index); return slots[index] ?? null; },
         width(index) {
             fill(index);
             const s = slots[index] ?? slots[slots.length - 1];
             return s ? s.width : 0;
+        },
+        /** Whether the slot of line `index` starts at the left edge of its column, and ends at the right edge. */
+        edges(index) {
+            fill(index);
+            const s = slots[index] ?? slots[slots.length - 1];
+            const c = s && columns?.[s.column];
+            if (!c) return { left: true, right: true };
+            return { left: Math.abs(s.x - c.x) < 0.5, right: Math.abs(s.x + s.width - (c.x + c.width)) < 0.5 };
         },
         get exhausted() { return done; },
     };

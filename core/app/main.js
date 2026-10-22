@@ -33,6 +33,7 @@ import { createLightbox } from './lightbox.js';
 import { createPersonal } from './personal.js';
 import { createVaultBridge } from './vault-bridge.js';
 import { installInteractions } from './interactions.js';
+import { installPrint } from './print.js';
 import { showToast } from './toast.js';
 import { routeFromLocation } from './urls.js';
 import '../figures/index.js';
@@ -73,6 +74,7 @@ app.pages = createPages(app);
 settings.subscribe((key) => { if (key !== 'theme') app.view.relayout(); });
 
 installInteractions(app);
+app.print = installPrint(app);
 app.vault.watchPageLifecycle();
 
 app.snapper = createSnapper({

@@ -4,8 +4,9 @@
  */
 
 import { english } from '../text/hyphenate.js';
+import { titleScaleFor } from '../layout/style.js';
 import { formatNumber } from '../runtime/store.js';
-import { hasFigure } from '../runtime/figures.js';
+import { hasFigure, figureOnPaper } from '../runtime/figures.js';
 import { assetUrl, displayUrl, imageSrc, hasDrawingSource, drawingUrl } from './urls.js';
 import { macroBlocks } from './page-lists.js';
 
@@ -28,12 +29,12 @@ export function createEnv(app) {
         }));
     }
 
-    /** Input for layoutDocument. */
-    function build() {
-        const width = document.documentElement.clientWidth;
+    /** Input for layoutDocument. `over` lays the page out at another width or text size, as for paper. */
+    function build(over = {}) {
+        const width = over.width ?? document.documentElement.clientWidth;
         const narrow = width < 600;
-        const { marginPercent } = settings.values;
-        const fontSize = narrow ? Math.min(settings.values.fontSize, 18) : settings.values.fontSize;
+        const { width: readingWidth, titleAlign } = settings.values;
+        const fontSize = over.fontSize ?? (narrow ? Math.min(settings.values.fontSize, 18) : settings.values.fontSize);
         math.setFontSize(fontSize);
         return {
             width,
@@ -41,11 +42,11 @@ export function createEnv(app) {
             expandedNotes: state.expandedNotes,
             measurer,
             hyphenator: english,
-            settings: { fontSize, marginPercent },
+            settings: { fontSize, width: readingWidth, titleScale: titleScaleFor(width), titleAlign },
             editing: state.editing,
             atoms: {
-                inlineMath: (tex) => math.render(tex, false) ?? { width: tex.length * fontSize * 0.5, height: fontSize * 1.2, ascent: fontSize },
-                displayMath: (tex) => math.render(tex, true) ?? { width: 0, height: fontSize * 2.5 },
+                inlineMath: (tex, size = fontSize) => math.render(tex, false, size) ?? { width: tex.length * size * 0.5, height: size * 1.2, ascent: size },
+                displayMath: (tex, _width, size = fontSize) => math.render(tex, true, size) ?? { width: 0, height: size * 2.5 },
                 image: (node) => {
                     const size = images.get(displayUrl(node.src)) ?? { width: fontSize * 6, height: fontSize * 4 };
                     const height = Math.min(size.height, fontSize * 1.4);
@@ -65,6 +66,7 @@ export function createEnv(app) {
                     return null;
                 },
                 mask: () => null,
+                onPaper: (node) => !(node.name === 'viz' || node.name === 'figure') || figureOnPaper(node.args?.items.find(a => a.key === 'type')?.value),
             },
             generate: (node) => macroBlocks(state.manifest, node),
         };

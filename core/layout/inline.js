@@ -15,7 +15,7 @@ const EM_SPACE = '\u2003';
 /**
  * @typedef {Object} InlineContext
  * @property {ReturnType<import('./style.js').createStyles>} styles
- * @property {{ inlineMath(tex: string): { width: number, height: number, ascent?: number },
+ * @property {{ inlineMath(tex: string, size?: number): { width: number, height: number, ascent?: number },
  *             image(node: any): { width: number, height: number },
  *             widget(node: any): { width: number, height: number } }} atoms
  * @property {Array<{ node: any, marker: object }>} notes        collects note directives
@@ -84,7 +84,7 @@ function flattenNode(node, ctx, flags) {
                 ...flags, link: { type: 'external', href: node.href }, underline: 'solid',
             });
         case 'mathinline': {
-            const m = ctx.atoms.inlineMath(node.tex);
+            const m = ctx.atoms.inlineMath(node.tex, fontFor(ctx.styles, flags).size);
             return [{ kind: 'atom', width: m.width, height: m.height, ref: { type: 'math', tex: node.tex, ascent: m.ascent, node } }];
         }
         case 'image': {
@@ -148,8 +148,9 @@ function flattenDirective(node, ctx, flags) {
             const target = positional(node);
             const display = argValue(node, 'display') ?? positional(node, 1) ?? target;
             const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(target ?? '');
-            return [textSpan(stripQuotes(display ?? ''), ctx, {
-                ...flags, link: { type: isUrl ? 'external' : 'card', href: target, node }, underline: isUrl ? 'solid' : 'solid',
+            const shown = stripQuotes(display ?? '');
+            return [textSpan(shown, ctx, {
+                ...flags, link: { type: isUrl ? 'external' : 'card', href: target, node, noHyphen: shown.includes('://') }, underline: isUrl ? 'solid' : 'solid',
             }, node)];
         }
 

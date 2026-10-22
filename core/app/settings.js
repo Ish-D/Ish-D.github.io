@@ -1,6 +1,8 @@
 /**
- * Reader settings (theme, text size, margin width), kept in local storage.
+ * Reader settings (theme, text size, reading width), kept in local storage.
  */
+
+import { PAGE } from '../layout/document.js';
 
 const KEY = 'v2-settings';
 
@@ -8,7 +10,7 @@ const KEY = 'v2-settings';
  * @param {{ document: Document, storage?: Storage, prefersDark?: boolean }} deps
  */
 export function createSettings({ document, storage, prefersDark = false }) {
-    const defaults = Object.freeze({ fontSize: 20, marginPercent: 28, theme: prefersDark ? 'dark' : 'light' });
+    const defaults = Object.freeze({ fontSize: 20, width: PAGE.width.default, titleAlign: 'left', theme: prefersDark ? 'dark' : 'light' });
     const listeners = new Set();
 
     const load = () => {

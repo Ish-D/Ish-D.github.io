@@ -81,7 +81,7 @@ export function createWidgets(app) {
             });
         }
         if (node.name === 'slider' && bind === 'fontSize') return slider(get, 'fontSize');
-        if (node.name === 'slider' && bind === 'marginSize') return slider(get, 'marginPercent');
+        if (node.name === 'slider' && bind === 'width') return slider(get, 'width');
         if (node.name === 'input' || node.name === 'textarea') return field(node, get);
         if (node.name === 'button') return button(get);
         return null;

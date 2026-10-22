@@ -85,7 +85,7 @@ function baseFontOf(item, styles) {
 /**
  * @param {object} layout       result of layoutDocument
  * @param {{ measurer: any }} env
- * @param {{ from?: number, to?: number, guides?: boolean }} [opts]
+ * @param {{ from?: number, to?: number, guides?: boolean, background?: string }} [opts]
  */
 export function layoutToSvg(layout, env, opts = {}) {
     const { measurer } = env;
@@ -164,5 +164,5 @@ export function layoutToSvg(layout, env, opts = {}) {
 
     const height = Math.max(1, to - from);
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${num(height)}" viewBox="0 ${from} ${W} ${num(height)}">`
-        + `<rect x="0" y="${from}" width="${W}" height="${num(height)}" fill="${PAPER}"/>${out.join('')}</svg>`;
+        + `<rect x="0" y="${from}" width="${W}" height="${num(height)}" fill="${opts.background ?? PAPER}"/>${out.join('')}</svg>`;
 }

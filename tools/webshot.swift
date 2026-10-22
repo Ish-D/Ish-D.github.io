@@ -2,10 +2,13 @@
 //
 //   webshot --root DIR --path "/?page=x" --out shot.png [--width 1280] [--height 900]
 //           [--ready JS] [--settle 0.6] [--eval JS] [--retina] [--writable]
+//           [--pdf out.pdf [--paper letter|a4]]
 //
 // The directory is served over app://local/, so root-relative URLs, fetch()
 // and ES modules behave as they do on a server. Console output and script
-// errors are echoed with a "[page]" prefix.
+// errors are echoed with a "[page]" prefix. With --pdf the page is printed
+// the way the print menu does it (print media, before/afterprint events) and
+// saved as a PDF instead of taking a screenshot.
 
 import Cocoa
 import WebKit
@@ -25,6 +28,8 @@ struct Options {
     var retina = false
     var timeout = 40.0
     var writable = false
+    var pdf: String? = nil
+    var paper = "letter"
 }
 
 func parseOptions() -> Options {
@@ -49,6 +54,8 @@ func parseOptions() -> Options {
         case "--timeout": o.timeout = Double(it.next() ?? "") ?? o.timeout
         case "--retina": o.retina = true
         case "--writable": o.writable = true
+        case "--pdf": o.pdf = it.next()
+        case "--paper": o.paper = it.next() ?? o.paper
         default: break
         }
     }
@@ -164,8 +171,34 @@ final class Controller: NSObject, WKNavigationDelegate {
         }
     }
 
+    func printToPDF(_ path: String) {
+        let size = options.paper == "a4" ? NSSize(width: 595.28, height: 841.89) : NSSize(width: 612, height: 792)
+        let info = NSPrintInfo()
+        info.paperSize = size
+        info.topMargin = 0
+        info.bottomMargin = 0
+        info.leftMargin = 0
+        info.rightMargin = 0
+        info.isHorizontallyCentered = false
+        info.isVerticallyCentered = false
+        info.jobDisposition = .save
+        info.dictionary().setObject(URL(fileURLWithPath: path), forKey: NSPrintInfo.AttributeKey.jobSavingURL.rawValue as NSString)
+        let op = web.printOperation(with: info)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        op.view?.frame = NSRect(origin: .zero, size: size)
+        op.runModal(for: web.window!, delegate: self, didRun: #selector(printed(_:success:contextInfo:)), contextInfo: nil)
+    }
+
+    @objc func printed(_ op: NSPrintOperation, success: Bool, contextInfo: UnsafeMutableRawPointer?) {
+        if !success { print("error: print failed"); exit(1) }
+        print("wrote \(options.pdf ?? "")")
+        exit(0)
+    }
+
     func finish() {
         func snapshot() {
+            if let path = options.pdf { printToPDF(path); return }
             let cfg = WKSnapshotConfiguration()
             if !options.retina { cfg.snapshotWidth = NSNumber(value: options.width) }
             web.takeSnapshot(with: cfg) { image, error in
