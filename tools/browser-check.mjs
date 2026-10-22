@@ -62,11 +62,40 @@ async function open(path, { width = 1280, height = 800, scale = 1, theme = 'ligh
     const logged = [];
     page.on('pageerror', (err) => errors.push(String(err.message ?? err)));
     page.on('console', (msg) => { if (msg.type() === 'error') logged.push(msg.text()); });
+    page.on('response', (res) => { if (res.status() >= 400) logged.push(`${res.status()} ${res.url().replace(origin, '')}`); });
     const response = await page.goto(`${origin}${path}${path.includes('?') ? '&' : '?'}theme=${theme}`, { waitUntil: 'load' });
     await page.waitForFunction(() => !!document.querySelector('.doc .ln'), null, { timeout: 45000 });
     await page.evaluate(() => document.fonts.ready.then(() => true));
     await page.waitForTimeout(1200);
     return { context, page, errors, logged, response };
+}
+
+const INK_DPI = 48;
+
+/** The share of a rectangle (in CSS px on the page) that is dark in a grayscale PGM of the page. */
+function darkShare(pgmPath, rect, dpi) {
+    const buf = readFileSync(pgmPath);
+    let pos = 0;
+    const token = () => {
+        while (/\s/.test(String.fromCharCode(buf[pos]))) pos++;
+        let text = '';
+        while (!/\s/.test(String.fromCharCode(buf[pos]))) text += String.fromCharCode(buf[pos++]);
+        return text;
+    };
+    token();
+    const [w, h] = [Number(token()), Number(token())];
+    token();
+    pos++;
+    const k = dpi / 96;
+    let dark = 0;
+    let total = 0;
+    for (let y = Math.floor(rect.y * k); y < Math.min(h, Math.ceil((rect.y + rect.h) * k)); y++) {
+        for (let x = Math.floor(rect.x * k); x < Math.min(w, Math.ceil((rect.x + rect.w) * k)); x++) {
+            total++;
+            if (buf[pos + y * w + x] < 110) dark++;
+        }
+    }
+    return total ? dark / total : 0;
 }
 
 const shot = (page, name, options = {}) => page.screenshot({ path: join(out, `${name}.png`), ...options });
@@ -269,6 +298,15 @@ for (const spec of PRINTED) await part(spec.name, 'prints', async () => {
         page: getComputedStyle(document.querySelector('#root')).display,
         sheet: Math.round(document.querySelector('.sheet')?.getBoundingClientRect().width ?? 0),
         has: document.documentElement.classList.contains('has-sheets'),
+        // where the first figure sits on its sheet, to look for ink there on paper
+        figure: (() => {
+            const figure = document.querySelector('.print-root .viz-container');
+            const sheet = figure?.closest('.sheet');
+            if (!figure || !sheet) return null;
+            const a = figure.getBoundingClientRect();
+            const b = sheet.getBoundingClientRect();
+            return { sheet: [...sheet.parentNode.children].indexOf(sheet), x: a.left - b.left, y: a.top - b.top, w: a.width, h: a.height };
+        })(),
     }));
     record(spec.name, 'in print only the sheets are shown', shown.root === 'block' && shown.page === 'none' && shown.has, JSON.stringify(shown));
     for (const n of [1, 2]) {
@@ -290,6 +328,12 @@ for (const spec of PRINTED) await part(spec.name, 'prints', async () => {
             }
             const images = run('pdfimages', '-list', '-f', '1', '-l', '1', pdfPath).split('\n').slice(2).filter(Boolean).length;
             if (spec.pictures) record(spec.name, 'the figure is on the first page', images >= spec.pictures, `${images} pictures on page 1`);
+            if (spec.pictures && shown.figure) {
+                const n = shown.figure.sheet + 1;
+                run('pdftoppm', '-r', String(INK_DPI), '-gray', '-f', String(n), '-l', String(n), '-singlefile', pdfPath, join(out, `ink-${spec.name}`));
+                const ink = darkShare(join(out, `ink-${spec.name}.pgm`), shown.figure, INK_DPI);
+                record(spec.name, 'the figure has ink on paper', ink > 0.03, `${(ink * 100).toFixed(1)}% of its box is dark`);
+            }
             run('pdftoppm', '-r', '60', '-png', '-f', '1', '-l', '3', pdfPath, join(out, `pdf-${spec.name}`));
         } else {
             record(spec.name, 'the pdf was looked at', false, 'poppler is not installed', false);
