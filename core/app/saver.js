@@ -72,13 +72,19 @@ export function createSaver(app) {
         }
     }
 
+    /** A site served over https from a real host has no dev server behind it, so it is not asked. */
+    const hosted = () => location.protocol === 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+
     /** Asks the server whether it accepts saves, which makes editing available. */
     async function probeDevServer() {
-        try {
-            const res = await fetch('/api/dev', { cache: 'no-cache' });
-            state.canSave = !!(res.ok && (await res.json())?.save);
-        } catch {
-            state.canSave = false;
+        state.canSave = false;
+        if (!hosted()) {
+            try {
+                const res = await fetch('/api/dev', { cache: 'no-cache' });
+                state.canSave = !!(res.ok && (await res.json())?.save);
+            } catch {
+                state.canSave = false;
+            }
         }
         state.canEdit = state.canSave || new URLSearchParams(location.search).has('edit');
     }

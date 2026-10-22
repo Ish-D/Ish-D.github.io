@@ -98,6 +98,9 @@ test('a hyphen is drawn, not text, and a split word is whole in the text of its 
         assert.ok(piece, 'the next line draws its piece');
         assert.equal(piece.dataset.t, tail.textContent.slice(0, piece.dataset.t.length));
         assert.ok(!/-/.test(head.textContent + tail.textContent), 'no hyphen in the word');
+        const kids = head.parentNode.children;
+        const after = kids[kids.indexOf(tail) + 1];
+        assert.ok(after?.matches?.('.brk') && after.textContent === '', 'the hyphen is drawn after the whole word');
     }
     // the pieces on the next lines are not text
     assert.ok(el.querySelectorAll('.ct').every(c => c.textContent === ''));

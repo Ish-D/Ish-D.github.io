@@ -348,7 +348,7 @@ function renderLine(env, line, item, base, blockLeft, blockTop, part) {
 
 /**
  * The text of a run. Where a word is split across lines, the piece from the line below is drawn
- * first (`ct`), and the last piece carries the rest of the word (`tl`) and the hyphen (`hd`).
+ * first (`ct`), and the last piece (`hd`) carries the rest of the word (`tl`) and then the hyphen (`brk`).
  */
 function fillText(document, el, text, { cont, hyphen, tail }) {
     if (!cont && !hyphen) {
@@ -386,6 +386,10 @@ function fillText(document, el, text, { cont, hyphen, tail }) {
         tl.textContent = tail;
         el.appendChild(tl);
     }
+    // the hyphen is drawn after all of the word's text, so it never comes between its pieces
+    const brk = document.createElement('span');
+    brk.className = 'brk';
+    el.appendChild(brk);
 }
 
 function renderRun(env, run, item, base, split) {

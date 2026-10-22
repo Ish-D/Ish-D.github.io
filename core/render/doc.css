@@ -80,7 +80,7 @@ body {
    found and copied; the hyphen and the piece on the next line are drawn, not text (the second `content` gives them
    empty alternative text where that is supported). `.sp` is the space or paragraph break after a line: text for
    copying, set outside the line. */
-.hd::after, .ct[data-hy]::after, .r[data-hy]::after { content: '-'; content: '-' / ''; white-space: pre; }
+.brk::after, .ct[data-hy]::after, .r[data-hy]::after { content: '-'; content: '-' / ''; white-space: pre; }
 .ct::before { content: attr(data-t); content: attr(data-t) / ''; }
 .tl { font-size: 0; }
 .sp { position: absolute; left: 100%; top: 0; white-space: pre; }
