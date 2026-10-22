@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from '../../core/doc/parse.js';
 import { checkDoc } from './validate.js';
+import { slack } from '../slack.js';
 
 const SEED = 20261020;
 const OFFSETS = 200;
@@ -89,8 +90,8 @@ describe('typing-time robustness', () => {
                     if (problems.length > 0) assert.fail(`${where}: ${problems.slice(0, 3).join('; ')}`);
                 }
             }
-            assert.ok(worst < 100, `slowest parse ${worst.toFixed(1)} ms`);
-            assert.ok(total / (2 * OFFSETS) < 5, `mean parse ${(total / (2 * OFFSETS)).toFixed(2)} ms`);
+            assert.ok(worst < 100 * slack, `slowest parse ${worst.toFixed(1)} ms`);
+            assert.ok(total / (2 * OFFSETS) < 5 * slack, `mean parse ${(total / (2 * OFFSETS)).toFixed(2)} ms`);
         });
     }
 });

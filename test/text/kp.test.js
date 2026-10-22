@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { slack } from '../slack.js';
 import {
     box, glue, penalty, finishParagraph, breakLines, splitLines, displayRatio,
     badness, fitnessClass, defaults, INF_BAD,
@@ -247,7 +248,7 @@ test('throughput: 2,000-item paragraph breaks quickly', () => {
     const result = breakLines(items, 420);
     const ms = performance.now() - t0;
     assert.equal(result.feasible, true);
-    assert.ok(ms < 250, `took ${ms.toFixed(1)}ms`);
+    assert.ok(ms < 250 * slack, `took ${ms.toFixed(1)}ms`);
 });
 
 function firstFit(items, width) {

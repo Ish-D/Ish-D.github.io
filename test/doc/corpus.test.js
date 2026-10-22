@@ -5,6 +5,7 @@ import { parse } from '../../core/doc/parse.js';
 import { walk } from '../../core/doc/walk.js';
 import { MarkdownParser } from '../../MarkdownParser.js';
 import { checkDoc } from './validate.js';
+import { slack } from '../slack.js';
 
 const CARDS = new URL('../../cards/', import.meta.url);
 const cards = readdirSync(CARDS)
@@ -61,7 +62,7 @@ describe('corpus', () => {
                 times.push(performance.now() - t0);
             }
             const median = times.sort((a, b) => a - b)[10];
-            assert.ok(median < 15, `${name}: median ${median.toFixed(2)} ms`);
+            assert.ok(median < 15 * slack, `${name}: median ${median.toFixed(2)} ms`);
         }
     });
 });

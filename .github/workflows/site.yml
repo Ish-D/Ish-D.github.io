@@ -55,10 +55,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Playwright
+        run: npm install --no-save --no-package-lock playwright@1.49.1
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-1.49.1-${{ matrix.browser }}
       - name: Install the browser
         run: |
-          npm install --no-save --no-package-lock playwright@1.49.1
-          npx playwright install --with-deps ${{ matrix.browser }}
+          npx playwright install ${{ matrix.browser }}
+          npx playwright install-deps ${{ matrix.browser }}
       - name: Install poppler, to look at printed pages
         if: matrix.browser == 'chromium'
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
