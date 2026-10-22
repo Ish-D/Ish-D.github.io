@@ -16,6 +16,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,6 +27,7 @@ jobs:
   browsers:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     # Chromium decides whether the site is published; the others are reported and do not hold it back.
     continue-on-error: ${{ !matrix.gate }}
     strategy:
@@ -67,6 +69,7 @@ jobs:
     needs: browsers
     if: always() && github.event_name == 'push' && github.ref != 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
@@ -92,6 +95,7 @@ jobs:
     needs: [test, browsers]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pages: write

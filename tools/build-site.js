@@ -78,6 +78,9 @@ export function buildManifest(cards) {
     return { cards: names.sort(), metadata };
 }
 
+/** The manifest as JSON with anything beyond ASCII written as \uXXXX, which is how it has always been written. */
+export const manifestJson = (manifest) => `${JSON.stringify(manifest, null, 2).replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`;
+
 // ---------------------------------------------------------------------------
 // Text of a card
 // ---------------------------------------------------------------------------
@@ -293,7 +296,7 @@ export function build({ out, source = root, log = () => {} }) {
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });
     copySite(source, out);
-    writeFileSync(join(out, 'cards', 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileSync(join(out, 'cards', 'manifest.json'), manifestJson(manifest));
 
     const shell = readFileSync(join(source, 'index.html'), 'utf8');
     const entries = [];
@@ -343,7 +346,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const out = resolve(flag('--out') ?? join(root, '_site'));
     if (args.includes('--manifest-only')) {
         const cards = listCards(join(root, 'cards')).map(c => ({ ...c, source: readFileSync(c.file, 'utf8') }));
-        writeFileSync(join(root, 'cards', 'manifest.json'), `${JSON.stringify(buildManifest(cards), null, 2)}\n`);
+        writeFileSync(join(root, 'cards', 'manifest.json'), manifestJson(buildManifest(cards)));
         console.log('wrote cards/manifest.json');
     } else {
         if (!statSync(root).isDirectory()) throw new Error('no repository');

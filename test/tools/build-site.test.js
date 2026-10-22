@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildManifest, frontMatter, build, describe, renderPage, rssFeed, sitemap, isoDate } from '../../tools/build-site.js';
+import { buildManifest, frontMatter, build, describe, renderPage, rssFeed, sitemap, isoDate, manifestJson } from '../../tools/build-site.js';
 import { staticHandler } from '../../tools/serve.js';
 import { parse } from '../../core/doc/parse.js';
 import { titleOf } from '../../core/doc/title.js';
@@ -206,4 +206,11 @@ test('the site can be built into a folder inside the repository, and never over 
     } finally {
         rmSync(src, { recursive: true, force: true });
     }
+});
+
+test('the manifest is written as it always has been, with anything beyond ASCII escaped', () => {
+    const text = manifestJson({ cards: ['a'], metadata: { a: { name: 'Café “quoted”' } } });
+    assert.ok(text.endsWith('}\n'));
+    assert.match(text, /"name": "Caf\\u00e9 \\u201cquoted\\u201d"/);
+    assert.deepEqual(JSON.parse(text).metadata.a.name, 'Café “quoted”');
 });
