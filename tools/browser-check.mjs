@@ -133,10 +133,11 @@ const findText = () => {
     const ln = [...document.querySelectorAll('.ln')];
     let word = '';
     let phrase = '';
+    let markup = '';
     for (let i = 0; i < ln.length - 1 && !(word && phrase); i++) {
         const hd = ln[i].querySelector('.hd');
         const tl = hd && hd.parentNode.querySelector('.tl');
-        if (!word && tl) word = hd.textContent + tl.textContent;
+        if (!word && tl) { word = hd.textContent + tl.textContent; markup = `${ln[i].outerHTML.slice(-420)} // ${ln[i + 1].outerHTML.slice(0, 260)}`; }
         const sp = ln[i].querySelector('.sp');
         if (!phrase && sp && sp.textContent === ' ') {
             const a = ln[i].textContent.trim().split(/\s+/).slice(-2);
@@ -145,7 +146,7 @@ const findText = () => {
         }
     }
     const found = (t) => { getSelection().removeAllRanges(); return t && typeof window.find === 'function' ? window.find(t, false, false, true) : false; };
-    return { word, phrase, foundWord: found(word), foundPhrase: found(phrase) };
+    return { word, phrase, markup, foundWord: found(word), foundPhrase: found(phrase) };
 };
 
 /** Runs one part of the check; if it throws, that is the result. */
@@ -194,7 +195,7 @@ for (const spec of PAGES) {
         await page.waitForFunction(() => !!document.querySelector('.doc .ln'), null, { timeout: 45000 });
         await page.waitForTimeout(800);
         const f = await page.evaluate(findText);
-        record(label, 'find reaches a split word and a wrapped phrase', f.foundWord && f.foundPhrase, `word "${f.word}" ${f.foundWord}; phrase "${f.phrase}" ${f.foundPhrase}`, false);
+        record(label, 'find reaches a split word and a wrapped phrase', f.foundWord && f.foundPhrase, `word "${f.word}" ${f.foundWord}; phrase "${f.phrase}" ${f.foundPhrase}; ${f.markup}`, false);
     }
     await shot(page, `${label}-desktop`);
     await context.close();
