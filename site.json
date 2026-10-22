@@ -1,0 +1,6 @@
+{
+    "origin": "https://ishandarji.com",
+    "title": "ish",
+    "description": "Ishan Darji: writing on GPUs and LLM inference, photography, and experiments with type and drawing.",
+    "unlisted": ["image-test", "layout-test", "margin-test", "lab", "umbrella", "settings", "todo"]
+}

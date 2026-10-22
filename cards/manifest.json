@@ -6,6 +6,8 @@
     "image-test",
     "journal",
     "koi",
+    "lab",
+    "layout-test",
     "llms_for_bozos_1",
     "llms_for_bozos_2",
     "margin-test",
@@ -15,6 +17,7 @@
     "settings",
     "tags",
     "todo",
+    "umbrella",
     "writing"
   ],
   "metadata": {
@@ -33,6 +36,13 @@
     },
     "koi": {
       "name": "Koi Pond"
+    },
+    "lab": {
+      "name": "Lab",
+      "date": "10-20-2026"
+    },
+    "layout-test": {
+      "name": "Layout test"
     },
     "llms_for_bozos_1": {
       "name": "LLM Inference for Bozos, Part 1",
@@ -61,6 +71,9 @@
     },
     "tags": {
       "name": "Tags"
+    },
+    "umbrella": {
+      "name": "Umbrella"
     },
     "writing": {
       "name": "Writing"

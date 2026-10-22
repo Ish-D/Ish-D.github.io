@@ -26,7 +26,7 @@ export function installInteractions(app) {
         (e) => {
             const link = e.target.closest('.heading-link');
             if (!link) return false;
-            navigator.clipboard?.writeText(`${location.origin}${location.pathname}${pageUrl(state.page, `#${link.dataset.anchor}`)}`).catch(() => {});
+            navigator.clipboard?.writeText(`${location.origin}${pageUrl(state.page, `#${link.dataset.anchor}`)}`).catch(() => {});
             return true;
         },
         (e) => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetUrl, displayUrl, routeFromLocation, hasDrawingSource, imageSrc, HOME_PAGE } from '../../core/app/urls.js';
+import { assetUrl, displayUrl, routeFromLocation, hasDrawingSource, imageSrc, pageUrl, HOME_PAGE } from '../../core/app/urls.js';
 import { parse } from '../../core/doc/parse.js';
 
 const route = (search = '', hash = '', pathname = '/') => routeFromLocation({ search, hash, pathname });
@@ -32,4 +32,17 @@ test('drawing nodes know whether they name a file', () => {
     assert.equal(hasDrawingSource(file), true);
     assert.equal(hasDrawingSource(inline), false);
     assert.equal(imageSrc(file), 'a.svg');
+});
+
+test('a page lives at its path, and the address finds the page again', () => {
+    assert.equal(pageUrl('lab'), '/lab/');
+    assert.equal(pageUrl('lab', '#intro'), '/lab/#intro');
+    assert.equal(pageUrl(HOME_PAGE), '/');
+    assert.equal(pageUrl('notes/one two'), '/notes/one%20two/');
+    assert.equal(pageUrl('~abc123'), '/?page=~abc123', 'a private page has no path of its own');
+    for (const page of ['lab', 'notes/one two', 'llms_for_bozos_1']) {
+        const [path, hash = ''] = pageUrl(page, '#a').split(/(?=#)/);
+        assert.deepEqual(route('', hash, path), { page, hash: '#a' }, page);
+    }
+    assert.deepEqual(route('?page=~abc123', '', '/'), { page: '~abc123', hash: '' });
 });

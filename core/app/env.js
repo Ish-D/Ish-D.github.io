@@ -7,7 +7,7 @@ import { english } from '../text/hyphenate.js';
 import { titleScaleFor } from '../layout/style.js';
 import { formatNumber } from '../runtime/store.js';
 import { hasFigure, figureOnPaper } from '../runtime/figures.js';
-import { assetUrl, displayUrl, imageSrc, hasDrawingSource, drawingUrl } from './urls.js';
+import { assetUrl, displayUrl, imageSrc, hasDrawingSource, drawingUrl, pageUrl } from './urls.js';
 import { macroBlocks } from './page-lists.js';
 
 export function createEnv(app) {
@@ -80,6 +80,7 @@ export function createEnv(app) {
             math: (tex, display) => math.render(tex, display),
             highlight: (el, lang) => { if (window.Prism && lang) window.Prism.highlightElement(el); },
             resolveAsset: displayUrl,
+            pageUrl,
             fullAsset: assetUrl,
             persist: app.persist,
             widget: (node) => app.widgets.build(node),

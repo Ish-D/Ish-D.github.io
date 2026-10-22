@@ -9,7 +9,8 @@ import { createEditor } from '../edit/editor.js';
 import { createStore } from '../runtime/store.js';
 import { attachScrub } from '../runtime/scrub.js';
 import { disposeFigures } from '../runtime/figures.js';
-import { pageUrl } from './urls.js';
+import { pageUrl, HOME_PAGE } from './urls.js';
+import { titleOf } from '../doc/title.js';
 import { showToast } from './toast.js';
 
 /** Pages with a script that runs after they are drawn. */
@@ -118,8 +119,8 @@ export function createPages(app) {
             startEditing(source);
         }
 
-        const title = app.view.currentDoc().frontmatter?.entries?.name?.value;
-        document.title = title ? `${title} · ish` : 'ish';
+        const title = titleOf(app.view.currentDoc());
+        document.title = title && name !== HOME_PAGE ? `${title} · ish` : 'ish';
         if (push) history.pushState({ page: name }, '', pageUrl(name, hash));
         if (!keepScroll) window.scrollTo(0, 0);
         app.chrome.build();

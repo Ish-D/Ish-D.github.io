@@ -82,7 +82,7 @@ final class FileSchemeHandler: NSObject, WKURLSchemeHandler {
 
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         guard let url = urlSchemeTask.request.url else { return }
-        var path = url.path.removingPercentEncoding ?? url.path
+        let path = url.path.removingPercentEncoding ?? url.path
         // --writable: behave like the dev server (saves cards, reports /api/dev)
         if options.writable {
             if path == "/api/dev" { return reply(urlSchemeTask, url, status: 200, body: Data("{\"save\":true}".utf8), type: "application/json") }
@@ -105,8 +105,12 @@ final class FileSchemeHandler: NSObject, WKURLSchemeHandler {
                 return reply(urlSchemeTask, url, status: 204)
             }
         }
-        if path.hasSuffix("/") { path += "index.html" }
-        let fileURL = rootURL.appendingPathComponent(String(path.dropFirst())).standardizedFileURL
+        var fileURL = rootURL.appendingPathComponent(String(path.dropFirst())).standardizedFileURL
+        // a folder, with or without the slash the URL ends in, has its index.html
+        var isFolder: ObjCBool = false
+        if path.hasSuffix("/") || (FileManager.default.fileExists(atPath: fileURL.path, isDirectory: &isFolder) && isFolder.boolValue) {
+            fileURL = fileURL.appendingPathComponent("index.html")
+        }
         guard fileURL.path.hasPrefix(rootURL.path), let data = try? Data(contentsOf: fileURL) else {
             let response = HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "text/plain"])!
             urlSchemeTask.didReceive(response)

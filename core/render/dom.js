@@ -415,7 +415,7 @@ function renderRun(env, run, item, base, split) {
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
     } else if (ref.link.type === 'card') {
-        link.href = `?page=${encodeURIComponent(ref.link.href)}`;
+        link.href = env.ctx.pageUrl ? env.ctx.pageUrl(ref.link.href) : `?page=${encodeURIComponent(ref.link.href)}`;
         link.dataset.card = ref.link.href;
     } else if (ref.link.type === 'jump') {
         link.href = `#${ref.link.target}`;

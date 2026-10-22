@@ -5,6 +5,9 @@
   "scripts": {
     "test": "node --test --test-timeout=60000 \"test/**/*.test.js\"",
     "smoke": "tools/smoke.sh",
-    "lint-type": "node tools/lint-type.js"
+    "lint-type": "node tools/lint-type.js",
+    "build": "node tools/build-site.js",
+    "manifest": "node tools/build-site.js --manifest-only",
+    "serve": "node tools/serve.js"
   }
 }

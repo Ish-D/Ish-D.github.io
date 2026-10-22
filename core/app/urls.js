@@ -42,4 +42,12 @@ export function routeFromLocation({ search, hash, pathname }) {
     return { page: HOME_PAGE, hash };
 }
 
-export const pageUrl = (page, hash = '') => `?page=${encodeURIComponent(page)}${hash}`;
+/**
+ * Where a page lives: a path (`/lab/`), which is what a shared link or a search result points at, so the page comes with
+ * its title and preview. Private pages (`~id`) have no page of their own and keep the query form.
+ */
+export function pageUrl(page, hash = '') {
+    if (page.startsWith('~')) return `/?page=${encodeURIComponent(page)}${hash}`;
+    if (page === HOME_PAGE) return `/${hash}`;
+    return `/${page.split('/').map(encodeURIComponent).join('/')}/${hash}`;
+}
