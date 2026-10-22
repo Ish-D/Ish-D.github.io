@@ -259,6 +259,43 @@ await part('llms', 'an address without its slash', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// The top line, the index and the home page
+// ---------------------------------------------------------------------------
+
+await part('home', 'the top line and the old man', async () => {
+    const { context, page } = await open('/');
+    const home = await page.evaluate(() => {
+        const bar = document.querySelector('.chrome').getBoundingClientRect();
+        const text = window.__v2.app.state.layout.geometry.text;
+        const man = document.querySelector('[data-figure="umbrella"]')?.getBoundingClientRect();
+        return { barLeft: bar.left, barWidth: bar.width, textX: text.x, textWidth: text.width, man: man && { left: man.left, right: man.right }, hasName: !!document.querySelector('.chrome .name') };
+    });
+    record('home', 'the top line is as wide as the text', Math.abs(home.barLeft - home.textX) <= 1.5 && Math.abs(home.barWidth - home.textWidth) <= 1.5, JSON.stringify(home));
+    record('home', 'the old man stands in the margin', !!home.man && home.man.right <= home.textX && home.man.left >= 0, JSON.stringify(home.man));
+    record('home', 'the home page does not name itself in the top line', !home.hasName, '');
+
+    await page.keyboard.press('/');
+    await page.waitForSelector('.chrome .index:not([hidden]) input', { timeout: 5000 });
+    await page.keyboard.type('about');
+    const rows = await page.evaluate(() => [...document.querySelectorAll('.chrome .index li')].map(li => li.textContent));
+    record('home', 'the index narrows as you type', rows.length === 1 && /About/.test(rows[0]), JSON.stringify(rows));
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__v2.app.state.page === 'about', null, { timeout: 15000 });
+    record('home', 'the index opens a page', new URL(page.url()).pathname === '/about/', page.url());
+    await context.close();
+});
+
+await part('llms', 'the top line on a phone', async () => {
+    const { context, page } = await open('/llms_for_bozos_1/', { width: 390, height: 844, scale: 2 });
+    const gap = await page.evaluate(() => ({
+        barBottom: document.querySelector('.chrome').getBoundingClientRect().bottom,
+        firstTop: document.querySelector('.doc .ln').getBoundingClientRect().top,
+    }));
+    record('llms', 'phone: the top line is above the title', gap.barBottom <= gap.firstTop, JSON.stringify(gap));
+    await context.close();
+});
+
+// ---------------------------------------------------------------------------
 // Printing
 // ---------------------------------------------------------------------------
 

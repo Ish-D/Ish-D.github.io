@@ -30,6 +30,9 @@
     "contact": {
       "name": "Contact Me"
     },
+    "image-test": {
+      "unlisted": true
+    },
     "journal": {
       "tags": "[fiction, ideas], [horror, ideas]",
       "encrypted": true
@@ -39,10 +42,12 @@
     },
     "lab": {
       "name": "Lab",
-      "date": "10-20-2026"
+      "date": "10-20-2026",
+      "unlisted": true
     },
     "layout-test": {
-      "name": "Layout test"
+      "name": "Layout test",
+      "unlisted": true
     },
     "llms_for_bozos_1": {
       "name": "LLM Inference for Bozos, Part 1",
@@ -55,7 +60,8 @@
       "date": "04-30-2026"
     },
     "margin-test": {
-      "name": "Margin Test"
+      "name": "Margin Test",
+      "unlisted": true
     },
     "math": {
       "encrypted": true
@@ -67,13 +73,18 @@
       "name": "Photography"
     },
     "settings": {
-      "name": "Settings"
+      "name": "Settings",
+      "unlisted": true
     },
     "tags": {
       "name": "Tags"
     },
+    "todo": {
+      "unlisted": true
+    },
     "umbrella": {
-      "name": "Umbrella"
+      "name": "Umbrella",
+      "unlisted": true
     },
     "writing": {
       "name": "Writing"

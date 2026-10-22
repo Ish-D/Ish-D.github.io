@@ -32,3 +32,9 @@ test('macros pick the right list and ignore other nodes', () => {
     assert.equal(macroBlocks(manifest, { name: 'note' }), null);
     assert.deepEqual(writingBlocks(null, at), []);
 });
+
+test('a page marked unlisted is in neither list', () => {
+    const marked = { cards: ['a', 'b'], metadata: { a: { name: 'A', date: '01-01-2026', tags: '[t, x]' }, b: { name: 'B', date: '02-01-2026', tags: '[t, x]', unlisted: true } } };
+    assert.deepEqual(writingBlocks(marked, at).map(b => linkTargets(b)[0]), ['a']);
+    assert.deepEqual(linkTargets(tagBlocks(marked, at)[0]), ['a']);
+});

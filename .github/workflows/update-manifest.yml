@@ -1,77 +1,27 @@
 name: Update Cards Manifest
 
+# Keeps cards/manifest.json (what the app and the dev server read) in step with the cards. The published site
+# makes its own in the Site workflow; this is for as long as Pages publishes the files on the branch.
+
 on:
   push:
     branches: [master]
     paths:
       - 'cards/**/*.md'
+      - 'site.json'
 
 jobs:
   update-manifest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Generate manifest.json with metadata
-        run: |
-          cd cards
-          python3 -c "
-          import json, re, os
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
 
-          cards = []
-          metadata = {}
-
-          for root, dirs, files in os.walk('.'):
-              dirs.sort()
-              for f in sorted(files):
-                  if not f.endswith('.md'):
-                      continue
-                  rel_dir = os.path.relpath(root, '.')
-                  if rel_dir == '.':
-                      name = f[:-3]
-                  else:
-                      name = rel_dir + '/' + f[:-3]
-                  cards.append(name)
-
-                  with open(os.path.join(root, f), 'r') as fh:
-                      content = fh.read()
-
-                  fm_match = re.match(r'^---\s*\n([\s\S]*?)\n---', content)
-                  if not fm_match:
-                      continue
-
-                  fm = fm_match.group(1)
-                  meta = {}
-
-                  name_match = re.search(r'^name:\s*(.+)', fm, re.M)
-                  if name_match:
-                      meta['name'] = name_match.group(1).strip()
-
-                  tags_match = re.search(r'^tags:\s*(.+)', fm, re.M)
-                  if tags_match:
-                      meta['tags'] = tags_match.group(1).strip()
-
-                  date_match = re.search(r'^date:\s*(\d{2}-\d{2}-\d{4})', fm, re.M)
-                  if date_match:
-                      meta['date'] = date_match.group(1)
-
-                  if 'encrypted: true' in fm:
-                      meta['encrypted'] = True
-
-                  visible_match = re.search(r'^visible:\s*(true|false)', fm, re.M)
-                  if visible_match and visible_match.group(1) == 'false':
-                      cards.remove(name)
-                      continue
-
-                  if meta:
-                      metadata[name] = meta
-
-          cards.sort()
-          result = {'cards': cards, 'metadata': metadata}
-          with open('manifest.json', 'w') as out:
-              json.dump(result, out, indent=2)
-              out.write('\n')
-          "
+      - name: Generate manifest.json
+        run: node tools/build-site.js --manifest-only
 
       - name: Commit if changed
         run: |

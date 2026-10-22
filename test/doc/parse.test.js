@@ -72,6 +72,11 @@ describe('blocks', () => {
         assert.deepEqual(d.children.map((h) => h.id), ['anchormindthe-mind', 'design-features', 'design-features-1', 'bold-code', 'section', 'claudecom']);
     });
 
+    it('gives a heading that is only links no address, and counts the others as if it were not there', () => {
+        const d = doc('## [[link(about, display: "About")]]\n## Real heading\n## [[link(a)]] [[link(b)]]\n## [[link(a)]] and words\n## Real heading');
+        assert.deepEqual(d.children.map((h) => h.id), [null, 'real-heading', null, 'linka-and-words', 'real-heading-1']);
+    });
+
     it('reads a rule only from dashes alone on a line', () => {
         const d = doc('text\n---\n--- not a rule');
         assert.deepEqual(types(d.children), ['paragraph', 'rule', 'paragraph']);

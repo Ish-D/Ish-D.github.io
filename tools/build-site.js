@@ -58,21 +58,21 @@ export function frontMatter(source) {
 
 /**
  * The list of cards and what is known about each, as `cards/manifest.json` has it. A card marked `visible: false`
- * is not in it.
+ * is not in it, and one named in `unlisted` (from site.json) is marked so that the lists leave it out.
  */
-export function buildManifest(cards) {
+export function buildManifest(cards, { unlisted = [] } = {}) {
     const names = [];
     const metadata = {};
     for (const { name, source } of cards) {
         names.push(name);
         const fm = frontMatter(source);
-        if (!fm) continue;
-        if (fm.hidden) { names.pop(); continue; }
+        if (fm?.hidden) { names.pop(); continue; }
         const meta = {};
-        if (fm.name) meta.name = fm.name;
-        if (fm.tags) meta.tags = fm.tags;
-        if (fm.date) meta.date = fm.date;
-        if (fm.encrypted) meta.encrypted = true;
+        if (fm?.name) meta.name = fm.name;
+        if (fm?.tags) meta.tags = fm.tags;
+        if (fm?.date) meta.date = fm.date;
+        if (fm?.encrypted) meta.encrypted = true;
+        if (unlisted.includes(name)) meta.unlisted = true;
         if (Object.keys(meta).length) metadata[name] = meta;
     }
     return { cards: names.sort(), metadata };
@@ -291,7 +291,7 @@ export function build({ out, source = root, log = () => {} }) {
     if (above === '' || !above.startsWith('..')) throw new Error(`refusing to build into ${out}, which is or holds the source`);
     const cardsDir = join(source, 'cards');
     const cards = listCards(cardsDir).map(c => ({ ...c, source: readFileSync(c.file, 'utf8') }));
-    const manifest = buildManifest(cards);
+    const manifest = buildManifest(cards, { unlisted: site.unlisted });
 
     rmSync(out, { recursive: true, force: true });
     mkdirSync(out, { recursive: true });
@@ -346,7 +346,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const out = resolve(flag('--out') ?? join(root, '_site'));
     if (args.includes('--manifest-only')) {
         const cards = listCards(join(root, 'cards')).map(c => ({ ...c, source: readFileSync(c.file, 'utf8') }));
-        writeFileSync(join(root, 'cards', 'manifest.json'), manifestJson(buildManifest(cards)));
+        writeFileSync(join(root, 'cards', 'manifest.json'), manifestJson(buildManifest(cards, { unlisted: readSite().unlisted })));
         console.log('wrote cards/manifest.json');
     } else {
         if (!statSync(root).isDirectory()) throw new Error('no repository');

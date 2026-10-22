@@ -18,7 +18,7 @@ A layout engine and editor for long-form pages. No dependencies, no build step. 
 
 Plain markdown plus directives: `[[name(args)]]{group}`.
 
-- `[[image(src, place: left|right|center|gutter|block|span|full, wrap: circle|ellipse|box|polygon(...), width:, height:, pad:, fit:)]]{caption}`
+- `[[image(src, place: left|right|center|gutter|block|span|full|margin-left|margin-right, wrap: circle|ellipse|box|polygon(...), width:, height:, pad:, fit:)]]{caption}`; a figure placed in a margin stands there, level with the block after it, and where the page has no margin (a phone) it stands in the column on that side
 - `[[columns(2, gap: 40)]]{ ... }`
 - `[[note(left|right, orient: vertical, type: absolute, pos: 120, maxh: 80px)]]{marker}{body}`
 - `[[var(name, value, min:, max:, step:)]]`, `\val{name}` in math, `[[viz(type: softmax-scale, var: name)]]`
@@ -56,6 +56,10 @@ A paragraph beside a figure is a stepped shape, not a rectangle. `layout/contour
 - **Line breaks:** no more than two hyphens in a row, the last word of a paragraph is never split, and an address breaks after a slash or a hyphen it already has.
 - **Lint:** `npm run lint-type` sets every page at phone to desktop widths and lists the lines set badly: spaces too wide or too tight, a last line of one word, hyphens stacked down the edge, and lines that stick out of their column. `node tools/lint-type.js <page> --verbose` shows each line.
 - **Copy and find:** every line is its own box, so each line also carries what follows it as text that is not drawn (`.sp`): a space between words, a newline at the end of a paragraph, nothing inside a word. A word split by a hyphen is whole in the text of its first line, with the rest at no size (`.tl`); the hyphen and the piece on the next line are generated content, so they are never found or copied twice. Copying reads the text straight off the selection (`selectionText`) and leaves out the section link and math drawn twice, so a paragraph pastes as it was written. In WebKit a phrase that wraps at a space is found; Chrome and Firefox are not checked.
+
+## The top line
+
+The line across the top of a page (`app/chrome.js`) is as wide as the text and goes with the page when it scrolls. On the left is the name of the site, which takes you home (the home page leaves it out, its title says it). On the right, `Aa` opens the text size, the width and dark mode, and `/` opens the list of pages (the `/` key does too): type to narrow it, arrows and Enter to go, Escape to close (`app/index-panel.js`). The owner has Edit, Publish and Backstage there as well. Pages under `unlisted` in `site.json` are not in that list, in Writing or in Tags (the manifest marks them), unless you are editing; they still open at their address.
 
 ## Print
 

@@ -482,13 +482,17 @@ class Parser {
         const cs = start.contentStart;
         const { tokens, end } = this.scanInline({ view, mode: LINE, from: cs, limit: region.end, region });
         const ce = trimTokensEnd(tokens, text, cs);
+        const children = this.buildInline(view, tokens);
+        // a heading that is only links is a way to somewhere else, not a section: it has no address of its own
+        const isLink = (c) => c.type === 'link' || (c.type === 'directive' && (c.name === 'link' || c.name === 'card'));
+        const onlyLinks = children.some(isLink) && children.every(c => isLink(c) || (c.type === 'text' && !c.value.trim()));
         const node = {
             type: 'heading',
             start: view.src(ls),
             end: view.srcEnd(ce > cs ? ce : ls + start.level),
             level: start.level,
-            id: this.headingId(text.slice(cs, le).trim()),
-            children: this.buildInline(view, tokens),
+            id: onlyLinks ? null : this.headingId(text.slice(cs, le).trim()),
+            children,
         };
         return { node, next: end + 1 };
     }

@@ -1,11 +1,12 @@
 /**
  * Generated blocks for pages that list other pages: `{{writing}}` and `{{tags}}`.
- * They are built from the manifest and returned as ordinary document blocks.
+ * They are built from the manifest and returned as ordinary document blocks. A page the manifest marks
+ * `unlisted` (a test page) is not in them, though it still opens at its address.
  */
 
 import { formatDate } from '../layout/generated.js';
 
-const parseDate = (text) => {
+export const parseDate = (text) => {
     const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(text ?? '');
     return m ? new Date(Number(m[3]), Number(m[1]) - 1, Number(m[2])).getTime() : 0;
 };
@@ -25,7 +26,7 @@ export function writingBlocks(manifest, at) {
     const meta = manifest?.metadata ?? {};
     return (manifest?.cards ?? [])
         .map(name => ({ name, entry: meta[name] ?? {} }))
-        .filter(({ entry }) => entry.date && !entry.encrypted)
+        .filter(({ entry }) => entry.date && !entry.encrypted && !entry.unlisted)
         .sort((a, b) => parseDate(b.entry.date) - parseDate(a.entry.date))
         .map(({ name, entry }) => ({
             type: 'paragraph', start: at.start, end: at.end,
@@ -38,7 +39,7 @@ export function tagBlocks(manifest, at) {
     const meta = manifest?.metadata ?? {};
     const byTag = new Map();
     for (const [name, entry] of Object.entries(meta)) {
-        if (entry.encrypted || !entry.tags) continue;
+        if (entry.encrypted || entry.unlisted || !entry.tags) continue;
         for (const m of entry.tags.matchAll(/\[([^\],]+),\s*([^\]]+)\]/g)) {
             const tag = m[1].trim();
             if (!byTag.has(tag)) byTag.set(tag, new Set());

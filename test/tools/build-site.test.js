@@ -214,3 +214,12 @@ test('the manifest is written as it always has been, with anything beyond ASCII 
     assert.match(text, /"name": "Caf\\u00e9 \\u201cquoted\\u201d"/);
     assert.deepEqual(JSON.parse(text).metadata.a.name, 'Café “quoted”');
 });
+
+test('pages named as unlisted are marked in the manifest, whether or not they have front matter', () => {
+    const cards = [{ name: 'lab', source: '---\nname: Lab\ndate: 10-20-2026\n---\nx' }, { name: 'bare', source: 'No front matter.' }, { name: 'post', source: '---\nname: Post\ndate: 01-02-2026\n---\nx' }];
+    const manifest = buildManifest(cards, { unlisted: ['lab', 'bare'] });
+    assert.deepEqual(manifest.metadata.lab, { name: 'Lab', date: '10-20-2026', unlisted: true });
+    assert.deepEqual(manifest.metadata.bare, { unlisted: true });
+    assert.equal(manifest.metadata.post.unlisted, undefined);
+    assert.equal(JSON.parse(read('cards/manifest.json')).metadata.lab.unlisted, true, 'the built manifest carries it');
+});

@@ -62,7 +62,7 @@ export function collectOutline(doc) {
     let h2 = 0;
     let h3 = 0;
     walk(doc, (node) => {
-        if (node.type !== 'heading' || node.level < 2 || node.level > 3) return;
+        if (node.type !== 'heading' || node.level < 2 || node.level > 3 || !node.id) return;
         if (node.level === 2) { h2++; h3 = 0; } else { h3++; }
         const number = node.level === 2 ? `${h2}` : (h2 > 0 ? `${h2}.${h3}` : `${h3}`);
         out.push({ level: node.level, number, id: node.id, text: plainText(node.children), node });

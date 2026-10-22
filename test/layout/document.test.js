@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutDocument } from '../../core/layout/document.js';
+import { layoutDocument, PAGE } from '../../core/layout/document.js';
 import { makeEnv, parseCard, parseText, hyphenator, atoms } from './fixtures.js';
 
 const textLines = (layout) => layout.blocks
@@ -370,7 +370,7 @@ test('a float that drops onto its own line leaves its nudges behind', () => {
     const layout = layoutDocument(parseText(src), makeEnv(420, { hyphenator }));
     const obj = layout.blocks.find(b => b.type === 'object');
     assert.equal(obj.place.kind, 'block');
-    assert.equal(obj.rect.y, 32);
+    assert.equal(obj.rect.y, PAGE.topPad);
 });
 
 test('math is measured at the size of the text it sits in, so a note set small has small math', () => {
@@ -392,4 +392,34 @@ test('display math is measured at the size of the text around it, and carries th
     assert.ok(math, 'there is a display math block');
     assert.equal(math.fontSize, 18);
     assert.deepEqual(asked, [18]);
+});
+
+test('a figure placed in the margin stands beside the text, level with the block after it, and the text keeps its width', () => {
+    const text = '# Title\n\n[[viz(type: x, place: margin-left, width: 200, height: 260)]]\n\nFirst paragraph under the figure, long enough to run over a couple of lines at this measure of text.\n';
+    const { blocks, geometry } = layoutDocument(parseText(text), makeEnv(1280, { settings: { fontSize: 20 } }));
+    const figure = blocks.find(b => b.type === 'object');
+    const paragraph = blocks.filter(b => b.type === 'paragraph').at(-1);
+    assert.equal(figure.place.kind, 'margin');
+    assert.ok(figure.rect.x + figure.rect.width <= geometry.text.x - 8, 'left of the text column');
+    assert.ok(figure.rect.x >= geometry.left.x, 'inside the strip');
+    assert.equal(Math.round(figure.rect.width), 200);
+    assert.equal(figure.rect.y, paragraph.top, 'level with the paragraph after it');
+    assert.equal(Math.round(paragraph.lines[0].x), Math.round(geometry.text.x), 'the text is not pushed aside');
+    const right = layoutDocument(parseText(text.replace('margin-left', 'margin-right')), makeEnv(1280, { settings: { fontSize: 20 } }));
+    const there = right.blocks.find(b => b.type === 'object');
+    assert.ok(there.rect.x >= right.geometry.text.x + right.geometry.text.width, 'right of the text column');
+});
+
+test('where there is no margin the figure stands in the column on its side, and a note keeps clear of one in the margin', () => {
+    const text = '# Title\n\n[[viz(type: x, place: margin-left, width: 120, height: 160)]]\n\nFirst paragraph under the figure, long enough to run over a couple of lines at this measure of text and a few more besides.\n';
+    const narrow = layoutDocument(parseText(text), makeEnv(420, { settings: { fontSize: 20 } }));
+    const figure = narrow.blocks.find(b => b.type === 'object');
+    assert.ok(figure.rect.x >= narrow.geometry.text.x - 1 && figure.rect.x + figure.rect.width <= narrow.geometry.text.x + narrow.geometry.text.width + 1, 'inside the column');
+    assert.notEqual(figure.place.kind, 'margin');
+
+    const withNote = layoutDocument(parseText('# Title\n\n[[viz(type: x, place: margin-left, width: 200, height: 260)]]\n\nA paragraph with a note.[[note(left)]]{}{A note on the same side as the figure.} More text after it.\n'), makeEnv(1280, { settings: { fontSize: 20 } }));
+    const picture = withNote.blocks.find(b => b.type === 'object');
+    const note = withNote.notes.find(n => n.side === 'left');
+    assert.ok(note, 'the note is in the margin too');
+    assert.ok(note.y >= picture.rect.y + picture.rect.height - 1 || note.y + note.height <= picture.rect.y + 1, 'it does not overlap the figure');
 });

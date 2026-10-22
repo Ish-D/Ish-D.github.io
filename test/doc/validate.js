@@ -51,7 +51,8 @@ export function checkDoc(doc) {
         const slice = src.slice(node.start, node.end);
         switch (node.type) {
             case 'heading':
-                if (!(node.level >= 1 && node.level <= 6) || !slice.startsWith('#'.repeat(node.level)) || !node.id) fail('bad heading', node);
+                // a heading that is only links has no address; any other has one
+                if (!(node.level >= 1 && node.level <= 6) || !slice.startsWith('#'.repeat(node.level)) || (node.id === null ? !onlyLinks(node) : !node.id)) fail('bad heading', node);
                 checkList(node.children, node.start, node.end, node);
                 break;
             case 'paragraph':
@@ -145,3 +146,6 @@ export function checkDoc(doc) {
 function inRange(start, end, lo, hi) {
     return Number.isInteger(start) && Number.isInteger(end) && lo <= start && start <= end && end <= hi;
 }
+
+const isLink = (c) => c.type === 'link' || (c.type === 'directive' && (c.name === 'link' || c.name === 'card'));
+const onlyLinks = (heading) => heading.children.some(isLink) && heading.children.every(c => isLink(c) || (c.type === 'text' && !c.value.trim()));

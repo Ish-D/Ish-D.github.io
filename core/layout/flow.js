@@ -17,6 +17,9 @@ import { createStyles, MIN_TEXT_BESIDE } from './style.js';
 import { flowGenerated } from './generated.js';
 import { parseView, DEFAULT_VIEW } from '../runtime/strokes.js';
 
+/** A margin has to be this wide (px) to hold a figure; narrower and the figure stands in the column. */
+const MIN_MARGIN_FIGURE = 120;
+
 /** @typedef {import('../types.js').Block} Block */
 
 export const argOf = (node, key) => node.args?.items.find(a => a.key === key)?.value;
@@ -743,17 +746,18 @@ function flowObject(scope, node) {
     const p = paramsOf(node);
     if (env.print && env.objects?.onPaper?.(node) === false) return;
     const place = parsePlace(p.place ?? (node.name === 'gallery' ? 'block' : 'block'));
+    if (place.kind === 'margin') {
+        const strip = env.print ? null : marginStrip(env, place.side);
+        if (strip) { flowMarginObject(scope, node, p, strip, place.side); return; }
+        // with no room beside the text, or on paper, the figure stands in the column on its side
+        place.kind = place.side === 'left' ? 'left' : place.side === 'right' ? 'right' : 'block';
+    }
     const floats = ['left', 'right', 'center', 'gutter', 'at'].includes(place.kind);
     // on paper nothing floats or hangs in a margin: a figure sits between the paragraphs
     let demoted = false;
     if (scope.env.print && place.kind !== 'inline') { place.kind = 'block'; delete place.at; delete place.side; demoted = true; }
     const em = styles.size;
     const col = scope.columns[Math.min(scope.columnIndex, scope.columns.length - 1)];
-
-    if (place.kind === 'margin') {
-        scope.marginObjects.push({ node, side: place.side, anchorY: scope.y, object: true, params: p });
-        return;
-    }
 
     let isFloat = !demoted && floats;
     const basis = place.kind === 'span' ? scope.width : place.kind === 'full' ? scope.page.width : col.width;
@@ -801,6 +805,27 @@ function flowObject(scope, node) {
     if (place.kind === 'full') scope.bleeds.push([rect.y, rect.y + rect.height]);
     pushObject(scope, node, rect, size, caption, p, place, { kind: 'none', args: [] });
     scope.y = rect.y + rect.height + styles.paragraphGap;
+}
+
+/** The strip beside the text on `side`, if it is wide enough to hold a figure. */
+function marginStrip(env, side) {
+    const strip = side === 'left' ? env.margins?.left : side === 'right' ? env.margins?.right : null;
+    return strip && strip.width >= MIN_MARGIN_FIGURE ? strip : null;
+}
+
+/** A figure that stands in the margin, level with the block that comes next and as close to the text as the gap allows. */
+function flowMarginObject(scope, node, p, strip, side) {
+    const { styles, env } = scope;
+    const em = styles.size;
+    const size = resolveSize(p, { basis: strip.width, em }, env.objects?.natural?.(node) ?? sketchSize(node), { defaultWidth: 1 });
+    const width = Math.min(size.width, strip.width);
+    const height = size.width > 0 ? size.height * (width / size.width) : size.height;
+    const dx = resolveLength(parseValue(p.dx), { em, basis: strip.width, fallback: 0 });
+    const dy = resolveLength(parseValue(p.dy), { em, basis: strip.width, fallback: 0 });
+    const rect = { x: (side === 'left' ? strip.x + strip.width - width : strip.x) + dx, y: scope.y + dy, width, height };
+    const caption = captionOf(scope, node, width);
+    scope.maxY = Math.max(scope.maxY ?? 0, rect.y + height + (caption ? caption.height + styles.paragraphGap / 2 : 0));
+    pushObject(scope, node, rect, { width, height }, caption, p, { kind: 'margin', side }, { kind: 'none', args: [] });
 }
 
 function pushObject(scope, node, rect, size, caption, params, place, wrap) {

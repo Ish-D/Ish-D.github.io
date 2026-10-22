@@ -44,6 +44,7 @@ export function createView(app) {
         const layout = layoutDocument(doc, app.env.build());
         const t1 = performance.now();
         state.layout = layout;
+        app.chrome?.place(layout.geometry);
         state.docEl = renderLayout(root, layout, app.env.renderContext());
         state.unbindVars = bindVars(state.docEl, state.store, formatNumber);
 

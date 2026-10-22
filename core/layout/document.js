@@ -34,7 +34,7 @@ export const PAGE = Object.freeze({
     gap: 16,
     minMargin: 150,
     minText: 280,
-    topPad: 32,
+    topPad: 72,
     bottomPad: 96,
     /** The text column's width in em of body text. Readers choose within the range. */
     width: Object.freeze({ default: 32, min: 24, max: 44 }),
@@ -139,6 +139,7 @@ function flowPass(doc, env, styles, geom, diagnostics, breakIn) {
         ...env,
         styles,
         pageBox: geom.page,
+        margins: geom.narrow ? null : { left: geom.left, right: geom.right },
         diagnostics,
         breakIn,
         inlineAllNotes: geom.narrow,
