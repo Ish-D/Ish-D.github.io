@@ -1,0 +1,720 @@
+{
+  "browser": "webkit",
+  "origin": "http://127.0.0.1:43367",
+  "results": [
+    {
+      "page": "home",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "home",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 6 blocks",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"ish\" against \"ish\"",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "home",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "dark: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "about",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "about",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "about",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "about",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 6 blocks",
+      "hard": true
+    },
+    {
+      "page": "about",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"About · ish\" against \"About · ish\"",
+      "hard": true
+    },
+    {
+      "page": "about",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "about",
+      "check": "lines are drawn as laid out",
+      "ok": true,
+      "detail": "0 of 2 justified lines differ",
+      "hard": false
+    },
+    {
+      "page": "about",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "writing",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "writing",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "writing",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "writing",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 3 blocks",
+      "hard": true
+    },
+    {
+      "page": "writing",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Writing · ish\" against \"Writing · ish\"",
+      "hard": true
+    },
+    {
+      "page": "writing",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "writing",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "lab",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 26 blocks",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Lab · ish\" against \"Lab · ish\"",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "lab",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "layout-test",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 11 blocks",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Layout test · ish\" against \"Layout test · ish\"",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "layout-test",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "margin-test",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "margin-test",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "margin-test",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "margin-test",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 29 blocks",
+      "hard": true
+    },
+    {
+      "page": "margin-test",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Margin Test · ish\" against \"Margin Test · ish\"",
+      "hard": true
+    },
+    {
+      "page": "margin-test",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "margin-test",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "photography",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "photography",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "photography",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "photography",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 25 blocks",
+      "hard": true
+    },
+    {
+      "page": "photography",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Photography · ish\" against \"Photography · ish\"",
+      "hard": true
+    },
+    {
+      "page": "photography",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "photography",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "umbrella",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 11 blocks",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"Umbrella · ish\" against \"Umbrella · ish\"",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "umbrella",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "dark: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "served",
+      "ok": true,
+      "detail": "status 200",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "nothing logged as an error",
+      "ok": true,
+      "detail": "",
+      "hard": false
+    },
+    {
+      "page": "llms",
+      "check": "the app is whole",
+      "ok": true,
+      "detail": "missing: none; 150 blocks",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "tab title is the page title",
+      "ok": true,
+      "detail": "\"LLM Inference for Bozos, Part 1 · ish\" against \"LLM Inference for Bozos, Part 1 · ish\"",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "no sideways scroll",
+      "ok": true,
+      "detail": "0px over",
+      "hard": false
+    },
+    {
+      "page": "llms",
+      "check": "lines are drawn as laid out",
+      "ok": true,
+      "detail": "11 of 330 justified lines differ",
+      "hard": false
+    },
+    {
+      "page": "llms",
+      "check": "find reaches a word split by a hyphen",
+      "ok": true,
+      "detail": "\"everyone\" true; <span class=\"ln\" style=\"left: 284px; top: 28px; width: 362.66px; height: 28px;\"><span class=\"r\">across various industries the more <span class=\"hd\">every</span><span class=\"tl\">one</span><span class=\"brk\"></span></span></span> // <span class=\"ln\" style=\"left: 284px; top: 56px; width: 356px; height: 28px;\"><span class=\"r\"><span class=\"ct\" data-t=\"one\"></span> reflects on pre-AI work as some sort</span><span class=\"sp\"> </span></span>",
+      "hard": false
+    },
+    {
+      "page": "llms",
+      "check": "find across a line break (only WebKit)",
+      "ok": true,
+      "detail": "\"for Bozos, Part 1\" found: true",
+      "hard": false
+    },
+    {
+      "page": "llms",
+      "check": "phone: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "dark: no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "links are clean paths",
+      "ok": true,
+      "detail": "/about/ /writing/ /photography/ /tags/",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "a link opens its page at its path",
+      "ok": true,
+      "detail": "{\"path\":\"/about/\",\"title\":\"About · ish\",\"page\":\"about\"}",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "back returns to the home page",
+      "ok": true,
+      "detail": "{\"path\":\"/\",\"page\":\"menu\"}",
+      "hard": true
+    },
+    {
+      "page": "no-such-page",
+      "check": "a missing address lands on the app and says so",
+      "ok": true,
+      "detail": "{\"search\":\"?page=no-such-page\",\"text\":\"Not found\\n§There is no page called “no-such-page”.\\n\"}",
+      "hard": true
+    },
+    {
+      "page": "no-such-page",
+      "check": "no script errors",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "an address without its slash is moved to the one with",
+      "ok": true,
+      "detail": "http://127.0.0.1:43367/llms_for_bozos_1/",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "the top line is as wide as the text",
+      "ok": true,
+      "detail": "{\"barLeft\":320,\"barWidth\":640,\"textX\":320,\"textWidth\":640,\"man\":{\"left\":104,\"right\":304},\"hasName\":false}",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "the old man stands in the margin",
+      "ok": true,
+      "detail": "{\"left\":104,\"right\":304}",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "the home page does not name itself in the top line",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "the index narrows as you type",
+      "ok": true,
+      "detail": "[\"About\"]",
+      "hard": true
+    },
+    {
+      "page": "home",
+      "check": "the index opens a page",
+      "ok": true,
+      "detail": "http://127.0.0.1:43367/about/",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "phone: the top line is above the title",
+      "ok": true,
+      "detail": "{\"barBottom\":40,\"firstTop\":72}",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "sheets are made",
+      "ok": true,
+      "detail": "16 sheets, 15 notes, 2 pictures, 0 figures missing",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "the sheets are not shown on screen",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "notes are in the margins",
+      "ok": true,
+      "detail": "15 of at least 10",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "in print only the sheets are shown",
+      "ok": true,
+      "detail": "{\"root\":\"block\",\"page\":\"none\",\"sheet\":816,\"has\":true,\"figure\":{\"sheet\":3,\"x\":248,\"y\":171,\"w\":320,\"h\":380}}",
+      "hard": true
+    },
+    {
+      "page": "llms",
+      "check": "no script errors while printing",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "sheets are made",
+      "ok": true,
+      "detail": "2 sheets, 0 notes, 2 pictures, 0 figures missing",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "the sheets are not shown on screen",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "the figure is pictured",
+      "ok": true,
+      "detail": "2 pictures, 0 missing",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "in print only the sheets are shown",
+      "ok": true,
+      "detail": "{\"root\":\"block\",\"page\":\"none\",\"sheet\":816,\"has\":true,\"figure\":{\"sheet\":0,\"x\":275.5,\"y\":276,\"w\":265,\"h\":358}}",
+      "hard": true
+    },
+    {
+      "page": "umbrella",
+      "check": "no script errors while printing",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "sheets are made",
+      "ok": true,
+      "detail": "2 sheets, 2 notes, 0 pictures, 0 figures missing",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "the sheets are not shown on screen",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "notes are in the margins",
+      "ok": true,
+      "detail": "2 of at least 1",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "in print only the sheets are shown",
+      "ok": true,
+      "detail": "{\"root\":\"block\",\"page\":\"none\",\"sheet\":816,\"has\":true,\"figure\":null}",
+      "hard": true
+    },
+    {
+      "page": "layout-test",
+      "check": "no script errors while printing",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "sheets are made",
+      "ok": true,
+      "detail": "4 sheets, 6 notes, 1 pictures, 0 figures missing",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "the sheets are not shown on screen",
+      "ok": true,
+      "detail": "none",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "notes are in the margins",
+      "ok": true,
+      "detail": "6 of at least 1",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "in print only the sheets are shown",
+      "ok": true,
+      "detail": "{\"root\":\"block\",\"page\":\"none\",\"sheet\":816,\"has\":true,\"figure\":{\"sheet\":0,\"x\":192,\"y\":423,\"w\":432,\"h\":300}}",
+      "hard": true
+    },
+    {
+      "page": "lab",
+      "check": "no script errors while printing",
+      "ok": true,
+      "detail": "",
+      "hard": true
+    }
+  ]
+}
