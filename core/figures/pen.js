@@ -8,20 +8,24 @@
  */
 
 /**
- * Widths are fractions of the drawing's base line width; lengths are in line widths. Hergé's line is one steady weight: inner lines
- * nearly as heavy as outlines, barely any swell, and ends that stop round and blunt rather than tapering away. `fit` is how far, in
- * line widths, an outline may stray from its exact edge so that straight runs need few points.
+ * Widths are fractions of the drawing's base line width; lengths are in line widths. A stroke goes down broad and lifts off to a
+ * point: its start stays full and round, its free end tapers over `ramp.end`, and the pen presses hardest early on (`press`) and
+ * eases off along the way. Inner lines are nearly as heavy as outlines. `fit` is how far, in line widths, an outline may stray
+ * from its exact edge so that straight runs need few points.
  */
 export const PEN = Object.freeze({
     contour: 1,
     detail: 0.85,
-    swell: 0.04,
-    lean: 0.06,
-    tip: Object.freeze({ contour: 0.85, detail: 0.75 }),
-    ramp: 2.5,
+    press: 0.16,
+    lean: 0.1,
+    tip: Object.freeze({ start: 0.92, end: 0.18 }),
+    ramp: Object.freeze({ start: 1, end: 5 }),
     tuck: 0.5,
     fit: 0.06,
 });
+
+/** How hard the pen presses along a stroke, 0 to 1 from its start to its end: set down firmly, a little harder just after, then easing off. */
+const pressure = (u) => (0.6 + 0.4 * smoothstep(u / 0.12)) * (1 - u) ** 0.7;
 
 /** The direction a hand pulls a pen down: strokes running this way lean on the nib and come out heavier. */
 const PULL = (() => { const x = -0.35; const y = 0.94; const n = Math.hypot(x, y); return [x / n, y / n]; })();
@@ -118,15 +122,15 @@ export function widths(pts, stroke, base, pen = PEN) {
     }
     const kind = stroke.kind === 'detail' ? 'detail' : 'contour';
     const full = base * pen[kind] * (stroke.w ?? 1);
-    const tip = pen.tip[kind];
-    const ramp = Math.min(0.35 * total, pen.ramp * full);
+    const rampStart = Math.min(0.2 * total, pen.ramp.start * full);
+    const rampEnd = Math.min(0.6 * total, pen.ramp.end * full);
     const t = tangents(pts);
     const freeStart = (stroke.ends ?? 'ff')[0] === 'f';
     const freeEnd = (stroke.ends ?? 'ff')[1] === 'f';
     return pts.map((_, i) => {
-        let w = full * (1 + pen.swell * Math.max(0, Math.sin((Math.PI * s[i]) / total)) ** 1.2) * (1 + pen.lean * (t[i][0] * PULL[0] + t[i][1] * PULL[1]));
-        if (freeStart) w *= tip + (1 - tip) * smoothstep(s[i] / ramp);
-        if (freeEnd) w *= tip + (1 - tip) * smoothstep((total - s[i]) / ramp);
+        let w = full * (1 + pen.press * (pressure(s[i] / total) - 0.3)) * (1 + pen.lean * (t[i][0] * PULL[0] + t[i][1] * PULL[1]));
+        if (freeStart) w *= pen.tip.start + (1 - pen.tip.start) * smoothstep(s[i] / rampStart);
+        if (freeEnd) w *= pen.tip.end + (1 - pen.tip.end) * smoothstep((total - s[i]) / rampEnd);
         return w;
     });
 }

@@ -17,14 +17,15 @@ test('a curve through points passes through each of them', () => {
     assert.match(shapePath(closed), /^M0 0C.*Z$/);
 });
 
-test('a free end tapers; a joined end keeps its width', () => {
+test('a stroke goes down broad and lifts off to a point; a joined end keeps its width', () => {
     const pts = sampleCubics(straight.c, 0.1);
     const free = widths(pts, straight, 1);
     const mid = free[Math.floor(free.length / 2)];
-    assert.ok(free[0] < mid && free[free.length - 1] < mid, 'free ends are a little thinner than the middle');
-    assert.ok(Math.abs(free[0] - PEN.tip.contour) < 0.1, 'a free end keeps most of its width: it stops round, it does not taper away');
+    assert.ok(free[0] > mid * 0.85, 'its start stays broad');
+    assert.ok(free[free.length - 1] < mid * 0.35, 'its end tapers');
+    assert.ok(Math.abs(free[free.length - 1] - PEN.tip.end) < 0.1, 'to the pen\'s tip');
     const joined = widths(pts, { ...straight, ends: 'jj' }, 1);
-    assert.ok(joined[0] > mid * 0.85 && joined[joined.length - 1] > mid * 0.85);
+    assert.ok(joined[0] > mid * 0.85 && joined[joined.length - 1] > mid * 0.7);
 });
 
 test('a detail line is lighter than a contour, and a stroke can carry its own widths', () => {

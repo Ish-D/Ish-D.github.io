@@ -27,7 +27,7 @@
     --color-error: #c41e3a;                /* Error/validation color */
 
     /* The one spot of colour a drawing may carry */
-    --color-figure-ochre: #b8862b;
+    --color-figure-spot: #c7323f;
 
     /* Fold effect colors */
     --fold-gradient-start: #a8a5a0;
@@ -166,7 +166,7 @@
     --color-error: #e85d75;                /* Lighter red for dark backgrounds */
 
     /* A drawing's spot of colour, lighter so it holds on the dark ground */
-    --color-figure-ochre: #d4a24c;
+    --color-figure-spot: #e04c58;
 
     /* Code background */
     --code-background: #252525;

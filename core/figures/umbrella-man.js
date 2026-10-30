@@ -270,7 +270,9 @@ export function createMan(document, parent) {
         ...u.ribsInside.map(run => shape(penLine(run, { w: 0.8 }), INK)),
         shape(penLine(u.farRim, { kind: 'contour', ends: 'jj' }), INK));
 
-    // ---- his head, behind the collar; the face and the pipe go over it and turn with it
+    // ---- his neck goes behind the collar and his head in front of it, so the jaw stays whole as he turns; the face's marks and
+    // the pipe go over the head and turn with it
+    const neck = svg('g', {}, ...drawn('neck'));
     const head = svg('g', {}, ...drawn('head'));
     const eyes = EYES.map(e => svg('ellipse', { class: 'eye', cx: e.x, cy: e.y, rx: EYE_RX, ry: EYE_RY, style: `fill: ${INK}` }));
     const face = svg('g', {}, ...drawn('face'), ...eyes);
@@ -302,8 +304,9 @@ export function createMan(document, parent) {
 
     const man = svg('g', { style: 'color: var(--color-text-primary)' },
         underside,
-        head,
+        neck,
         svg('g', {}, ...drawn('body')),
+        head,
         front,
         handle,
         svg('g', {}, ...drawn('hand')),
@@ -382,6 +385,7 @@ export function createMan(document, parent) {
             const shut = Math.max(0, Math.min(1, blink));
             turn = { x: gx, y: gy };
             const tilt = `rotate(${num(gx * 4)} ${NECK.x} ${NECK.y})`;
+            neck.setAttribute('transform', tilt);
             head.setAttribute('transform', tilt);
             front.setAttribute('transform', tilt);
             face.setAttribute('transform', `translate(${num(gx * 2)} ${num(gy * 1.3)})`);

@@ -3,7 +3,7 @@
  * rain falling inside it. The rain runs off his umbrella and drips from its rim, the smoke
  * from his pipe gathers under it, and he looks at the pointer wherever it is on the page.
  * The drawing is the colour of the text but for one thing: in the puddle at his feet he and
- * his umbrella show in ochre.
+ * his umbrella show in red, like city lights on a wet street.
  *
  *   [[viz(type: umbrella, place: gutter, width: 200, height: 270, wrap: box)]]
  *
@@ -145,7 +145,7 @@ defineFigure('umbrella', (ctx) => {
         if (!rain || !g) return;
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, W, H);
-        reflect(colors.ochre);
+        reflect(colors.spot);
         g.lineCap = 'round';
         g.strokeStyle = colors.ink;
         g.fillStyle = colors.ink;

@@ -771,7 +771,7 @@ body.editing .obj { cursor: pointer; }
     --color-border: #bbbbbb;
     --code-background: #f4f4f4;
     --color-link: #111111;
-    --color-figure-ochre: #b8862b;
+    --color-figure-spot: #c7323f;
     color: var(--color-text-primary);
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
