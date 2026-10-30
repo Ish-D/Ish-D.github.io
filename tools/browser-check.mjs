@@ -35,7 +35,7 @@ function record(page, check, ok, detail = '', hard = true) {
     results.push({ page, check, ok, detail, hard });
     const mark = ok ? 'ok  ' : hard ? 'FAIL' : 'warn';
     console.log(`${mark} ${browserName} ${page} ${check}${detail ? `  ${detail}` : ''}`);
-    if (!ok) console.log(`::${hard ? 'error' : 'warning'} title=${browserName} ${page}: ${check}::${String(detail).replace(/\n/g, ' ').slice(0, 900)}`);
+    if (!ok) console.log(`::${hard ? 'error' : 'warning'} title=${browserName} ${page}: ${check}::${String(detail || 'failed').replace(/\n/g, ' ').slice(0, 900)}`);
 }
 
 const have = (command) => { try { execFileSync('which', [command], { stdio: 'ignore' }); return true; } catch { return false; } };
@@ -262,16 +262,14 @@ await part('llms', 'an address without its slash', async () => {
 // The top line, the index and the home page
 // ---------------------------------------------------------------------------
 
-await part('home', 'the top line and the man under the umbrella', async () => {
+await part('home', 'the top line and the index', async () => {
     const { context, page } = await open('/');
     const home = await page.evaluate(() => {
         const bar = document.querySelector('.chrome').getBoundingClientRect();
         const text = window.__v2.app.state.layout.geometry.text;
-        const man = document.querySelector('[data-figure="umbrella"]')?.getBoundingClientRect();
-        return { barLeft: bar.left, barWidth: bar.width, textX: text.x, textWidth: text.width, man: man && { left: man.left, right: man.right }, hasName: !!document.querySelector('.chrome .name') };
+        return { barLeft: bar.left, barWidth: bar.width, textX: text.x, textWidth: text.width, hasName: !!document.querySelector('.chrome .name') };
     });
     record('home', 'the top line is as wide as the text', Math.abs(home.barLeft - home.textX) <= 1.5 && Math.abs(home.barWidth - home.textWidth) <= 1.5, JSON.stringify(home));
-    record('home', 'the man under the umbrella stands in the margin', !!home.man && home.man.right <= home.textX && home.man.left >= 0, JSON.stringify(home.man));
     record('home', 'the home page does not name itself in the top line', !home.hasName, '');
 
     await page.keyboard.press('/');
@@ -282,6 +280,27 @@ await part('home', 'the top line and the man under the umbrella', async () => {
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => window.__v2.app.state.page === 'about', null, { timeout: 15000 });
     record('home', 'the index opens a page', new URL(page.url()).pathname === '/about/', page.url());
+    await context.close();
+});
+
+/** The home page's drawing against the text column, and how far the page runs past the screen. */
+const cover = () => {
+    const text = window.__v2.app.state.layout.geometry.text;
+    const figure = document.querySelector('.doc [data-figure]');
+    const box = figure?.getBoundingClientRect();
+    return {
+        column: [text.x, text.x + text.width],
+        drawing: box && [box.left, box.right],
+        drawn: !!figure?.querySelector('svg path'),
+        over: document.documentElement.scrollHeight - window.innerHeight,
+    };
+};
+
+for (const [prefix, size] of [['', {}], ['phone: ', { width: 390, height: 844, scale: 2 }]]) await part('home', `${prefix}the cover`, async () => {
+    const { context, page } = await open('/', size);
+    const c = await page.evaluate(cover);
+    record('home', `${prefix}the drawing is drawn inside the text column`, c.drawn && !!c.drawing && c.drawing[0] >= c.column[0] - 1.5 && c.drawing[1] <= c.column[1] + 1.5, JSON.stringify(c));
+    record('home', `${prefix}the home page fits the screen`, c.over <= 1, `${c.over}px past the screen`);
     await context.close();
 });
 

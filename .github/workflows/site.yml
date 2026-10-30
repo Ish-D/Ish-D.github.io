@@ -62,9 +62,14 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-1.49.1-${{ matrix.browser }}
       - name: Install the browser
+        shell: bash
         run: |
-          npx playwright install ${{ matrix.browser }}
-          npx playwright install-deps ${{ matrix.browser }}
+          { npx playwright install ${{ matrix.browser }} && npx playwright install-deps ${{ matrix.browser }}; } 2>&1 | tee install.log || {
+            # what failed and on which system, where it can be read without the log
+            report=$({ grep PRETTY_NAME /etc/os-release; tail -30 install.log; } | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g' | cut -c1-3500)
+            echo "::error title=installing ${{ matrix.browser }}::${report}"
+            exit 1
+          }
       - name: Install poppler, to look at printed pages
         if: matrix.browser == 'chromium'
         run: sudo apt-get update && sudo apt-get install -y poppler-utils
