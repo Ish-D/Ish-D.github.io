@@ -1,7 +1,8 @@
 /**
  * The man under the umbrella: a clear-line drawing in flat ink and flat paper that looks where he is told to, smokes a pipe,
- * and gives the rain and the smoke the shapes they need. The man is drawn from umbrella-man-drawing.js with the pen in
- * pen.js, in a black coat with its seams, folds and buttons cut in paper; the umbrella is built here.
+ * and gives the rain and the smoke the shapes they need. The man is drawn from umbrella-man-drawing.js, klein's ink as he
+ * drew it with the lines in it done by the pen in pen.js, in a black coat with its seams, folds and buttons cut in paper;
+ * the umbrella is built here.
  *
  * Drawn in his own units: the ground at his feet is y = 0, up is negative, he stands 200 tall and the umbrella tops out
  * near 245. `place` sets where he stands and how big.
@@ -220,7 +221,7 @@ const penned = (strokes) => {
     return Object.entries(byTone).map(([tone, ds]) => ({ tone, d: ds.join('') }));
 };
 
-/** The man's parts as path data, built once: each part's under-lines, fills, blacks, lines by tone, and buttons. */
+/** The man's parts as path data, built once: each part's under-lines, fills, traced shapes, blacks, lines by tone, and buttons. */
 let PARTS = null;
 function parts() {
     if (PARTS) return PARTS;
@@ -230,6 +231,7 @@ function parts() {
         PARTS[name] = {
             under: penned(part.under),
             fills: (part.fills ?? []).map(([tone, pts]) => ({ tone, d: shapePath(curve(pts, true)) })),
+            traced: (part.traced ?? []).map(([tone, d]) => ({ tone, d })),
             ink: (part.ink ?? []).map(pts => shapePath(curve(pts, true))).join(''),
             lines: penned(part.strokes),
             dots: part.dots ?? [],
@@ -248,13 +250,15 @@ export function createMan(document, parent) {
     const PAPER = 'var(--color-card-background)';
     const toneOf = (tone) => (tone === 'paper' ? PAPER : INK);
     const shape = (d, color) => svg('path', { d, style: `fill: ${color}` });
+    const traced = (d, color) => svg('path', { d, style: `fill: ${color}; fill-rule: evenodd` });
 
-    /** One drawn part: its paper edge, fills, blacks, lines, and its buttons, which are paper dots on the black coat. */
+    /** One drawn part: its paper edge, fills, traced shapes, blacks, lines, and its buttons, which are paper dots on the black coat. */
     const drawn = (name) => {
         const p = parts()[name];
         return [
             ...p.under.map(l => shape(l.d, toneOf(l.tone))),
             ...p.fills.map(f => shape(f.d, toneOf(f.tone))),
+            ...p.traced.map(t => traced(t.d, toneOf(t.tone))),
             p.ink && shape(p.ink, INK),
             ...p.lines.map(l => shape(l.d, toneOf(l.tone))),
             ...p.dots.map(([x, y, r]) => svg('circle', { cx: x, cy: y, r, style: `fill: ${PAPER}` })),
