@@ -1,24 +1,28 @@
 /**
- * An old man in the rain under an umbrella, smoking a pipe, in a rectangle with the
+ * A man in the rain under an umbrella, smoking a pipe, in a rectangle with the
  * rain falling inside it. The rain runs off his umbrella and drips from its rim, the smoke
  * from his pipe gathers under it, and he looks at the pointer wherever it is on the page.
+ * The drawing is the colour of the text but for one thing: in the puddle at his feet he and
+ * his umbrella show in ochre.
  *
  *   [[viz(type: umbrella, place: gutter, width: 200, height: 270, wrap: box)]]
  *
- * Optional: ground (how far down he stands, 0 to 1, default 0.93), size (1 fills the
- * rectangle), rain (1 is a steady shower).
+ * Optional: ground (how far down he stands, 0 to 1, default 0.8, which leaves the
+ * puddle room), size (1 fills the rectangle), rain (1 is a steady shower).
  */
 
 import { defineFigure } from '../runtime/figures.js';
 import { createLoop } from '../runtime/loop.js';
 import { el as svgEl, seeded } from '../runtime/svg.js';
 import { createMan, gazeToward, EXTENT } from './umbrella-man.js';
-import { createRain, createWind } from './rain.js';
+import { createRain } from './rain.js';
 import { createSmoke, LIFE as SMOKE_LIFE } from './smoke.js';
 
 /** Where he looks when nobody is pointing at anything: now at the rain, now at the umbrella, now ahead. */
 const GLANCES = [{ x: 0, y: 0.1 }, { x: -0.6, y: -0.5 }, { x: 0.7, y: -0.4 }, { x: 0.2, y: -0.9 }, { x: -0.8, y: 0.1 }];
 const WARM_SECONDS = 2;
+/** The wind, in px/s: steady, so the rain falls at one slant and the smoke leans the same way. */
+const WIND = -160;
 
 /** What he and his umbrella take up, in his own units, for fitting him into the rectangle. */
 const FIGURE = { width: EXTENT.right - EXTENT.left, height: 10 - EXTENT.top, centre: EXTENT.centre };
@@ -30,7 +34,7 @@ defineFigure('umbrella', (ctx) => {
         const value = ctx.params[name] === undefined || ctx.params[name] === '' ? NaN : Number(ctx.params[name]);
         return Number.isFinite(value) ? value : fallback;
     };
-    const groundAt = param('ground', 0.93);
+    const groundAt = param('ground', 0.8);
     const size = param('size', 1);
     const strength = param('rain', 1);
 
@@ -43,7 +47,6 @@ defineFigure('umbrella', (ctx) => {
     const g = canvas.getContext('2d');
 
     const man = createMan(document, svg);
-    const wind = createWind();
     const rand = seeded(3);
     let rain = null;
     let smoke = null;
@@ -53,7 +56,6 @@ defineFigure('umbrella', (ctx) => {
     let H = 0;
     let scale = 1;
     let dpr = 1;
-    let windNow = 0;
 
     function shapes() {
         return { ground: H * groundAt, hit: (x, y) => man.hit(x, y), tips: man.tips() };
@@ -88,17 +90,62 @@ defineFigure('umbrella', (ctx) => {
                 centre: roof.centre,
                 scale,
             });
-            rain.warm(WARM_SECONDS, windNow);
-            smoke.warm(WARM_SECONDS + 1, windNow);
+            rain.warm(WARM_SECONDS, WIND);
+            smoke.warm(WARM_SECONDS + 1, WIND);
         }
         return true;
     }
 
     /** Everything is drawn in the ink of the page, at full strength; the weight of a mark is its width, not a paler colour. */
+    /**
+     * The puddle at his feet mirrors him and his umbrella, squashed as water seen low down squashes what it shows, in
+     * level bands that sway a little with the water.
+     */
+    function reflect(color) {
+        const ground = H * groundAt;
+        const depth = H - ground;
+        if (depth < 4) return;
+        const squash = 0.2;
+        const outlines = man.outlines();
+        const xs = outlines[1].map(p => p.x);
+        const left = Math.min(...xs);
+        const right = Math.max(...xs);
+        const mid = (left + right) / 2;
+        g.save();
+        g.beginPath();
+        g.ellipse(mid, ground + depth * 0.5, (right - left) * 0.56, depth * 0.62, 0, 0, Math.PI * 2);
+        g.ellipse(mid - (right - left) * 0.18, ground + depth * 0.18, (right - left) * 0.4, depth * 0.3, 0, 0, Math.PI * 2);
+        g.clip();
+        g.fillStyle = color;
+        const band = 2.2;
+        const gap = 1;
+        for (let y = ground; y < H; y += band + gap) {
+            const below = y - ground;
+            const sway = Math.sin(below * 0.35 + clock * 2.4) * (0.3 + below * 0.06);
+            g.save();
+            g.beginPath();
+            g.rect(0, y, W, band);
+            g.clip();
+            g.beginPath();
+            for (const outline of outlines) {
+                outline.forEach((p, i) => {
+                    const x = p.x + sway;
+                    const yy = ground + (ground - p.y) * squash;
+                    if (i === 0) g.moveTo(x, yy); else g.lineTo(x, yy);
+                });
+                g.closePath();
+            }
+            g.fill();
+            g.restore();
+        }
+        g.restore();
+    }
+
     function draw() {
         if (!rain || !g) return;
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, W, H);
+        reflect(colors.ochre);
         g.lineCap = 'round';
         g.strokeStyle = colors.ink;
         g.fillStyle = colors.ink;
@@ -113,13 +160,15 @@ defineFigure('umbrella', (ctx) => {
             g.stroke();
         }
 
+        // every drop falls at the shower's one slant
+        const lean = rain.lean(WIND);
+        const across = lean / Math.hypot(lean, 1);
+        const down = 1 / Math.hypot(lean, 1);
         for (const d of rain.drops) {
-            const vx = windNow * d.drift;
-            const speed = Math.hypot(vx, d.vy);
             g.lineWidth = d.alpha > 0.7 ? 1.15 : 0.6;
             g.beginPath();
             g.moveTo(d.x, d.y);
-            g.lineTo(d.x - (vx / speed) * d.len, d.y - (d.vy / speed) * d.len);
+            g.lineTo(d.x - across * d.len, d.y - down * d.len);
             g.stroke();
         }
 
@@ -195,9 +244,8 @@ defineFigure('umbrella', (ctx) => {
 
     function advance(dt) {
         if (!rain) return;
-        windNow = wind.step(dt);
-        rain.step(dt, windNow);
-        smoke.step(dt, windNow);
+        rain.step(dt, WIND);
+        smoke.step(dt, WIND);
         look(dt);
     }
 

@@ -24,7 +24,7 @@ Plain markdown plus directives: `[[name(args)]]{group}`.
 - `[[var(name, value, min:, max:, step:)]]`, `\val{name}` in math, `[[viz(type: softmax-scale, var: name)]]`
 - `[[drawing(file.svg)]]` or `[[drawing(view: 600x300)]]{strokes}` (click it in edit mode to draw)
 - `[[gallery(columns: 3)]]{path | caption}`
-- `[[viz(type: umbrella, place: gutter, width: 200, height: 270, wrap: box)]]` an old man in the rain, smoking a pipe under his umbrella, who watches the pointer (`figures/umbrella.js`). Animated figures run on `runtime/loop.js`, which steps them only while they are on screen, the tab is showing and the reader has not asked for less motion.
+- `[[viz(type: umbrella, place: gutter, width: 200, height: 270, wrap: box)]]` a man in the rain, smoking a pipe under his umbrella, who watches the pointer (`figures/umbrella.js`). Animated figures run on `runtime/loop.js`, which steps them only while they are on screen, the tab is showing and the reader has not asked for less motion.
 
 ## Editing
 

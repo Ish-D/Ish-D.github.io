@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRain, createWind } from '../../core/figures/rain.js';
+import { createRain } from '../../core/figures/rain.js';
 
 /** A canopy that is a box over x 100..200, y 100..150, and the ground at 400. */
 const shapes = (over = {}) => ({
@@ -10,7 +10,7 @@ const shapes = (over = {}) => ({
     ...over,
 });
 const make = (over = {}) => createRain({ width: 300, height: 450, shapes: shapes(), density: 1, seed: 3, ...over });
-const drop = (x, y) => ({ x, y, vy: 600, len: 10, drift: 1, land: 400, alpha: 1 });
+const drop = (x, y, vy = 600) => ({ x, y, vy, len: 10, land: 400, alpha: 1 });
 
 test('drops fall to the ground, leave ripples, and none is left below the ground', () => {
     const rain = make();
@@ -88,16 +88,13 @@ test('resizing keeps the drops in flight and lands them on the new ground', () =
     assert.ok(rain.drops.every(d => d.land < 300));
 });
 
-test('wind leans steadily, with gusts that blow hard now and then', () => {
-    const wind = createWind(5);
-    let min = Infinity;
-    let max = -Infinity;
-    for (let t = 0; t < 90; t += 1 / 60) {
-        const w = wind.step(1 / 60);
-        assert.ok(Number.isFinite(w));
-        min = Math.min(min, w);
-        max = Math.max(max, w);
-    }
-    assert.ok(min < -150 || max > 150, 'at least one gust');
-    assert.ok(min > -600 && max < 600);
+test('the whole shower falls at one slant, the fast drops and the slow', () => {
+    const rain = make({ density: 0 });
+    rain.drops.push(drop(100, 20, 700), drop(200, 20, 1100));
+    const start = rain.drops.map(d => [d.x, d.y]);
+    rain.step(0.05, -200);
+    const slants = rain.drops.map((d, i) => (d.x - start[i][0]) / (d.y - start[i][1]));
+    assert.ok(slants.every(s => s < 0), 'the wind leans them all the same way');
+    assert.ok(Math.abs(slants[0] - slants[1]) < 1e-9, 'at the same slant');
+    assert.ok(Math.abs(slants[0] - rain.lean(-200)) < 1e-9, 'the one it reports');
 });

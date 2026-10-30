@@ -9,6 +9,8 @@
 import { seeded } from '../runtime/svg.js';
 
 const GRAVITY = 1500;
+/** The middle of the speeds drops fall at, in px/s before `speed` scales them. */
+const FALL = 940;
 /** Ripples on the ground are capped so a downpour stays cheap to draw. */
 const MAX_RIPPLES = 220;
 const MAX_SPLASHES = 220;
@@ -57,7 +59,6 @@ export function createRain({ width, height, shapes, density = 0.4, speed = 1, se
             y: -30,
             vy: fall,
             len: fall * between(0.04, 0.066),
-            drift: between(0.8, 1.2),
             land: shape.ground + between(-0.6, 0.4) * landDepth(),
             alpha: between(0.35, 1),
         });
@@ -98,7 +99,10 @@ export function createRain({ width, height, shapes, density = 0.4, speed = 1, se
         drops, splashes, ripples, drips,
         get tips() { return tips; },
 
-        /** Moves everything on by `dt` seconds with the wind pushing sideways at `wind` px/s. */
+        /**
+         * Moves everything on by `dt` seconds in a wind of `wind` px/s. A drop's sideways speed keeps step with its fall, so the
+         * whole shower falls at one slant (`lean`), the fast drops and the slow.
+         */
         step(dt, wind = 0) {
             spawnDebt += density * w * dt;
             while (spawnDebt >= 1) { spawnDebt -= 1; spawnDrop(); }
@@ -107,7 +111,7 @@ export function createRain({ width, height, shapes, density = 0.4, speed = 1, se
                 const d = drops[i];
                 const px = d.x;
                 const py = d.y;
-                d.x += wind * d.drift * dt;
+                d.x += wind * (d.vy / (FALL * pace)) * dt;
                 d.y += d.vy * dt;
                 const hit = shape.hit(d.x, d.y) ?? shape.hit((px + d.x) / 2, (py + d.y) / 2);
                 if (hit === 'canopy') {
@@ -149,6 +153,11 @@ export function createRain({ width, height, shapes, density = 0.4, speed = 1, se
             }
         },
 
+        /** How far a drop moves sideways for each px it falls, in a wind of `wind` px/s. */
+        lean(wind = 0) {
+            return wind / (FALL * pace);
+        },
+
         /** Runs the rain ahead without drawing, so a figure starts in the middle of a shower. */
         warm(seconds, wind = 0, dt = 1 / 60) {
             for (let t = 0; t < seconds; t += dt) this.step(dt, wind);
@@ -162,36 +171,6 @@ export function createRain({ width, height, shapes, density = 0.4, speed = 1, se
             pace = speed;
             tips = makeTips(shape.tips);
             for (const d of drops) d.land = shape.ground + between(-0.6, 0.4) * landDepth();
-        },
-    };
-}
-
-/**
- * Wind in px/s: a steady lean, a slow sway, and now and then a gust strong enough to blow
- * rain in under the umbrella. Call `step` once per frame.
- */
-export function createWind(seed = 5) {
-    const rand = seeded(seed);
-    let time = 0;
-    let gust = null;
-    let next = 2.5 + rand() * 3;
-    return {
-        step(dt) {
-            time += dt;
-            if (!gust && time >= next) {
-                gust = { start: time, length: 1.1 + rand() * 0.6, power: (rand() < 0.5 ? -1 : 1) * (260 + rand() * 120) };
-            }
-            let wind = -160 + 55 * Math.sin(time * 0.6) + 40 * Math.sin(time * 1.7 + 1.3);
-            if (gust) {
-                const u = (time - gust.start) / gust.length;
-                if (u >= 1) {
-                    gust = null;
-                    next = time + 3 + rand() * 4;
-                } else {
-                    wind += gust.power * Math.sin(Math.PI * u) ** 2;
-                }
-            }
-            return wind;
         },
     };
 }

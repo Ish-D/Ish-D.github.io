@@ -262,7 +262,7 @@ await part('llms', 'an address without its slash', async () => {
 // The top line, the index and the home page
 // ---------------------------------------------------------------------------
 
-await part('home', 'the top line and the old man', async () => {
+await part('home', 'the top line and the man under the umbrella', async () => {
     const { context, page } = await open('/');
     const home = await page.evaluate(() => {
         const bar = document.querySelector('.chrome').getBoundingClientRect();
@@ -271,7 +271,7 @@ await part('home', 'the top line and the old man', async () => {
         return { barLeft: bar.left, barWidth: bar.width, textX: text.x, textWidth: text.width, man: man && { left: man.left, right: man.right }, hasName: !!document.querySelector('.chrome .name') };
     });
     record('home', 'the top line is as wide as the text', Math.abs(home.barLeft - home.textX) <= 1.5 && Math.abs(home.barWidth - home.textWidth) <= 1.5, JSON.stringify(home));
-    record('home', 'the old man stands in the margin', !!home.man && home.man.right <= home.textX && home.man.left >= 0, JSON.stringify(home.man));
+    record('home', 'the man under the umbrella stands in the margin', !!home.man && home.man.right <= home.textX && home.man.left >= 0, JSON.stringify(home.man));
     record('home', 'the home page does not name itself in the top line', !home.hasName, '');
 
     await page.keyboard.press('/');

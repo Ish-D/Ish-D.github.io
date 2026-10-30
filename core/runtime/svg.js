@@ -64,6 +64,8 @@ export function themeColors(document) {
         muted,
         paper: read('--color-card-background', dark ? '#1a1a1a' : '#ffffff'),
         rule: read('--color-border', dark ? '#333333' : '#cccccc'),
+        // a drawing's one spot of colour
+        ochre: read('--color-figure-ochre', dark ? '#d4a24c' : '#b8862b'),
         // figures are drawn in ink: one strong tone and one lighter
         accent: ink,
         accent2: muted,

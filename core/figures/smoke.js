@@ -1,6 +1,6 @@
 /**
  * A thread of pipe smoke: it rises from the bowl, sways, is pushed by the wind, and when it
- * meets the underside of the umbrella it spreads along it and drifts out from under it.
+ * meets the underside of the umbrella it runs up along it and drifts out from under it.
  *
  * State and arithmetic only; the figure draws the points as one line that thins as the smoke
  * ages. Units are px and seconds in the figure's own coordinates, y down.
@@ -17,7 +17,7 @@ const MAX_POINTS = 160;
  * @param {Object} options
  * @param {() => { x: number, y: number }} options.source   where smoke leaves the pipe now
  * @param {(x: number) => number} options.ceiling   y of the underside of the umbrella at x, or -Infinity when nothing is above
- * @param {number} options.centre                    x the smoke slides away from when it meets the umbrella
+ * @param {number} options.centre                    x the smoke slides away from under a level umbrella; under a tilted one it runs uphill
  * @param {number} [options.scale]                   size of the figure; speeds and sway scale with it
  * @param {number} [options.seed]
  */
@@ -44,6 +44,14 @@ export function createSmoke({ source, ceiling, centre, scale = 1, seed = 17 }) {
         if (points.length > MAX_POINTS) points.shift();
     }
 
+    /** Which way smoke against the umbrella at x runs: up its slope, or away from the middle where it is level. */
+    function uphill(x) {
+        const h = 2 * size;
+        const slope = (ceiling(x + h) - ceiling(x - h)) / (2 * h);
+        if (Number.isFinite(slope) && Math.abs(slope) > 0.03) return slope > 0 ? -1 : 1;
+        return x < middle ? -1 : 1;
+    }
+
     return {
         points,
 
@@ -66,7 +74,7 @@ export function createSmoke({ source, ceiling, centre, scale = 1, seed = 17 }) {
                 }
                 const sway = Math.cos(2.6 * p.age + p.phase) * 12 * size * Math.min(1, p.age * 1.2);
                 p.x += (sway + wind * 0.08) * dt;
-                if (p.under) p.x += (p.x < middle ? -1 : 1) * 14 * size * dt;
+                if (p.under) p.x += uphill(p.x) * 14 * size * dt;
                 p.y -= (30 - 10 * (p.age / LIFE)) * size * dt;
 
                 const roof = ceiling(p.x);

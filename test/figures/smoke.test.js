@@ -26,6 +26,16 @@ test('smoke that meets the umbrella stops under it and slides away from its midd
     assert.ok(smoke.points.every(p => p.y >= 200 || !roof(p.x) || p.x < 50), 'nothing passes through the roof');
 });
 
+test('under a tilted umbrella it runs up the slope, not away from the middle', () => {
+    // the roof climbs to the right: lower at x 50, higher at x 350
+    const tilted = (x) => (x >= 50 && x <= 350 ? 210 - (x - 50) * 0.1 : -Infinity);
+    const smoke = make({ ceiling: tilted });
+    smoke.warm(LIFE);
+    const under = smoke.points.filter(p => p.under);
+    assert.ok(under.length > 0, 'some smoke is against the roof');
+    assert.ok(Math.max(...under.map(p => p.x)) > 130, 'it ran right, up the slope, from a pipe left of the middle');
+});
+
 test('smoke that slides out from under the umbrella rises again', () => {
     const smoke = make({ ceiling: roof, source: () => ({ x: 55, y: 250 }) });
     smoke.warm(LIFE * 1.5);
