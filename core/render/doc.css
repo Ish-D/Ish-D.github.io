@@ -33,6 +33,8 @@ body {
 }
 
 ::selection { background: var(--color-selection); }
+/* a page that shows a drawing carrying the spot colour selects its text in that colour */
+html:has([data-spot]) ::selection { background: var(--color-spot-selection); }
 
 .doc {
     position: relative;

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { makeScores, softmax, entropy } from '../../core/figures/softmax-scale.js';
 import { scale, seeded } from '../../core/runtime/svg.js';
 import { pixelsPerStep } from '../../core/runtime/scrub.js';
+import { defineFigure, figureSpot } from '../../core/runtime/figures.js';
 
 test('softmax sums to one and is order preserving', () => {
     const p = softmax([1, 2, 3, 1000]);
@@ -62,4 +63,12 @@ test('pixelsPerStep keeps a full sweep to a few hundred pixels', () => {
     assert.ok(pixelsPerStep({ min: 0, max: 100, step: 1 }) * 100 <= 400);
     assert.equal(pixelsPerStep({ min: 0, max: 4, step: 1 }), 10);
     assert.equal(pixelsPerStep({ min: 0, max: 10000, step: 1 }), 2);
+});
+
+test('a figure can say it carries the spot colour', () => {
+    defineFigure('spot-test', () => null, { spot: true });
+    defineFigure('plain-test', () => null);
+    assert.equal(figureSpot('spot-test'), true);
+    assert.equal(figureSpot('plain-test'), false);
+    assert.equal(figureSpot('unknown'), false);
 });

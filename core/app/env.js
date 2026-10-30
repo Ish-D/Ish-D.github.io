@@ -6,7 +6,7 @@
 import { english } from '../text/hyphenate.js';
 import { titleScaleFor } from '../layout/style.js';
 import { formatNumber } from '../runtime/store.js';
-import { hasFigure, figureOnPaper } from '../runtime/figures.js';
+import { hasFigure, figureOnPaper, figureSpot } from '../runtime/figures.js';
 import { assetUrl, displayUrl, imageSrc, hasDrawingSource, drawingUrl, pageUrl } from './urls.js';
 import { macroBlocks } from './page-lists.js';
 
@@ -87,6 +87,7 @@ export function createEnv(app) {
             formatVar: varText,
             liveMath,
             isFigure: hasFigure,
+            figureSpot,
             drawing: (src) => drawings.get(assetUrl(src)) ?? null,
         };
     }

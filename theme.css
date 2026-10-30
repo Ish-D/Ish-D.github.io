@@ -26,8 +26,9 @@
     --color-selection: rgba(0, 0, 0, 0.1);  /* Text selection highlight */
     --color-error: #c41e3a;                /* Error/validation color */
 
-    /* The one spot of colour a drawing may carry */
+    /* The one spot of colour a drawing may carry, and text selected on a page that has one */
     --color-figure-spot: #c7323f;
+    --color-spot-selection: color-mix(in srgb, var(--color-figure-spot) 30%, transparent);
 
     /* Fold effect colors */
     --fold-gradient-start: #a8a5a0;
@@ -167,6 +168,7 @@
 
     /* A drawing's spot of colour, lighter so it holds on the dark ground */
     --color-figure-spot: #e04c58;
+    --color-spot-selection: color-mix(in srgb, var(--color-figure-spot) 38%, transparent);
 
     /* Code background */
     --code-background: #252525;

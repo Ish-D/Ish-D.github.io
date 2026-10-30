@@ -68,6 +68,7 @@ export function sanitizeCss(css) {
  * @property {(name: string) => string} [formatVar]   current text of an article variable
  * @property {(el: HTMLElement, tex: string, display: boolean) => void} [liveMath]   keeps math with \val{} in step with the variables
  * @property {(type: string) => boolean} [isFigure]
+ * @property {(type: string) => boolean} [figureSpot]   whether a figure carries the spot colour, which the page's selection takes
  * @property {(path: string) => string} [fullAsset]   the original of an image whose displayed copy is a web-sized variant
  * @property {(src: string) => { markup: string } | null} [drawing]   themed SVG markup for a drawing file
  * @property {boolean} [eager]   images load now, whether or not they are near the screen (paper)
@@ -581,6 +582,7 @@ function renderObject(env, item, ox, oy) {
         }
         body.setAttribute('data-viz-type', argValue(item.node, 'type') ?? '');
         if (env.ctx.isFigure?.(argValue(item.node, 'type'))) body.dataset.figure = argValue(item.node, 'type');
+        if (env.ctx.figureSpot?.(argValue(item.node, 'type'))) body.dataset.spot = '';
         env.ctx.persist?.set(persistKey, body);
     }
     if (argValue(item.node, 'clip') !== 'none') {

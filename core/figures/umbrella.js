@@ -268,4 +268,4 @@ defineFigure('umbrella', (ctx) => {
         },
         dispose() { offResize(); offTheme(); },
     };
-});
+}, { spot: true });

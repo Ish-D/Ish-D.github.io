@@ -13,15 +13,22 @@ import { themeColors } from './svg.js';
 
 const registry = new Map();
 const onPaper = new Map();
+const spotted = new Set();
 
-/** `options.paper: false` keeps a figure off paper, for one that is only there to look at on screen. */
+/**
+ * `options.paper: false` keeps a figure off paper, for one that is only there to look at on screen.
+ * `options.spot: true` says the figure carries the drawing's spot colour (`--color-figure-spot`); a page that shows one
+ * takes that colour for its text selection.
+ */
 export function defineFigure(name, factory, options = {}) {
     registry.set(name, factory);
     onPaper.set(name, options.paper !== false);
+    if (options.spot) spotted.add(name); else spotted.delete(name);
 }
 
 export const hasFigure = (name) => registry.has(name);
 export const figureOnPaper = (name) => onPaper.get(name) !== false;
+export const figureSpot = (name) => spotted.has(name);
 export const figureNames = () => [...registry.keys()];
 
 function paramsOf(el) {
