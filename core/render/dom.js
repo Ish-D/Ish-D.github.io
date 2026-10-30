@@ -582,7 +582,8 @@ function renderObject(env, item, ox, oy) {
         }
         body.setAttribute('data-viz-type', argValue(item.node, 'type') ?? '');
         if (env.ctx.isFigure?.(argValue(item.node, 'type'))) body.dataset.figure = argValue(item.node, 'type');
-        if (env.ctx.figureSpot?.(argValue(item.node, 'type'))) body.dataset.spot = '';
+        // named, so the theme can give one drawing its own colour
+        if (env.ctx.figureSpot?.(argValue(item.node, 'type'))) body.dataset.spot = argValue(item.node, 'type');
         env.ctx.persist?.set(persistKey, body);
     }
     if (argValue(item.node, 'clip') !== 'none') {

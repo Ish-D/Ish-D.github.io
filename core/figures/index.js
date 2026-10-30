@@ -2,3 +2,4 @@
 import './softmax-scale.js';
 import './scatter.js';
 import './umbrella.js';
+import './october.js';

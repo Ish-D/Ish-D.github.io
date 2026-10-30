@@ -195,13 +195,13 @@ test('viz objects expose their data attributes and persist across renders', () =
     assert.equal(b.querySelector('.viz-container'), body1, 'the same element is reused');
 });
 
-test('a figure that carries the spot colour marks its element, so the page selects text in that colour', () => {
+test('a figure that carries the spot colour marks its element with its name, so the page selects text in its colour', () => {
     const doc = parseText('[[viz(type: umbrella, height: 270, width: 200)]]\n\n[[viz(type: neuron-approx, height: 200, width: 300)]]');
     const layout = layoutDocument(doc, makeEnv(1280, { hyphenator }));
     const ctx = { document, measurer, math, persist: new Map(), isFigure: () => true, figureSpot: (type) => type === 'umbrella' };
     const el = renderLayout(document.createElement('div'), layout, ctx);
     const [umbrella, other] = el.querySelectorAll('.viz-container');
-    assert.equal(umbrella.dataset.spot, '');
+    assert.equal(umbrella.dataset.spot, 'umbrella');
     assert.equal(other.dataset.spot, undefined);
 });
 

@@ -145,6 +145,10 @@
     --preview-linger: 750ms;       /* How long preview stays after mouse leaves link */
 }
 
+/* A drawing with a colour of its own, by its figure's name: the page with it paints and selects in that colour */
+html:has([data-spot="october"]) { --color-figure-spot: #d8b450; }
+html[data-theme="dark"]:has([data-spot="october"]) { --color-figure-spot: #e6c766; }
+
 /* ============================================
    Dark Mode Theme
    ============================================ */

@@ -14,21 +14,27 @@ import { themeColors } from './svg.js';
 const registry = new Map();
 const onPaper = new Map();
 const spotted = new Set();
+const covers = new Map();
 
 /**
  * `options.paper: false` keeps a figure off paper, for one that is only there to look at on screen.
  * `options.spot: true` says the figure carries the drawing's spot colour (`--color-figure-spot`); a page that shows one
- * takes that colour for its text selection.
+ * takes that colour for its text selection. A drawing with a colour of its own sets it in theme.css by its name.
+ * `options.cover: { room: [x, y], aspect }` lets the figure stand beside a cover page's type (`place: cover`): `room` is
+ * the empty corner at its top left, as shares of its width and height, where the type goes, and `aspect` its width over
+ * its height.
  */
 export function defineFigure(name, factory, options = {}) {
     registry.set(name, factory);
     onPaper.set(name, options.paper !== false);
     if (options.spot) spotted.add(name); else spotted.delete(name);
+    if (options.cover) covers.set(name, options.cover); else covers.delete(name);
 }
 
 export const hasFigure = (name) => registry.has(name);
 export const figureOnPaper = (name) => onPaper.get(name) !== false;
 export const figureSpot = (name) => spotted.has(name);
+export const figureCover = (name) => covers.get(name) ?? null;
 export const figureNames = () => [...registry.keys()];
 
 function paramsOf(el) {

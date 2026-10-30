@@ -746,6 +746,13 @@ function flowObject(scope, node) {
     const p = paramsOf(node);
     if (env.print && env.objects?.onPaper?.(node) === false) return;
     const place = parsePlace(p.place ?? (node.name === 'gallery' ? 'block' : 'block'));
+    if (place.kind === 'cover') {
+        // a cover's drawing stands with its type once the type is set (layout/document.js); on paper it leads the page
+        const spec = env.objects?.cover?.(node) ?? null;
+        if (spec && env.cover && !env.cover.node) { env.cover.node = node; return; }
+        place.kind = 'block';
+        if (spec && p.aspect === undefined) p.aspect = String(spec.aspect);
+    }
     if (place.kind === 'margin') {
         const strip = env.print ? null : marginStrip(env, place.side);
         if (strip) { flowMarginObject(scope, node, p, strip, place.side); return; }

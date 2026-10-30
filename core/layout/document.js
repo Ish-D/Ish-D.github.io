@@ -8,7 +8,7 @@
  * set of inline notes stops changing.
  */
 
-import { createStyles } from './style.js';
+import { createStyles, coverScalesFor } from './style.js';
 import { createScope, flowBlocks, argOf, positionalArg } from './flow.js';
 import { solveMargins } from './margins.js';
 import { flowAutoBibliography } from './generated.js';
@@ -80,23 +80,13 @@ export function pageGeometry(env) {
 }
 
 export function layoutDocument(doc, env) {
-    const styles = createStyles(env.settings);
+    // a cover page (the home page) sets its title and the headings under it large, its drawing stands with them, and the
+    // whole of it fits the first screen
+    const cover = !env.print && doc.frontmatter?.entries?.cover?.value === 'true';
+    const styles = createStyles({ ...env.settings, cover: cover ? coverScalesFor(env.width) : null });
     const geom = pageGeometry(env);
     env = { ...env, refs: collectReferences(doc), outline: collectOutline(doc), doc };
-    const diagnostics = [];
-    let breakIn = new Set(env.inlineNotes ?? []);
-    let scope;
-    let notes = { placed: [], inline: new Set() };
-
-    for (let pass = 0; pass < 4; pass++) {
-        scope = flowPass(doc, env, styles, geom, diagnostics, breakIn);
-        if (geom.narrow || env.print) break;
-        notes = placeNotes(scope, env, styles, geom);
-        const sameSize = notes.inline.size === breakIn.size && [...notes.inline].every(n => breakIn.has(n));
-        if (sameSize) break;
-        breakIn = new Set([...breakIn, ...notes.inline]);
-        diagnostics.length = 0;
-    }
+    const { scope, notes, diagnostics } = passes(doc, env, styles, geom);
 
     const items = [...scope.out];
     let bottom = scope.y;
@@ -106,7 +96,7 @@ export function layoutDocument(doc, env) {
 
     return {
         width: env.width,
-        height: bottom + PAGE.bottomPad,
+        height: bottom + (cover ? COVER_FIT.bottom : PAGE.bottomPad),
         geometry: geom,
         styles,
         blocks: items,
@@ -134,6 +124,25 @@ function sheetNotes(scope, env, styles, geom) {
     };
 }
 
+/** Flows the page and places its margin notes, again while the notes that have to go inline keep changing. */
+function passes(doc, env, styles, geom) {
+    const diagnostics = [];
+    let breakIn = new Set(env.inlineNotes ?? []);
+    let scope;
+    let notes = { placed: [], inline: new Set() };
+
+    for (let pass = 0; pass < 4; pass++) {
+        scope = flowPass(doc, env, styles, geom, diagnostics, breakIn);
+        if (geom.narrow || env.print) break;
+        notes = placeNotes(scope, env, styles, geom);
+        const sameSize = notes.inline.size === breakIn.size && [...notes.inline].every(n => breakIn.has(n));
+        if (sameSize) break;
+        breakIn = new Set([...breakIn, ...notes.inline]);
+        diagnostics.length = 0;
+    }
+    return { scope, notes, diagnostics };
+}
+
 function flowPass(doc, env, styles, geom, diagnostics, breakIn) {
     const passEnv = {
         ...env,
@@ -143,6 +152,8 @@ function flowPass(doc, env, styles, geom, diagnostics, breakIn) {
         diagnostics,
         breakIn,
         inlineAllNotes: geom.narrow,
+        // a drawing placed `cover` waits here until the type is set; on paper it is set where it stands
+        cover: env.print ? null : { node: null },
     };
     const scope = createScope(passEnv, {
         x: geom.text.x, width: geom.text.width, y: PAGE.topPad, styles,
@@ -150,7 +161,52 @@ function flowPass(doc, env, styles, geom, diagnostics, breakIn) {
     scope.maxY = scope.y;
     flowBlocks(scope, doc.children, true);
     flowAutoBibliography(scope, doc);
+    if (passEnv.cover?.node) standCover(scope, passEnv, styles, geom);
     return scope;
+}
+
+/**
+ * How a cover's drawing fits with its type: the gap between them, the least width it may stand beside the type at and
+ * the least it may have at all, in em, and how near the foot of the first screen it may come, in px.
+ */
+export const COVER_FIT = Object.freeze({ gap: 1, beside: 16, min: 8, bottom: 16 });
+
+/**
+ * Stands a cover's drawing with the type already set, inside the text column and on the first screen, so the page does
+ * not scroll: beside the type, with the type in the empty corner at the drawing's top left (its `room`), as large as the
+ * column and the screen allow; where that would leave it too small, under the type in the middle of the column, as large
+ * as what is left of the screen allows.
+ */
+function standCover(scope, env, styles, geom) {
+    const node = env.cover.node;
+    const { room: [rx, ry], aspect } = env.objects.cover(node);
+    const em = styles.size;
+    // where the type ends: the right of its widest line and the foot of its last
+    const type = { right: 0, bottom: 0 };
+    for (const item of scope.out) {
+        if (item.type !== 'heading' && item.type !== 'paragraph') continue;
+        for (const line of item.lines) if (!line.overflow) type.right = Math.max(type.right, line.x + line.hung.left + line.natural);
+        type.bottom = Math.max(type.bottom, item.bottom);
+    }
+    const need = { x: type.right + COVER_FIT.gap * em, y: type.bottom + COVER_FIT.gap * em };
+    const left = geom.text.x;
+    const right = geom.text.x + geom.text.width;
+    const top = PAGE.topPad;
+    const screen = (env.viewportHeight ?? 800) - COVER_FIT.bottom;
+    const beside = (width) => {
+        const height = width / aspect;
+        return { x: Math.max(left, need.x - rx * width), y: Math.max(top, need.y - ry * height), width, height };
+    };
+    let rect = beside(Math.min((right - need.x) / (1 - rx), right - left, (screen - top) * aspect));
+    // standing low, it may still run past the first screen: then it shrinks until its foot is on it
+    if (rect.y + rect.height > screen) rect = beside(Math.min(rect.width, ((screen - need.y) / (1 - ry)) * aspect));
+    if (!(rect.width >= COVER_FIT.beside * em) || rect.y + rect.height > screen + 0.5) {
+        const height = Math.max(screen - need.y, (COVER_FIT.min * em) / aspect);
+        const width = Math.min(right - left, height * aspect);
+        rect = { x: left + (right - left - width) / 2, y: need.y, width, height: width / aspect };
+    }
+    scope.out.unshift({ type: 'object', node, name: node.name, rect, place: { kind: 'cover' }, wrap: { kind: 'none', args: [] }, layer: 'over', caption: null, em });
+    scope.maxY = Math.max(scope.maxY ?? 0, rect.y + rect.height);
 }
 
 function bottomOf(item) {

@@ -1,8 +1,9 @@
 ---
 name: ish
+cover: true
 ---
 
-[[viz(type: umbrella, place: margin-left, width: 200, height: 270)]]
+[[viz(type: october, place: cover)]]
 
 # ish
 

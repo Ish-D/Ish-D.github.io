@@ -4,7 +4,7 @@
  * `place` says where an object goes, `wrap` says what text does around it:
  *
  *   place: inline | block | left | right | center | gutter | span | full
- *        | margin-left | margin-right | margin-top | margin-bottom | at(x, y)
+ *        | margin-left | margin-right | margin-top | margin-bottom | at(x, y) | cover
  *   wrap:  none | box | circle | ellipse | polygon(x y, ...) | contour
  */
 
@@ -13,7 +13,7 @@ import * as geometry from './geometry.js';
 
 /**
  * @typedef {Object} PlaceSpec
- * @property {'inline' | 'block' | 'left' | 'right' | 'center' | 'gutter' | 'span' | 'full' | 'margin' | 'at'} kind
+ * @property {'inline' | 'block' | 'left' | 'right' | 'center' | 'gutter' | 'span' | 'full' | 'margin' | 'at' | 'cover'} kind
  * @property {'left' | 'right' | 'top' | 'bottom'} [side]       margin placements
  * @property {import('./values.js').Value[]} [at]                 at(x, y) arguments
  */
@@ -24,7 +24,7 @@ import * as geometry from './geometry.js';
  * @property {import('./values.js').Value[]} args
  */
 
-const PLACE_KEYWORDS = new Set(['inline', 'block', 'left', 'right', 'center', 'gutter', 'span', 'full']);
+const PLACE_KEYWORDS = new Set(['inline', 'block', 'left', 'right', 'center', 'gutter', 'span', 'full', 'cover']);
 const WRAP_KEYWORDS = new Set(['none', 'box', 'circle', 'ellipse', 'contour']);
 
 /** @returns {PlaceSpec} unknown input falls back to a plain block */

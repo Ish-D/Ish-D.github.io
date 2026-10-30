@@ -757,6 +757,10 @@ body.editing .obj { cursor: pointer; }
 .token.keyword, .token.function, .token.class-name, .token.builtin { font-weight: bold; }
 .token.string, .token.char, .token.number { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-thickness: 1px; }
 
+/* october figure: roofs, a moon and crows in one drawing standing on the bottom of its rectangle */
+.viz-container[data-figure="october"] { margin: 0; }
+.october-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
 /* umbrella figure: a drawing and a canvas of rain laid over each other, in the ink of the page, clipped to the figure's rectangle */
 .viz-container[data-figure="umbrella"] { margin: 0; overflow: hidden; }
 .umbrella-svg, .umbrella-rain { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
@@ -778,6 +782,8 @@ body.editing .obj { cursor: pointer; }
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
 }
+/* a drawing with a colour of its own keeps it on paper (see theme.css) */
+.paper [data-spot="october"] { --color-figure-spot: #d8b450; }
 .print-root { display: none; }
 
 .sheet { position: relative; overflow: hidden; background: #fff; }

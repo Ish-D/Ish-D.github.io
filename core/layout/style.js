@@ -12,6 +12,7 @@
  * @property {number} [lineHeight]        multiple of fontSize, default 1.4
  * @property {number} [titleScale]        page title size as a multiple of fontSize, default TITLE.desktop
  * @property {'left' | 'center'} [titleAlign]   where the title block sits in the column, default 'left'
+ * @property {{ title: number, heading: number } | null} [cover]   a cover page: its title and the headings under it at these multiples of fontSize, set left
  * @property {string} [family]
  * @property {string} [monoFamily]
  */
@@ -19,10 +20,24 @@
 /** The page title is `phone` times the body size up to `from` px of window, `desktop` times from `to` px, and grows between. */
 export const TITLE = Object.freeze({ phone: 2, desktop: 2.8, from: 400, to: 1100 });
 
+/** How far a window `viewportWidth` px wide is from a phone (0) to a desktop (1), for type that grows with the window. */
+const windowShare = (viewportWidth) => Math.min(1, Math.max(0, (viewportWidth - TITLE.from) / (TITLE.to - TITLE.from)));
+
 /** Title size, as a multiple of the body size, for a window `viewportWidth` px wide. */
 export function titleScaleFor(viewportWidth) {
-    const t = Math.min(1, Math.max(0, (viewportWidth - TITLE.from) / (TITLE.to - TITLE.from)));
-    return TITLE.phone + (TITLE.desktop - TITLE.phone) * t;
+    return TITLE.phone + (TITLE.desktop - TITLE.phone) * windowShare(viewportWidth);
+}
+
+/** A cover page (the home page) sets its title and the headings under it large, growing with the window as a title does. */
+export const COVER = Object.freeze({ title: Object.freeze({ phone: 3, desktop: 5 }), heading: Object.freeze({ phone: 1.4, desktop: 2 }) });
+
+/** Cover sizes, as multiples of the body size, for a window `viewportWidth` px wide. */
+export function coverScalesFor(viewportWidth) {
+    const t = windowShare(viewportWidth);
+    return {
+        title: COVER.title.phone + (COVER.title.desktop - COVER.title.phone) * t,
+        heading: COVER.heading.phone + (COVER.heading.desktop - COVER.heading.phone) * t,
+    };
 }
 
 /** The least width, in em, of text beside a floated figure or contents box; with less room it sits on its own line. */
@@ -36,8 +51,10 @@ export function createStyles(settings = {}) {
     /** A height in px as a whole number of lines, at least one, so blocks sit on the grid of lines. */
     const lines = (px) => Math.max(1, Math.round(px / lineHeight)) * lineHeight;
     const noteSize = size * 0.85;
-    const titleScale = settings.titleScale ?? TITLE.desktop;
-    const titleAlign = settings.titleAlign ?? 'left';
+    const cover = settings.cover ?? null;
+    const titleScale = cover?.title ?? settings.titleScale ?? TITLE.desktop;
+    // a drawing stands beside a cover's type, so the type keeps to the left
+    const titleAlign = cover ? 'left' : settings.titleAlign ?? 'left';
 
     const text = (extra = {}, scale = 1) => ({ family, size: size * scale, ...extra });
 
@@ -46,6 +63,7 @@ export function createStyles(settings = {}) {
         lineHeight,
         family,
         titleAlign,
+        cover: !!cover,
 
         body: text(),
         emph: text({ style: 'italic' }),
@@ -64,7 +82,9 @@ export function createStyles(settings = {}) {
 
         heading: {
             1: { font: text({}, titleScale), lineHeight: lines(size * titleScale * 1.1), align: titleAlign, before: 0, after: lineHeight },
-            2: { font: text({}, 1.6), lineHeight: 2 * lineHeight, align: 'left', before: 0, after: 0 },
+            2: cover
+                ? { font: text({}, cover.heading), lineHeight: lines(size * cover.heading * 1.6), align: 'left', before: 0, after: 0 }
+                : { font: text({}, 1.6), lineHeight: 2 * lineHeight, align: 'left', before: 0, after: 0 },
             3: { font: text({ caps: true, tracking: 0.1 }, 0.8), lineHeight, align: 'left', before: 0, after: 0 },
             4: { font: text({ style: 'italic' }, 1), lineHeight, align: 'left', before: 0, after: 0 },
             5: { font: text({ style: 'italic' }, 0.9), lineHeight, align: 'left', before: 0, after: 0 },

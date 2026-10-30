@@ -6,7 +6,7 @@
 import { english } from '../text/hyphenate.js';
 import { titleScaleFor } from '../layout/style.js';
 import { formatNumber } from '../runtime/store.js';
-import { hasFigure, figureOnPaper, figureSpot } from '../runtime/figures.js';
+import { hasFigure, figureOnPaper, figureSpot, figureCover } from '../runtime/figures.js';
 import { assetUrl, displayUrl, imageSrc, hasDrawingSource, drawingUrl, pageUrl } from './urls.js';
 import { macroBlocks } from './page-lists.js';
 
@@ -67,6 +67,7 @@ export function createEnv(app) {
                 },
                 mask: () => null,
                 onPaper: (node) => !(node.name === 'viz' || node.name === 'figure') || figureOnPaper(node.args?.items.find(a => a.key === 'type')?.value),
+                cover: (node) => (node.name === 'viz' ? figureCover(node.args?.items.find(a => a.key === 'type')?.value) : null),
             },
             generate: (node) => macroBlocks(state.manifest, node),
         };
