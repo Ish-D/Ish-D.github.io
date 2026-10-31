@@ -2,7 +2,9 @@
  * October: a street of old houses on Halloween night under a crescent moon, with crows over the roofs. The crows fly in
  * place, each at its own pace, now and then holding their wings out to glide, and one sits on the moon's lower tip,
  * looking about and now and then cawing. The drawing's one colour, a yellow, is the moon and what is lit in the street:
- * the jack-o'-lanterns by the doors, the street lamp, an open door; everything else is the ink of the page.
+ * the jack-o'-lanterns by the doors, the street lamp, an open door; everything else is the ink of the page. Beside a
+ * cover's type on a phone, where the type takes half the sky, three of the crows fly right of the moon instead, and one
+ * more flies beside the type's short top lines.
  *
  *   [[viz(type: october, width: 450, height: 360)]]
  *   [[viz(type: october, place: cover)]]   beside the type of a cover page
@@ -22,15 +24,35 @@ export const BODY = 220;
 const LINE = 2.1;
 /** The pen in a flier's own px, which it is scaled from, so the lines between its feathers read on the largest crows. */
 const FLIER_LINE = 4;
-/**
- * The empty corner at the drawing's top left, as shares of its width and height, where a cover's type goes: left of the
- * furthest any crow reaches (see the test), and down to just above the roofs there.
- */
-const ROOM_X = 0.25;
 // every point of the roofs' paths counts, their curves' handles too, and the thin lines standing on them
-const roofHandles = (ROOFS.match(/-?\d+(\.\d+)?/g) ?? []).map(Number).reduce((out, v, i, all) => (i % 2 ? out : [...out, [v, all[i + 1]]]), []);
-const roomFoot = Math.min(...[...roofHandles, ...ROOF_INK.flatMap(l => l.pts)].filter(([x]) => x < VIEW.x + ROOM_X * VIEW.width).map(p => p[1])) - 4;
-export const ROOM = Object.freeze([ROOM_X, (roomFoot - VIEW.y) / VIEW.height]);
+const roofPoints = [
+    ...(ROOFS.match(/-?\d+(\.\d+)?/g) ?? []).map(Number).reduce((out, v, i, all) => (i % 2 ? out : [...out, [v, all[i + 1]]]), []),
+    ...ROOF_INK.flatMap(l => l.pts),
+];
+/** A corner `x` wide at the drawing's top left, as shares of its width and height, down to just above the roofs there. */
+const corner = (x) => Object.freeze([x, (Math.min(...roofPoints.filter(([px]) => px < VIEW.x + x * VIEW.width).map(p => p[1])) - 4 - VIEW.y) / VIEW.height]);
+/**
+ * The empty corners at the drawing's top left where a cover's type can stand, each in steps from the top down (so wide,
+ * down to so far): a quarter of its width as drawn, left of the furthest any crow reaches; and for a phone, where the
+ * type is wide against the drawing, half of it with three crows moved right of the moon, first narrower beside the
+ * type's short top lines, where one more crow flies, then plain for type that doesn't fit that (`ARRANGEMENTS`). See the
+ * test.
+ */
+export const ROOMS = Object.freeze([
+    Object.freeze([corner(0.25)]),
+    Object.freeze([Object.freeze([0.34, 0.28]), corner(0.5)]),
+    Object.freeze([corner(0.5)]),
+]);
+/** The crow that flies only with the type in the phone's narrower corner: right of its short top lines, left of the moon. */
+const EXTRA = Object.freeze({ x: 766, y: 179, size: 0.28 });
+/** Where the six fliers and the extra crow are with the type in each of ROOMS: as drawn, or three above, beside and below the moon; null where one isn't. */
+const MOVED = { 0: [944, -82], 2: [1210, -104], 4: [903, 418] };
+const PHONE = FLIERS.map((f, i) => (MOVED[i] ? { ...f, x: MOVED[i][0], y: MOVED[i][1] } : f));
+export const ARRANGEMENTS = Object.freeze([
+    Object.freeze([...FLIERS, null]),
+    Object.freeze([...PHONE, EXTRA]),
+    Object.freeze([...PHONE, null]),
+]);
 
 /** Lines of the street for the pen, each drawn down or left to right and as heavy as klein drew it: the thin black ones and the white ones cut into the black. */
 const strokes = (lines) => lines.map(({ pts, ends, w }) => ({ c: through(pts), kind: 'detail', ends, w }));
@@ -66,15 +88,19 @@ function chainOf(d) {
  */
 export function createFlock(seed = 10) {
     const rand = seeded(seed);
-    const crows = FLIERS.map((f) => ({
+    const crowAt = (f) => ({
         ...f,
         phase: rand(),
         period: BEAT * (0.8 + rand() * 0.45),
         drift: { ax: 0.05 + rand() * 0.05, ay: 0.03 + rand() * 0.03, px: 5 + rand() * 4, py: 4 + rand() * 4, ox: rand() * 6.3, oy: rand() * 6.3 },
         glideIn: 4 + rand() * 10,
         gliding: 0,
-    }));
+        away: false,
+    });
+    const crows = FLIERS.map(crowAt);
     const perched = { pose: 0, at: 0, next: 3 + rand() * 4, cawIn: 9 + rand() * 9, steps: [] };
+    // the extra crow flies only with the type in the phone's narrower corner
+    crows.push({ ...crowAt(EXTRA), away: true });
     let clock = 0;
 
     const pose = (c) => (c.gliding > 0 ? 2 : Math.floor(c.phase * 6) % 6);
@@ -137,6 +163,13 @@ export function createFlock(seed = 10) {
             crows.forEach(c => stepCrow(c, dt));
             stepPerched(dt);
         },
+        /** Moves each crow to its place in one of ARRANGEMENTS, where it is in its wingbeat kept; one with no place is away. */
+        arrange(places) {
+            crows.forEach((c, i) => {
+                c.away = !places[i];
+                if (places[i]) [c.x, c.y] = [places[i].x, places[i].y];
+            });
+        },
     };
 }
 
@@ -173,6 +206,16 @@ defineFigure('october', (ctx) => {
         g.lastChild.setAttribute('d', pose.lines);
     };
     const flock = createFlock();
+    // the crows keep out of the corner the cover's layout left for the type
+    let arrangement = -1;
+    const arrange = (room) => {
+        const a = Number.isInteger(room) && ARRANGEMENTS[room] ? room : 0;
+        if (a === arrangement) return false;
+        arrangement = a;
+        flock.arrange(ARRANGEMENTS[a]);
+        return true;
+    };
+    arrange(ctx.room?.());
     const perch = crow(perchPoses[0]);
     const fliers = flock.crows.map(() => crow(wingbeat[0]));
     svg.append(perch, ...fliers);
@@ -182,13 +225,19 @@ defineFigure('october', (ctx) => {
 
     function draw() {
         flock.crows.forEach((c, i) => {
+            const g = fliers[i];
+            if (c.away) {
+                g.remove();
+                return;
+            }
+            if (!g.parentNode) svg.append(g);
             const pose = flock.pose(c);
             if (pose !== shown[i]) {
-                show(fliers[i], wingbeat[pose]);
+                show(g, wingbeat[pose]);
                 shown[i] = pose;
             }
             const { x, y } = flock.place(c);
-            fliers[i].setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${c.size})`);
+            g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${c.size})`);
         });
         if (flock.perched.pose !== perchShown) {
             perchShown = flock.perched.pose;
@@ -197,6 +246,7 @@ defineFigure('october', (ctx) => {
     }
 
     createLoop({ el: host, document, signal, tick: (dt) => { flock.advance(dt); draw(); } });
+    ctx.onRoom?.((room) => { if (arrange(room)) draw(); });
     draw();
 
     return {
@@ -206,4 +256,4 @@ defineFigure('october', (ctx) => {
             draw();
         },
     };
-}, { spot: true, cover: { room: ROOM, aspect: VIEW.width / VIEW.height } });
+}, { spot: true, cover: { rooms: ROOMS, aspect: VIEW.width / VIEW.height } });

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { makeScores, softmax, entropy } from '../../core/figures/softmax-scale.js';
 import { scale, seeded } from '../../core/runtime/svg.js';
 import { pixelsPerStep } from '../../core/runtime/scrub.js';
-import { defineFigure, figureSpot } from '../../core/runtime/figures.js';
+import { defineFigure, figureSpot, mountFigures } from '../../core/runtime/figures.js';
+import { createDocument } from '../render/fakedom.js';
 
 test('softmax sums to one and is order preserving', () => {
     const p = softmax([1, 2, 3, 1000]);
@@ -71,4 +72,19 @@ test('a figure can say it carries the spot colour', () => {
     assert.equal(figureSpot('spot-test'), true);
     assert.equal(figureSpot('plain-test'), false);
     assert.equal(figureSpot('unknown'), false);
+});
+
+test('a figure reads which of its corners a cover\'s layout left for its type, and null when there is none', () => {
+    const document = createDocument();
+    const seen = [];
+    defineFigure('room-test', (ctx) => { seen.push(ctx.room()); });
+    const root = document.createElement('div');
+    for (const room of ['1', '0', undefined]) {
+        const el = document.createElement('div');
+        el.dataset.figure = 'room-test';
+        if (room) el.dataset.room = room;
+        root.appendChild(el);
+    }
+    mountFigures(root, { document, store: null, eager: true });
+    assert.deepEqual(seen, [1, 0, null]);
 });

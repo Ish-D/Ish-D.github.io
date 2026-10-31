@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { layoutDocument } from '../../core/layout/document.js';
 import { renderLayout, selectionText, sanitizeCss } from '../../core/render/dom.js';
 import { createDocument } from './fakedom.js';
-import { makeEnv, parseCard, parseText, hyphenator, measurer } from '../layout/fixtures.js';
+import { makeEnv, parseCard, parseText, hyphenator, measurer, objects } from '../layout/fixtures.js';
 
 const document = createDocument();
 const math = (tex) => ({ html: `<span class="katex">${tex}</span>`, width: tex.length * 5, height: 24, ascent: 18, descent: 6 });
@@ -203,6 +203,22 @@ test('a figure that carries the spot colour marks its element with its name, so 
     const [umbrella, other] = el.querySelectorAll('.viz-container');
     assert.equal(umbrella.dataset.spot, 'umbrella');
     assert.equal(other.dataset.spot, undefined);
+});
+
+test('a cover\'s drawing is told on every render which corner its type stands in, or that it has none', () => {
+    const links = ['about', 'writing', 'photography', 'tags'].map(n => `## [[link(${n}, display: "${n}")]]\n\n`).join('');
+    const page = parseText(`---\nname: ish\ncover: true\n---\n\n[[viz(type: october, place: cover)]]\n\n# ish\n\n${links}`);
+    const cover = () => ({ rooms: [[[0.25, 0.6]], [[0.5, 0.57]]], aspect: 0.65 });
+    const lay = (width, height) => layoutDocument(page, makeEnv(width, { hyphenator, settings: { fontSize: 18 }, viewportHeight: height, objects: { ...objects, cover } }));
+    const ctx = { document, measurer, math, persist: new Map(), isFigure: () => true };
+    const beside = lay(390, 844);
+    const body = renderLayout(document.createElement('div'), beside, ctx).querySelector('.viz-container');
+    assert.equal(body.dataset.room, String(beside.blocks.find(b => b.type === 'object').room));
+    // under the type on a narrower phone, the same element
+    const under = lay(320, 640);
+    assert.equal(under.blocks.find(b => b.type === 'object').room, null);
+    assert.equal(renderLayout(document.createElement('div'), under, ctx).querySelector('.viz-container'), body);
+    assert.equal(body.dataset.room, undefined);
 });
 
 test('drop caps and bullets and rules render', () => {

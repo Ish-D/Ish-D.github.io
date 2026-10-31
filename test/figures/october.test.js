@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFlock, roofInk, roofPaper, BODY, ROOM } from '../../core/figures/october.js';
+import { createFlock, roofInk, roofPaper, BODY, ROOMS, ARRANGEMENTS } from '../../core/figures/october.js';
 import { VIEW, ROOFS, ROOF_INK, ROOF_PAPER, LIT, MOON, PERCHED, WINGBEAT, FLIERS } from '../../core/figures/october-drawing.js';
 import { figureSpot, figureCover } from '../../core/runtime/figures.js';
 
@@ -82,17 +82,61 @@ test('october carries a spot colour of its own', () => {
     assert.equal(figureSpot('october'), true);
 });
 
-test('the corner it leaves for a cover\'s type stays empty: no crow ever reaches into it, and the roofs are below it', () => {
-    const right = VIEW.x + ROOM[0] * VIEW.width;
-    const bottom = VIEW.y + ROOM[1] * VIEW.height;
+/** How far each crow reaches over two minutes, in the drawing's px, with the crows at `places`; null for one that is away. */
+function reaches(places) {
     const poses = WINGBEAT.map(p => box(pairs(p.shape)));
     const flock = createFlock();
-    run(flock, 120, () => flock.crows.forEach((c) => {
+    flock.arrange(places);
+    const out = flock.crows.map(() => ({ x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }));
+    run(flock, 120, () => flock.crows.forEach((c, i) => {
         const at = flock.place(c);
         const b = poses[flock.pose(c)];
-        assert.ok(at.x + b.x0 * c.size >= right || at.y + b.y0 * c.size >= bottom, 'a crow flies into the corner');
+        const r = out[i];
+        r.x0 = Math.min(r.x0, at.x + b.x0 * c.size); r.x1 = Math.max(r.x1, at.x + b.x1 * c.size);
+        r.y0 = Math.min(r.y0, at.y + b.y0 * c.size); r.y1 = Math.max(r.y1, at.y + b.y1 * c.size);
     }));
-    for (const [x, y] of [...pairs(ROOFS), ...ROOF_INK.flatMap(l => l.pts)]) assert.ok(x >= right || y >= bottom, `the roofs reach into the corner at ${x}, ${y}`);
-    for (const d of [MOON, ...PERCHED.map(p => p.shape)]) assert.ok(box(pairs(d)).x0 >= right);
-    assert.deepEqual(figureCover('october'), { room: ROOM, aspect: VIEW.width / VIEW.height });
+    return out.map((r, i) => (places[i] ? r : null));
+}
+
+/** A room's steps as boxes in the drawing's px, each from the left edge. */
+function stepsOf(room) {
+    let from = VIEW.y;
+    return room.map(([x, y]) => {
+        const step = { x0: -Infinity, x1: VIEW.x + x * VIEW.width, y0: from, y1: VIEW.y + y * VIEW.height };
+        from = step.y1;
+        return step;
+    });
+}
+const meets = (a, b) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+ROOMS.forEach((room, i) => {
+    const steps = stepsOf(room);
+    const name = room.map(([x, y]) => `${x.toFixed(2)} wide to ${y.toFixed(2)}`).join(', then ');
+    test(`the corner it can leave for a cover's type, ${name}, stays empty: no crow reaches into it, and the roofs and the moon are clear of it`, () => {
+        for (const r of reaches(ARRANGEMENTS[i])) if (r) assert.ok(!steps.some(s => meets(r, s)), 'a crow flies into the corner');
+        for (const [x, y] of [...pairs(ROOFS), ...ROOF_INK.flatMap(l => l.pts)]) {
+            assert.ok(!steps.some(s => x < s.x1 && y >= s.y0 && y < s.y1), `the roofs reach into the corner at ${x}, ${y}`);
+        }
+        for (const d of [MOON, ...PERCHED.map(p => p.shape)]) assert.ok(!steps.some(s => meets(box(pairs(d)), s)));
+    });
+
+    test(`with the type in the corner ${name}, every crow keeps clear of the others, the moon and the crow on it, inside the drawing`, () => {
+        const things = [box(pairs(MOON)), box(PERCHED.flatMap(p => pairs(p.shape))), ...reaches(ARRANGEMENTS[i])];
+        const apart = (a, b) => a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0;
+        for (let a = 2; a < things.length; a++) {
+            const t = things[a];
+            if (!t) continue;
+            assert.ok(t.x0 >= VIEW.x && t.x1 <= VIEW.x + VIEW.width && t.y0 >= VIEW.y, `crow ${a - 2} leaves the drawing`);
+            for (let b = 0; b < a; b++) if (things[b]) assert.ok(apart(t, things[b]), `crow ${a - 2} touches ${b < 2 ? ['the moon', 'the crow on it'][b] : `crow ${b - 2}`}`);
+        }
+    });
+});
+
+test('a cover can stand the type in any of its corners, the drawing as drawn first, and one more crow flies in the phone\'s narrower corner only', () => {
+    assert.deepEqual(figureCover('october'), { rooms: ROOMS, aspect: VIEW.width / VIEW.height });
+    assert.equal(ARRANGEMENTS.length, ROOMS.length);
+    assert.deepEqual(ARRANGEMENTS[0].slice(0, FLIERS.length), FLIERS);
+    assert.deepEqual(ARRANGEMENTS.map(a => a.length), ROOMS.map(() => FLIERS.length + 1));
+    assert.deepEqual(ARRANGEMENTS.map(a => !!a[FLIERS.length]), [false, true, false]);
+    for (const room of ROOMS.slice(1)) assert.ok(room.at(-1)[0] >= 0.5 && room.at(-1)[1] > 0.55, 'a phone\'s corner is wide and tall enough for its type');
 });

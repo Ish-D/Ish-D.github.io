@@ -586,6 +586,11 @@ function renderObject(env, item, ox, oy) {
         if (env.ctx.figureSpot?.(argValue(item.node, 'type'))) body.dataset.spot = argValue(item.node, 'type');
         env.ctx.persist?.set(persistKey, body);
     }
+    if (isViz) {
+        // which of its corners a cover's layout left for its type, so the figure keeps what moves out of it
+        if (item.room != null) body.dataset.room = String(item.room);
+        else delete body.dataset.room;
+    }
     if (argValue(item.node, 'clip') !== 'none') {
         const clip = clipPathFor(item.wrap, item.rect, item.em);
         if (clip) body.style.clipPath = clip;

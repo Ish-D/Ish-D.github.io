@@ -283,14 +283,15 @@ await part('home', 'the top line and the index', async () => {
     await context.close();
 });
 
-/** The home page's drawing against the text column, and how far the page runs past the screen. */
+/** The home page's drawing against the text column and its type, and how far the page runs past the screen. */
 const cover = () => {
     const text = window.__v2.app.state.layout.geometry.text;
     const figure = document.querySelector('.doc [data-figure]');
     const box = figure?.getBoundingClientRect();
     return {
         column: [text.x, text.x + text.width],
-        drawing: box && [box.left, box.right],
+        drawing: box && [box.left, box.right, box.top],
+        typeFoot: Math.max(...[...document.querySelectorAll('.doc .ln')].map(l => l.getBoundingClientRect().bottom)),
         drawn: !!figure?.querySelector('svg path'),
         over: document.documentElement.scrollHeight - window.innerHeight,
     };
@@ -300,6 +301,8 @@ for (const [prefix, size] of [['', {}], ['phone: ', { width: 390, height: 844, s
     const { context, page } = await open('/', size);
     const c = await page.evaluate(cover);
     record('home', `${prefix}the drawing is drawn inside the text column`, c.drawn && !!c.drawing && c.drawing[0] >= c.column[0] - 1.5 && c.drawing[1] <= c.column[1] + 1.5, JSON.stringify(c));
+    record('home', `${prefix}the drawing stands beside the type`, !!c.drawing && c.drawing[2] < c.typeFoot, JSON.stringify(c));
+    if (prefix) record('home', `${prefix}the drawing is as wide as the column`, !!c.drawing && c.drawing[1] - c.drawing[0] >= 0.98 * (c.column[1] - c.column[0]), JSON.stringify(c));
     record('home', `${prefix}the home page fits the screen`, c.over <= 1, `${c.over}px past the screen`);
     await context.close();
 });

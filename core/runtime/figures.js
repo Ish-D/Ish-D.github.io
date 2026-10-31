@@ -20,9 +20,11 @@ const covers = new Map();
  * `options.paper: false` keeps a figure off paper, for one that is only there to look at on screen.
  * `options.spot: true` says the figure carries the drawing's spot colour (`--color-figure-spot`); a page that shows one
  * takes that colour for its text selection. A drawing with a colour of its own sets it in theme.css by its name.
- * `options.cover: { room: [x, y], aspect }` lets the figure stand beside a cover page's type (`place: cover`): `room` is
- * the empty corner at its top left, as shares of its width and height, where the type goes, and `aspect` its width over
- * its height.
+ * `options.cover: { rooms: [[[x, y], …], …], aspect }` lets the figure stand beside a cover page's type (`place: cover`):
+ * `rooms` are the empty corners at its top left it can leave for the type, each in steps from the top down (so wide, down
+ * to so far, as shares of its width and height), the first as it is drawn, and `aspect` is its width over its height. The
+ * layout takes the one that lets the drawing stand largest; the figure reads which with `ctx.room()` (its index, or null
+ * when no type stands beside it) and `ctx.onRoom(cb)`.
  */
 export function defineFigure(name, factory, options = {}) {
     registry.set(name, factory);
@@ -45,6 +47,9 @@ function paramsOf(el) {
     return out;
 }
 
+/** Which of its `cover.rooms` a cover's layout left for its type (`data-room`), as an index, or null. */
+const roomOf = (el) => (el.dataset.room ? Number(el.dataset.room) : null);
+
 /**
  * Mounts every unmounted `[data-figure]` under `root` as it nears the viewport.
  * @param {HTMLElement} root
@@ -62,6 +67,7 @@ export function mountFigures(root, { document, store, window: win = document.def
         if (!factory) return;
         const themeListeners = new Set();
         const resizeListeners = new Set();
+        const roomListeners = new Set();
         const controller = new AbortController();
         const observer = typeof ResizeObserver === 'function'
             ? new ResizeObserver(() => resizeListeners.forEach(cb => cb(el.clientWidth, el.clientHeight)))
@@ -71,6 +77,11 @@ export function mountFigures(root, { document, store, window: win = document.def
             ? new MutationObserver(() => themeListeners.forEach(cb => cb(themeColors(document))))
             : null;
         themeWatch?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+        // the layout says again on every render which room it left; the figure keeps what moves out of it
+        const roomWatch = typeof MutationObserver === 'function'
+            ? new MutationObserver(() => roomListeners.forEach(cb => cb(roomOf(el))))
+            : null;
+        roomWatch?.observe(el, { attributes: true, attributeFilter: ['data-room'] });
 
         const ctx = {
             el,
@@ -83,6 +94,8 @@ export function mountFigures(root, { document, store, window: win = document.def
             theme: () => (colors ? colors() : themeColors(document)),
             onTheme: (cb) => { themeListeners.add(cb); return () => themeListeners.delete(cb); },
             onResize: (cb) => { resizeListeners.add(cb); return () => resizeListeners.delete(cb); },
+            room: () => roomOf(el),
+            onRoom: (cb) => { roomListeners.add(cb); return () => roomListeners.delete(cb); },
         };
         const handle = factory(ctx) ?? {};
         el.__figure = {
@@ -91,6 +104,7 @@ export function mountFigures(root, { document, store, window: win = document.def
                 controller.abort();
                 observer?.disconnect();
                 themeWatch?.disconnect();
+                roomWatch?.disconnect();
                 handle.dispose?.();
             },
         };

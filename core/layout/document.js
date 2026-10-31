@@ -173,39 +173,68 @@ export const COVER_FIT = Object.freeze({ gap: 1, beside: 16, min: 8, bottom: 16 
 
 /**
  * Stands a cover's drawing with the type already set, inside the text column and on the first screen, so the page does
- * not scroll: beside the type, with the type in the empty corner at the drawing's top left (its `room`), as large as the
- * column and the screen allow; where that would leave it too small, under the type in the middle of the column, as large
- * as what is left of the screen allows.
+ * not scroll: beside the type, with the type in one of the empty corners at the drawing's top left that it can leave
+ * (its `rooms`, each in steps from the top down: so wide, down to so far), the one that lets it stand largest, and as
+ * large as the column and the screen allow; where none leaves it big enough, under the type in the middle of the
+ * column, as large as what is left of the screen allows. The drawing is told which room it stands with (`room` on the
+ * item, its index in `rooms`), or none.
  */
 function standCover(scope, env, styles, geom) {
     const node = env.cover.node;
-    const { room: [rx, ry], aspect } = env.objects.cover(node);
+    const { rooms, aspect } = env.objects.cover(node);
     const em = styles.size;
-    // where the type ends: the right of its widest line and the foot of its last
+    const gap = COVER_FIT.gap * em;
+    // where the type ends, and every line of it: the right of its widest line and the foot of its last
     const type = { right: 0, bottom: 0 };
+    const lines = [];
     for (const item of scope.out) {
         if (item.type !== 'heading' && item.type !== 'paragraph') continue;
-        for (const line of item.lines) if (!line.overflow) type.right = Math.max(type.right, line.x + line.hung.left + line.natural);
+        for (const line of item.lines) {
+            if (line.overflow) continue;
+            const right = line.x + line.hung.left + line.natural;
+            type.right = Math.max(type.right, right);
+            lines.push({ top: line.y, bottom: line.y + item.lineHeight, right });
+        }
         type.bottom = Math.max(type.bottom, item.bottom);
     }
-    const need = { x: type.right + COVER_FIT.gap * em, y: type.bottom + COVER_FIT.gap * em };
+    const need = { x: type.right + gap, y: type.bottom + gap };
     const left = geom.text.x;
     const right = geom.text.x + geom.text.width;
     const top = PAGE.topPad;
     const screen = (env.viewportHeight ?? 800) - COVER_FIT.bottom;
-    const beside = (width) => {
-        const height = width / aspect;
-        return { x: Math.max(left, need.x - rx * width), y: Math.max(top, need.y - ry * height), width, height };
+    const beside = (steps) => {
+        const rx = Math.max(...steps.map(s => s[0]));
+        const ry = steps[steps.length - 1][1];
+        const at = (width) => {
+            const height = width / aspect;
+            return { x: Math.max(left, need.x - rx * width), y: Math.max(top, need.y - ry * height), width, height };
+        };
+        let rect = at(Math.min((right - need.x) / (1 - rx), right - left, (screen - top) * aspect));
+        // standing low, it may still run past the first screen: then it shrinks until its foot is on it
+        if (rect.y + rect.height > screen) rect = at(Math.min(rect.width, ((screen - need.y) / (1 - ry)) * aspect));
+        if (!(rect.width >= COVER_FIT.beside * em && rect.y + rect.height <= screen + 0.5)) return null;
+        // a room narrower above: every line beside a step keeps inside it
+        let from = rect.y;
+        for (const [sx, sy] of steps) {
+            const to = rect.y + sy * rect.height;
+            if (lines.some(l => l.top < to && l.bottom > from && l.right + gap > rect.x + sx * rect.width + 0.5)) return null;
+            from = to;
+        }
+        return rect;
     };
-    let rect = beside(Math.min((right - need.x) / (1 - rx), right - left, (screen - top) * aspect));
-    // standing low, it may still run past the first screen: then it shrinks until its foot is on it
-    if (rect.y + rect.height > screen) rect = beside(Math.min(rect.width, ((screen - need.y) / (1 - ry)) * aspect));
-    if (!(rect.width >= COVER_FIT.beside * em) || rect.y + rect.height > screen + 0.5) {
+    // the room that lets it stand largest; the drawing as drawn where another makes no difference
+    let rect = null;
+    let room = null;
+    rooms.forEach((steps, i) => {
+        const at = beside(steps);
+        if (at && (!rect || at.width > rect.width + 0.5)) [rect, room] = [at, i];
+    });
+    if (!rect) {
         const height = Math.max(screen - need.y, (COVER_FIT.min * em) / aspect);
         const width = Math.min(right - left, height * aspect);
         rect = { x: left + (right - left - width) / 2, y: need.y, width, height: width / aspect };
     }
-    scope.out.unshift({ type: 'object', node, name: node.name, rect, place: { kind: 'cover' }, wrap: { kind: 'none', args: [] }, layer: 'over', caption: null, em });
+    scope.out.unshift({ type: 'object', node, name: node.name, rect, room, place: { kind: 'cover' }, wrap: { kind: 'none', args: [] }, layer: 'over', caption: null, em });
     scope.maxY = Math.max(scope.maxY ?? 0, rect.y + rect.height);
 }
 
