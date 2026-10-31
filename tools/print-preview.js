@@ -27,7 +27,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         process.exit(1);
     }
     const doc = parse(readFileSync(resolve(file), 'utf8'));
-    const env = makeEnv(1280, { fontSize: 20, width: 32 });
+    const env = makeEnv(1280, { fontSize: 20 });
     const printed = layoutPrint(doc, env, paper);
     const { layout, sheets, room, margins } = printed;
     const title = doc.frontmatter?.entries?.name?.value ?? '';

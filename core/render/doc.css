@@ -67,7 +67,6 @@ html:has([data-spot]) ::selection { background: var(--color-spot-selection); }
     background: var(--code-background);
 }
 
-.u-solid { text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 0.06em; }
 .u-dotted { text-decoration: underline dotted; text-underline-offset: 2px; }
 
 .lnk { color: inherit; text-decoration: none; }
@@ -191,6 +190,7 @@ aside.note.on::before { content: ''; position: absolute; top: 0; bottom: 0; left
 .chrome .panel.settings { right: 0; min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
 .chrome .panel.settings[hidden] { display: none; }
 .chrome .panel label { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.chrome .panel label[hidden] { display: none; }
 .chrome input[type=range] { width: 110px; accent-color: var(--color-text-primary); }
 .chrome .panel.index { left: 0; right: 0; }
 .chrome .index input {

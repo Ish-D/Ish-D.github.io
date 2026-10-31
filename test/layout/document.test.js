@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { layoutDocument, PAGE } from '../../core/layout/document.js';
+import { layoutDocument, autoTextWidth, PAGE } from '../../core/layout/document.js';
 import { makeEnv, parseCard, parseText, hyphenator, atoms } from './fixtures.js';
 
 const textLines = (layout) => layout.blocks
@@ -338,31 +338,42 @@ test('the contents box floats beside the first paragraphs, and sits above them o
     const doc = parseText('# Title\n\n[[toc]]\n---\n## One\n\nText.\n\n## Two\n\nMore.\n');
     const beside = layoutDocument(doc, makeEnv(1300, { hyphenator })).blocks.find(b => b.type === 'toc');
     assert.ok(beside.rect.width < 400, 'floated at the default width');
-    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator, settings: { width: 24 } }));
+    const layout = layoutDocument(doc, makeEnv(1300, { hyphenator, settings: { width: 480 } }));
     const above = layout.blocks.find(b => b.type === 'toc');
     assert.equal(above.rect.width, layout.geometry.text.width);
 });
 
-test('the text column is a fixed width in em, centred, whatever the window', () => {
+test('the text column is the width the reader chose, centred, whatever the window and text size', () => {
     const at = (w, over) => layoutDocument(parseText('Text.\n'), makeEnv(w, over)).geometry;
     for (const w of [1100, 1440, 2560]) {
         const g = at(w);
-        assert.equal(g.text.width, 32 * 20);
+        assert.equal(g.text.width, 640);
         assert.equal(g.text.x, (w - 640) / 2);
     }
-    assert.equal(at(1440, { settings: { fontSize: 24 } }).text.width, 32 * 24);
-    assert.equal(at(1440, { settings: { width: 40 } }).text.width, 800);
+    assert.equal(at(1440, { settings: { fontSize: 24 } }).text.width, 640);
+    assert.equal(at(1440, { settings: { width: 800 } }).text.width, 800);
+});
+
+test('until the reader chooses, the column is a third of the window, within bounds', () => {
+    const at = (w) => layoutDocument(parseText('Text.\n'), makeEnv(w, { settings: { width: null } })).geometry.text.width;
+    assert.equal(at(1920), 640);
+    assert.equal(at(1280), PAGE.width.auto.min);
+    assert.equal(at(3840), PAGE.width.auto.max);
+    assert.equal(autoTextWidth(1920), 640);
 });
 
 test('the column gives way before the margins get too narrow for notes, then the page has no margins', () => {
-    const at = (w) => layoutDocument(parseText('Text.\n'), makeEnv(w)).geometry;
-    const g = at(900);
+    const at = (w, width = null) => layoutDocument(parseText('Text.\n'), makeEnv(w, { settings: { width } })).geometry;
+    const g = at(900, 800);
     assert.equal(g.narrow, false);
     assert.equal(g.text.width, 900 - 2 * (24 + 16 + 150));
     assert.ok(g.left.width >= 150 && g.right.width >= 150);
-    const small = at(640);
-    assert.equal(small.narrow, true);
-    assert.equal(small.text.width, 640 - 2 * 16);
+    for (const phone of [390, 640]) {
+        const small = at(phone);
+        assert.equal(small.narrow, true);
+        assert.equal(small.text.width, phone - 2 * 16);
+    }
+    assert.equal(at(390, 800).text.width, 390 - 2 * 16, 'a chosen width cannot bring margins to a phone');
 });
 
 test('a float that drops onto its own line leaves its nudges behind', () => {

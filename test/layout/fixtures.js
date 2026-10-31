@@ -22,7 +22,7 @@ export const objects = {
 };
 
 export function makeEnv(width, over = {}) {
-    return { width, measurer, atoms, objects, ...over };
+    return { width, measurer, atoms, objects, ...over, settings: { width: 640, ...over.settings } };
 }
 
 export const card = (name) => readFileSync(new URL(`../../cards/${name}.md`, import.meta.url), 'utf8');

@@ -13,7 +13,7 @@ const card = (name) => parse(readFileSync(new URL(`../../cards/${name}.md`, impo
 const math = (tex) => ({ html: `<span class="katex">${tex}</span>`, width: tex.length * 5, height: 24, ascent: 18, descent: 6 });
 
 function draw(name, paper = PAPER.letter, heading = { title: 'The title', address: 'example.com/page' }) {
-    const env = makeEnv(1280, { fontSize: 20, width: 32 });
+    const env = makeEnv(1280, { fontSize: 20 });
     const printed = layoutPrint(card(name), env, paper);
     const root = document.createElement('div');
     renderSheets(root, printed, { document, measurer: env.measurer, math, resolveAsset: (p) => `/${p}`, persist: new Map(), eager: true }, heading);

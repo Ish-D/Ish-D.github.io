@@ -31,7 +31,7 @@ export function paperFor(locale = '') {
  * @param {typeof PAPER[keyof typeof PAPER]} paper
  */
 export function layoutPrint(doc, env, paper) {
-    const settings = { ...env.settings, fontSize: SHEET.fontSize, width: SHEET.measure, titleScale: SHEET.titleScale, titleAlign: 'left' };
+    const settings = { ...env.settings, fontSize: SHEET.fontSize, measure: SHEET.measure, titleScale: SHEET.titleScale, titleAlign: 'left' };
     const onPaper = { ...env, print: { notes: hasMarginNotes(doc) }, width: paper.width, settings, expandedNotes: undefined, editing: null };
     // the room on a sheet is a whole number of lines, so every sheet's lines sit on the same grid
     const lineHeight = createStyles(settings).lineHeight;

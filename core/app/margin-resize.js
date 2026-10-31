@@ -3,18 +3,18 @@
  * reading width setting, the same one the settings panel has.
  */
 
-import { PAGE } from '../layout/document.js';
+import { textWidthRange } from '../layout/document.js';
 
 const HANDLE_PX = 10;
 
 /**
- * Reading width, in em, when a handle is dragged to `clientX`. The column stays centred,
+ * Reading width, in px, when a handle is dragged to `clientX`. The column stays centred,
  * so the far edge follows.
  */
-export function widthFor(side, clientX, windowWidth, fontSize) {
+export function widthFor(side, clientX, windowWidth) {
     const edge = side === 'left' ? clientX : windowWidth - clientX;
-    const em = (windowWidth - 2 * edge) / fontSize;
-    return Math.round(Math.min(PAGE.width.max, Math.max(PAGE.width.min, em)));
+    const { min, max } = textWidthRange(windowWidth);
+    return Math.round(Math.min(max, Math.max(min, windowWidth - 2 * edge)));
 }
 
 /**
@@ -36,7 +36,7 @@ export function createMarginResize({ document, window, settings }) {
         });
         el.addEventListener('pointermove', (e) => {
             if (!el.classList.contains('dragging')) return;
-            const width = widthFor(side, e.clientX, window.innerWidth, settings.values.fontSize);
+            const width = widthFor(side, e.clientX, window.innerWidth);
             if (width !== settings.values.width) settings.set('width', width);
         });
         const stop = () => {

@@ -27,7 +27,7 @@ const EM_SPACE = '\u2003';
 /**
  * @param {Inline[]} nodes
  * @param {InlineContext} ctx
- * @param {{ italic?: boolean, bold?: boolean, code?: boolean, sup?: boolean, link?: object, css?: string, underline?: string, font?: object }} [flags]
+ * @param {{ italic?: boolean, bold?: boolean, code?: boolean, sup?: boolean, link?: object, linked?: boolean, css?: string, underline?: string, font?: object }} [flags]
  * @returns {Span[]}
  */
 export function flattenInline(nodes, ctx, flags = {}) {
@@ -55,6 +55,7 @@ export function fontFor(styles, flags) {
             : flags.bold ? styles.strong
                 : styles.body;
     if (flags.sup) font = { ...font, size: font.size * 0.7 };
+    if (flags.linked) font = { ...font, weight: 'bold' };
     return font;
 }
 
@@ -81,7 +82,7 @@ function flattenNode(node, ctx, flags) {
             return [textSpan(node.value, ctx, { ...flags, code: true }, node)];
         case 'link':
             return flattenInline(node.children, ctx, {
-                ...flags, link: { type: 'external', href: node.href }, underline: 'solid',
+                ...flags, link: { type: 'external', href: node.href }, linked: true,
             });
         case 'mathinline': {
             const m = ctx.atoms.inlineMath(node.tex, fontFor(ctx.styles, flags).size);
@@ -150,7 +151,7 @@ function flattenDirective(node, ctx, flags) {
             const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(target ?? '');
             const shown = stripQuotes(display ?? '');
             return [textSpan(shown, ctx, {
-                ...flags, link: { type: isUrl ? 'external' : 'card', href: target, node, noHyphen: shown.includes('://') }, underline: isUrl ? 'solid' : 'solid',
+                ...flags, link: { type: isUrl ? 'external' : 'card', href: target, node, noHyphen: shown.includes('://') }, linked: true,
             }, node)];
         }
 

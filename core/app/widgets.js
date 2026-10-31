@@ -13,7 +13,7 @@ export function createWidgets(app) {
 
     function slider(get, key) {
         const input = make('input', '', { type: 'range', min: get('min') ?? 12, max: get('max') ?? 22, step: get('step') ?? 1 });
-        input.value = settings.values[key];
+        input.value = settings.values[key] ?? (key === 'width' ? state.layout?.geometry.text.width : '');
         input.oninput = () => settings.set(key, Number(input.value));
         return input;
     }

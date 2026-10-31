@@ -119,7 +119,7 @@ const lineText = (l) => l.runs.map(r => (r.kind === 'hyphen' ? '-' : r.text ?? '
 
 for (const paper of [PAPER.letter, PAPER.a4]) {
     test(`the long post prints on ${paper.name}: every line once, nothing taller than a sheet, no stranded lines`, () => {
-        const printed = layoutPrint(parse(card('llms_for_bozos_1')), makeEnv(1280, { fontSize: 20, width: 32 }), paper);
+        const printed = layoutPrint(parse(card('llms_for_bozos_1')), makeEnv(1280, { fontSize: 20 }), paper);
         const { layout, sheets, room } = printed;
         assert.ok(sheets.length > 10 && sheets.length < 40, `${sheets.length} sheets`);
 
@@ -154,7 +154,7 @@ for (const paper of [PAPER.letter, PAPER.a4]) {
 }
 
 test('on paper the text is one centred column, figures sit between paragraphs, and there is no contents box', () => {
-    const printed = layoutPrint(parse(card('layout-test')), makeEnv(1280, { fontSize: 20, width: 32 }), PAPER.letter);
+    const printed = layoutPrint(parse(card('layout-test')), makeEnv(1280, { fontSize: 20 }), PAPER.letter);
     const { layout, sheets } = printed;
     const column = layout.geometry.text;
     assert.ok(column.width <= SHEET.measure * SHEET.fontSize, 'no wider than the measure');
@@ -179,7 +179,7 @@ test('on paper the text is one centred column, figures sit between paragraphs, a
 test('a figure placed by hand is on its own line on paper, wherever it was nudged to on screen', () => {
     const page = (args) => `Before the figure.\n\n[[viz(type: umbrella, place: gutter, width: 265px, height: 358px${args})]]\n\nAfter the figure.\n`;
     const rectOf = (text) => {
-        const { sheets } = layoutPrint(parse(text), makeEnv(1280, { fontSize: 20, width: 32 }), PAPER.letter);
+        const { sheets } = layoutPrint(parse(text), makeEnv(1280, { fontSize: 20 }), PAPER.letter);
         return sheets.flatMap(s => s.items).find(i => i.type === 'object').rect;
     };
     const plain = rectOf(page(''));
@@ -188,7 +188,7 @@ test('a figure placed by hand is on its own line on paper, wherever it was nudge
 });
 
 test('a page with no notes is set at the full measure, and one with notes gives up width to keep its margins', () => {
-    const env = () => makeEnv(1280, { fontSize: 20, width: 32 });
+    const env = () => makeEnv(1280, { fontSize: 20 });
     const plain = layoutPrint(parse('Some text with no note in it.\n'), env(), PAPER.letter).layout.geometry;
     assert.equal(Math.round(plain.text.width), SHEET.measure * SHEET.fontSize);
     assert.equal(plain.left.width, 0);
@@ -199,7 +199,7 @@ test('a page with no notes is set at the full measure, and one with notes gives 
 
 test('margin notes stay in the margins on paper, beside the line they belong to, inside the sheet and clear of each other', () => {
     for (const paper of [PAPER.letter, PAPER.a4]) {
-        const printed = layoutPrint(parse(card('llms_for_bozos_1')), makeEnv(1280, { fontSize: 20, width: 32 }), paper);
+        const printed = layoutPrint(parse(card('llms_for_bozos_1')), makeEnv(1280, { fontSize: 20 }), paper);
         const { sheets, room, layout } = printed;
         const column = layout.geometry.text;
         const placed = sheets.flatMap(s => s.notes);
@@ -224,7 +224,7 @@ test('margin notes stay in the margins on paper, beside the line they belong to,
 
 test('a figure that keeps off paper is left out of the printed page and stays on the screen one', () => {
     const text = 'Before.\n\n[[viz(type: scatter, src: a.png, height: 300, place: full)]]\n\nAfter.\n';
-    const env = makeEnv(1280, { fontSize: 20, width: 32 });
+    const env = makeEnv(1280, { fontSize: 20 });
     const kept = { ...env, objects: { ...env.objects, onPaper: () => false } };
     assert.ok(layoutDocument(parse(text), kept).blocks.some(b => b.type === 'object'));
     assert.ok(!layoutPrint(parse(text), kept, PAPER.letter).layout.blocks.some(b => b.type === 'object'));

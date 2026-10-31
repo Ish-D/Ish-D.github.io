@@ -10,15 +10,19 @@ const KEY = 'v2-settings';
  * @param {{ document: Document, storage?: Storage, prefersDark?: boolean }} deps
  */
 export function createSettings({ document, storage, prefersDark = false }) {
-    const defaults = Object.freeze({ fontSize: 20, width: PAGE.width.default, titleAlign: 'left', theme: prefersDark ? 'dark' : 'light' });
+    const defaults = Object.freeze({ fontSize: 20, width: null, titleAlign: 'left', theme: prefersDark ? 'dark' : 'light' });
     const listeners = new Set();
 
     const load = () => {
+        let stored;
         try {
-            return { ...defaults, ...JSON.parse(storage?.getItem(KEY) ?? '{}') };
+            stored = { ...defaults, ...JSON.parse(storage?.getItem(KEY) ?? '{}') };
         } catch {
             return { ...defaults };
         }
+        // a width outside the range follows the window instead
+        if (!(stored.width >= PAGE.width.min && stored.width <= PAGE.width.max)) stored.width = null;
+        return stored;
     };
     let values = load();
 

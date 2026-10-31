@@ -72,7 +72,7 @@ test('issues are counted by kind and level', () => {
     assert.deepEqual(counts, { 'loose:bad': 2, 'tight:note': 1 });
 });
 
-// The pages are laid out in the real font at the default reading width on a desktop and on a phone,
+// The pages are laid out in the real font at the default reading width (which follows the window) on a desktop and on a phone,
 // and none may have a line sticking out of its slot.
 const pages = readdirSync(new URL('../../cards/', import.meta.url))
     .filter(name => name.endsWith('.md'))
@@ -82,7 +82,7 @@ const pages = readdirSync(new URL('../../cards/', import.meta.url))
 for (const [name, text] of pages) {
     for (const [width, fontSize] of [[1280, 20], [390, 18]]) {
         test(`${name} at ${width}px has no line sticking out of its slot`, () => {
-            const layout = layoutDocument(parse(text), realEnv(width, { fontSize, width: 32 }));
+            const layout = layoutDocument(parse(text), realEnv(width, { fontSize }));
             const bad = lintBlocks(layout.blocks).filter(i => i.kind === 'overfull');
             assert.deepEqual(bad.map(i => i.text), []);
         });

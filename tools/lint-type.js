@@ -2,7 +2,7 @@
  * Lays out pages at a range of screen and column widths and reports the lines that are set badly:
  * spaces pulled too wide or squeezed, a last line that is one word, hyphens stacked down the edge.
  *
- *   node tools/lint-type.js [page ...] [--viewports 360,768,1280] [--em 24,32,44] [--size 20] [--verbose]
+ *   node tools/lint-type.js [page ...] [--viewports 360,768,1280] [--widths 480,640,800] [--size 20] [--verbose]
  *
  * With no page it checks every page in cards/. Exits 1 when any line is bad.
  */
@@ -29,7 +29,7 @@ const verbose = args.includes('--verbose') && args.splice(args.indexOf('--verbos
 const list = (value) => String(value).split(',').map(Number).filter(Number.isFinite);
 
 const viewports = list(flag('--viewports', '360,430,768,1280'));
-const readingWidths = list(flag('--em', '24,28,32,36,40,44'));
+const readingWidths = list(flag('--widths', '360,480,640,800,1000,1200'));
 const sizes = list(flag('--size', '20'));
 const requested = args.filter(a => !a.startsWith('--'));
 
@@ -46,10 +46,10 @@ for (const name of names) {
     let lines = 0;
     let configs = 0;
     for (const width of viewports) {
-        for (const em of readingWidths) {
+        for (const column of readingWidths) {
             for (const size of sizes) {
                 const fontSize = width < 600 ? Math.min(size, 18) : size;
-                const env = makeEnv(width, { fontSize, width: em, titleScale: titleScaleFor(width), titleAlign: 'left' });
+                const env = makeEnv(width, { fontSize, width: column, titleScale: titleScaleFor(width), titleAlign: 'left' });
                 const layout = layoutDocument(parse(source), env);
                 const key = `${Math.round(layout.geometry.text.width)}:${fontSize}`;
                 if (seen.has(key)) continue;

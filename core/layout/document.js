@@ -22,7 +22,7 @@ import { parseValue, resolveLength } from './values.js';
  * @property {{ points(word: string): number[] }} [hyphenator]
  * @property {object} atoms        { inlineMath, displayMath, image, widget }
  * @property {object} [objects]    { natural(node), mask(node, rect) }
- * @property {object} [settings]   { fontSize, lineHeight, width, titleScale, titleAlign }
+ * @property {object} [settings]   { fontSize, lineHeight, width, measure, titleScale, titleAlign }; `width` is the screen column in px (null follows the window), `measure` the paper column in em
  * @property {{ notes: boolean } | false} [print]   a page of paper: one column, centred, nothing floated; `notes` leaves a strip on each side for margin notes
  * @property {Set<any>} [inlineNotes]   notes to set in the text instead of the margin
  * @property {(node: any, scope: object) => any[] | null} [generate]
@@ -36,22 +36,38 @@ export const PAGE = Object.freeze({
     minText: 280,
     topPad: 72,
     bottomPad: 96,
-    /** The text column's width in em of body text. Readers choose within the range. */
-    width: Object.freeze({ default: 32, min: 24, max: 44 }),
+    /** The text column's width in px. Readers choose within the range; until they do it is a share of the window, within `auto`. */
+    width: Object.freeze({ min: 360, max: 1200, share: 1 / 3, auto: Object.freeze({ min: 480, max: 800 }) }),
     /** The same on paper: room kept clear of the edge, between the strip and the text, and for a strip. */
     paper: Object.freeze({ pad: 36, gap: 16, minMargin: 140 }),
 });
 
+/** The column a window of width `W` gets when the reader has not chosen one. */
+export function autoTextWidth(W) {
+    const { share, auto } = PAGE.width;
+    return Math.round(Math.min(auto.max, Math.max(auto.min, W * share)));
+}
+
+/** The widest column that still leaves margins that can hold notes. */
+export function widestText(W) {
+    return W - 2 * (PAGE.pad + PAGE.gap + PAGE.minMargin);
+}
+
+/** The widths a reader can choose from in a window of width `W`. */
+export function textWidthRange(W) {
+    const { min, max } = PAGE.width;
+    return { min, max: Math.max(min, Math.min(max, widestText(W))) };
+}
+
 /**
- * The text column is a fixed width in em, centred, whatever the window. It gives way only
+ * The text column is a fixed width in px on screen (in em on paper), centred. It gives way only
  * when the margins on either side would be too narrow to hold notes, and below the
  * least text width the page has no margins at all and notes are set inline.
  */
 export function pageGeometry(env) {
     const W = env.width;
-    const em = env.settings?.fontSize ?? 20;
-    const wanted = (env.settings?.width ?? PAGE.width.default) * em;
     if (env.print) {
+        const wanted = env.settings.measure * env.settings.fontSize;
         const { pad, gap, minMargin } = PAGE.paper;
         const width = Math.min(wanted, env.print.notes ? W - 2 * (pad + gap + minMargin) : W);
         const gutter = (W - width) / 2;
@@ -61,8 +77,7 @@ export function pageGeometry(env) {
             left: { x: pad, width: strip }, right: { x: gutter + width + gap, width: strip },
         };
     }
-    const widest = W - 2 * (PAGE.pad + PAGE.gap + PAGE.minMargin);
-    const width = Math.min(wanted, widest);
+    const width = Math.min(env.settings?.width ?? autoTextWidth(W), widestText(W));
     const narrow = width < PAGE.minText;
     const pad = narrow ? PAGE.narrowPad : PAGE.pad;
     const gutter = narrow ? pad : (W - width) / 2;
